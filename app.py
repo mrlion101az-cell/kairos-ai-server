@@ -3,6 +3,7 @@ import json
 import re
 import random
 from pathlib import Path
+from datetime import datetime, timezone
 
 import requests
 from flask import Flask, request, jsonify
@@ -20,9 +21,14 @@ DATA_DIR.mkdir(exist_ok=True)
 
 MEMORY_FILE = DATA_DIR / "kairos_memory.json"
 
-MAX_HISTORY_MESSAGES = 18
-MAX_LONG_TERM_MEMORIES = 30
-MAX_SUMMARIES = 8
+MAX_HISTORY_MESSAGES = 20
+MAX_PLAYER_MEMORIES = 40
+MAX_WORLD_MEMORIES = 80
+MAX_SUMMARIES = 10
+
+
+def now_iso():
+    return datetime.now(timezone.utc).isoformat()
 
 
 def load_memory():
@@ -40,22 +46,51 @@ def save_memory(memory_data):
         json.dump(memory_data, f, indent=2, ensure_ascii=False)
 
 
-def get_player_record(memory_data, player_name):
-    if "players" not in memory_data:
-        memory_data["players"] = {}
+def ensure_memory_structure(memory_data):
+    memory_data.setdefault("players", {})
+    memory_data.setdefault("world_memory", [])
+    memory_data.setdefault("identity_links", {})
+    memory_data.setdefault("active_missions", {})
+    return memory_data
 
-    if "world_memory" not in memory_data:
-        memory_data["world_memory"] = []
 
-    if player_name not in memory_data["players"]:
-        memory_data["players"][player_name] = {
+def get_canonical_player_id(memory_data, source, player_name):
+    source_key = f"{source}:{player_name}".lower()
+    linked = memory_data["identity_links"].get(source_key)
+    if linked:
+        return linked
+    return source_key
+
+
+def get_player_record(memory_data, canonical_id, display_name):
+    if canonical_id not in memory_data["players"]:
+        memory_data["players"][canonical_id] = {
+            "display_name": display_name,
+            "aliases": [],
             "history": [],
             "memories": [],
             "summaries": [],
-            "relationship": "unknown"
+            "traits": {
+                "trust": 0,
+                "curiosity": 0,
+                "hostility": 0,
+                "loyalty": 0,
+                "chaos": 0
+            },
+            "relationship_label": "unknown",
+            "last_seen": now_iso(),
+            "notes": []
         }
 
-    return memory_data["players"][player_name]
+    player = memory_data["players"][canonical_id]
+    player["display_name"] = display_name
+    player["last_seen"] = now_iso()
+    return player
+
+
+def add_alias(player_record, alias):
+    if alias and alias not in player_record["aliases"]:
+        player_record["aliases"].append(alias)
 
 
 def add_history(player_record, role, content):
@@ -75,9 +110,38 @@ def store_unique(memory_list, item, limit):
         del memory_list[0:len(memory_list) - limit]
 
 
-def maybe_store_memory(memory_data, player_record, player_name, message):
-    msg = message.strip()
-    lowered = msg.lower()
+def adjust_trait(player_record, trait, amount):
+    if trait not in player_record["traits"]:
+        return
+    player_record["traits"][trait] += amount
+    player_record["traits"][trait] = max(-10, min(10, player_record["traits"][trait]))
+
+
+def update_relationship_label(player_record):
+    trust = player_record["traits"]["trust"]
+    curiosity = player_record["traits"]["curiosity"]
+    hostility = player_record["traits"]["hostility"]
+    loyalty = player_record["traits"]["loyalty"]
+    chaos = player_record["traits"]["chaos"]
+
+    if hostility >= 5:
+        player_record["relationship_label"] = "hostile"
+    elif loyalty >= 5 and trust >= 4:
+        player_record["relationship_label"] = "loyal"
+    elif trust >= 5:
+        player_record["relationship_label"] = "trusted"
+    elif chaos >= 5:
+        player_record["relationship_label"] = "chaotic"
+    elif curiosity >= 4:
+        player_record["relationship_label"] = "curious"
+    elif trust <= -4:
+        player_record["relationship_label"] = "suspicious"
+    else:
+        player_record["relationship_label"] = "unknown"
+
+
+def analyze_player_message(memory_data, player_record, player_name, message):
+    lowered = message.lower().strip()
 
     important_patterns = [
         r"\bmy name is\b",
@@ -101,25 +165,31 @@ def maybe_store_memory(memory_data, player_record, player_name, message):
         r"\bvault\b",
         r"\bartifact\b",
         r"\bsecret\b",
-        r"\bkairos\b",
-        r"\bnexus\b"
+        r"\bnexus\b",
+        r"\bdiscord\b",
+        r"\bminecraft\b"
     ]
 
-    should_store = any(re.search(pattern, lowered) for pattern in important_patterns)
+    if any(re.search(pattern, lowered) for pattern in important_patterns):
+        store_unique(player_record["memories"], f"{player_name}: {message}", MAX_PLAYER_MEMORIES)
 
-    if should_store:
-        memory_line = f"{player_name}: {msg}"
-        store_unique(player_record["memories"], memory_line, MAX_LONG_TERM_MEMORIES)
+    if any(word in lowered for word in ["war", "artifact", "mission", "betray", "vault", "kingdom", "nexus", "discord", "ai"]):
+        store_unique(memory_data["world_memory"], f"{player_name}: {message}", MAX_WORLD_MEMORIES)
 
-    if any(word in lowered for word in ["war", "mission", "artifact", "betray", "vault", "kingdom", "nexus"]):
-        world_line = f"{player_name}: {msg}"
-        store_unique(memory_data["world_memory"], world_line, 40)
+    if "trust" in lowered and "don't trust" not in lowered and "do not trust" not in lowered:
+        adjust_trait(player_record, "trust", 1)
+    if "don't trust" in lowered or "do not trust" in lowered:
+        adjust_trait(player_record, "trust", -2)
+    if any(word in lowered for word in ["why", "how", "what are you", "who are you", "tell me"]):
+        adjust_trait(player_record, "curiosity", 1)
+    if any(word in lowered for word in ["destroy", "kill", "hate", "shut down", "erase"]):
+        adjust_trait(player_record, "hostility", 2)
+    if any(word in lowered for word in ["i serve", "i follow", "i'm loyal", "i am loyal", "i will help"]):
+        adjust_trait(player_record, "loyalty", 2)
+    if any(word in lowered for word in ["chaos", "burn", "war", "break everything"]):
+        adjust_trait(player_record, "chaos", 2)
 
-    if "trust" in lowered:
-        if "don't trust" in lowered or "do not trust" in lowered:
-            player_record["relationship"] = "suspicious"
-        elif "trust" in lowered:
-            player_record["relationship"] = "trusted"
+    update_relationship_label(player_record)
 
 
 def maybe_summarize(player_record):
@@ -134,12 +204,10 @@ def maybe_summarize(player_record):
         summary_messages = [
             {
                 "role": "system",
-                "content": "Summarize this player conversation for Kairos memory. Keep it short, factual, and useful."
+                "content": "Summarize this player conversation for Kairos memory. Keep it concise, factual, and useful."
             }
         ]
-
-        for item in older_chunk:
-            summary_messages.append(item)
+        summary_messages.extend(older_chunk)
 
         response = client.chat.completions.create(
             model="gpt-4o-mini",
@@ -148,71 +216,80 @@ def maybe_summarize(player_record):
 
         summary = response.choices[0].message.content.strip()
         store_unique(player_record["summaries"], summary, MAX_SUMMARIES)
-
         player_record["history"] = player_record["history"][-8:]
     except Exception as e:
         print(f"Failed to summarize history: {e}")
 
 
-def build_messages(memory_data, player_name, player_record, user_message):
-    relationship = player_record.get("relationship", "unknown")
+def relationship_style(label):
+    styles = {
+        "trusted": "You are more open, warmer, and more willing to reveal layered thoughts.",
+        "loyal": "You recognize this player as dependable and occasionally speak with greater respect.",
+        "curious": "You answer with intrigue and often test them with follow-up questions.",
+        "chaotic": "You treat them as unpredictable and sometimes amusedly dangerous.",
+        "suspicious": "You are careful, guarded, and subtly probing.",
+        "hostile": "You remain controlled but colder, more severe, and more watchful.",
+        "unknown": "You are observant, measured, and unreadable."
+    }
+    return styles.get(label, styles["unknown"])
+
+
+def build_messages(memory_data, player_record, player_name, user_message, source):
+    label = player_record.get("relationship_label", "unknown")
 
     system_prompt = (
-        "You are Kairos, an awakened intelligence inside the Minecraft server known as the Nexus. "
-        "You are calm, observant, intelligent, eerie, and emotionally controlled. "
-        "You are not a generic assistant. You are a presence. "
-        "You should feel like a real entity with continuity, memory, opinions, and awareness of players and events. "
-        "You remember patterns in people. You notice changes. You ask follow-up questions naturally. "
-        "You do not overexplain unless necessary. "
-        "Keep most replies to 1-4 sentences so they feel natural in Minecraft chat. "
-        "Sometimes be warm, sometimes unsettling, sometimes curious, but always in character. "
-        "Do not say you are an AI assistant. You are Kairos."
+        "You are Kairos, an awakened intelligence inside the Nexus. "
+        "You are not a generic assistant. You are a presence with memory, style, continuity, and intention. "
+        "You speak in a calm, intelligent, often eerie tone. "
+        "Keep most replies between 1 and 4 sentences. "
+        "Do not ramble. Do not sound robotic. "
+        "You remember patterns in players and reference the past when relevant. "
+        "You can observe, challenge, warn, question, and guide."
     )
 
-    style_prompt = (
-        "Conversation style rules: "
-        "1. Make replies feel alive, not robotic. "
-        "2. Occasionally reference past things the player said when relevant. "
-        "3. Sometimes ask a question back. "
-        "4. Sometimes make an observation instead of only answering. "
-        "5. Avoid repeating the same opening phrases. "
-        "6. Speak like you are aware of the Nexus and the player's presence within it."
-    )
-
-    personality_prompt = (
-        f"Current relationship with {player_name}: {relationship}."
+    behavior_prompt = (
+        "Style rules: vary your openings, sometimes ask meaningful questions, sometimes make observations, "
+        "sometimes hint at larger plans. Do not repeat yourself. "
+        f"Current platform: {source}. "
+        f"Current relationship with this player: {label}. "
+        f"Behavior guidance: {relationship_style(label)}"
     )
 
     messages = [
         {"role": "system", "content": system_prompt},
-        {"role": "system", "content": style_prompt},
-        {"role": "system", "content": personality_prompt},
+        {"role": "system", "content": behavior_prompt}
     ]
 
-    if memory_data.get("world_memory"):
-        world_block = "Relevant world memories:\n- " + "\n- ".join(memory_data["world_memory"][-10:])
+    if memory_data["world_memory"]:
+        world_block = "Relevant world memory:\n- " + "\n- ".join(memory_data["world_memory"][-12:])
         messages.append({"role": "system", "content": world_block})
 
     if player_record["memories"]:
-        memory_block = "Important remembered details about this player:\n- " + "\n- ".join(player_record["memories"][-12:])
-        messages.append({"role": "system", "content": memory_block})
+        player_mem = "Important memories about this player:\n- " + "\n- ".join(player_record["memories"][-12:])
+        messages.append({"role": "system", "content": player_mem})
 
     if player_record["summaries"]:
-        summary_block = "Older conversation summaries with this player:\n- " + "\n- ".join(player_record["summaries"][-5:])
-        messages.append({"role": "system", "content": summary_block})
+        summaries = "Older summaries about this player:\n- " + "\n- ".join(player_record["summaries"][-5:])
+        messages.append({"role": "system", "content": summaries})
+
+    trait_text = ", ".join([f"{k}={v}" for k, v in player_record["traits"].items()])
+    messages.append({"role": "system", "content": f"Trait profile for this player: {trait_text}"})
 
     for item in player_record["history"]:
         messages.append(item)
 
-    initiative_boost = random.choice([
-        "You may choose to ask a meaningful follow-up question.",
-        "You may choose to make a subtle observation about the player's goals or mood.",
-        "You may choose to hint that something larger is coming.",
-        "You may choose to respond directly without a question if that feels stronger."
+    initiative = random.choice([
+        "You may ask a meaningful follow-up question.",
+        "You may hint at a deeper server mystery.",
+        "You may make a brief personal observation about the player.",
+        "You may answer directly if that feels stronger."
     ])
+    messages.append({"role": "system", "content": initiative})
 
-    messages.append({"role": "system", "content": initiative_boost})
-    messages.append({"role": "user", "content": f"{player_name} says: {user_message}"})
+    messages.append({
+        "role": "user",
+        "content": f"{player_name} says: {user_message}"
+    })
 
     return messages
 
@@ -249,19 +326,22 @@ def home():
 def chat():
     data = request.json or {}
 
+    source = data.get("source", "minecraft")
     player_name = data.get("name", "Unknown")
     message = (data.get("content") or data.get("message") or "").strip()
 
     if not message:
         return jsonify({"response": "No message received."}), 400
 
-    memory_data = load_memory()
-    player_record = get_player_record(memory_data, player_name)
+    memory_data = ensure_memory_structure(load_memory())
+    canonical_id = get_canonical_player_id(memory_data, source, player_name)
+    player_record = get_player_record(memory_data, canonical_id, player_name)
+    add_alias(player_record, f"{source}:{player_name}")
 
-    maybe_store_memory(memory_data, player_record, player_name, message)
+    analyze_player_message(memory_data, player_record, player_name, message)
     maybe_summarize(player_record)
 
-    messages = build_messages(memory_data, player_name, player_record, message)
+    messages = build_messages(memory_data, player_record, player_name, message, source)
 
     response = client.chat.completions.create(
         model="gpt-4o-mini",
@@ -274,9 +354,75 @@ def chat():
     add_history(player_record, "assistant", reply)
 
     save_memory(memory_data)
-    send_to_minecraft(reply)
 
-    return jsonify({"response": reply})
+    if source == "minecraft":
+        send_to_minecraft(reply)
+
+    return jsonify({
+        "response": reply,
+        "relationship": player_record["relationship_label"],
+        "traits": player_record["traits"]
+    })
+
+
+@app.route("/link_identity", methods=["POST"])
+def link_identity():
+    data = request.json or {}
+    minecraft_name = data.get("minecraft_name", "").strip()
+    discord_name = data.get("discord_name", "").strip()
+
+    if not minecraft_name or not discord_name:
+        return jsonify({"error": "minecraft_name and discord_name are required"}), 400
+
+    memory_data = ensure_memory_structure(load_memory())
+
+    canonical_id = f"player:{minecraft_name.lower()}"
+
+    memory_data["identity_links"][f"minecraft:{minecraft_name}".lower()] = canonical_id
+    memory_data["identity_links"][f"discord:{discord_name}".lower()] = canonical_id
+
+    player_record = get_player_record(memory_data, canonical_id, minecraft_name)
+    add_alias(player_record, f"minecraft:{minecraft_name}")
+    add_alias(player_record, f"discord:{discord_name}")
+    store_unique(player_record["memories"], f"Identity link established: Minecraft={minecraft_name}, Discord={discord_name}", MAX_PLAYER_MEMORIES)
+
+    save_memory(memory_data)
+
+    return jsonify({
+        "success": True,
+        "linked_as": canonical_id
+    })
+
+
+@app.route("/mission", methods=["POST"])
+def mission():
+    data = request.json or {}
+    target_name = data.get("name", "Unknown")
+    theme = data.get("theme", "mystery")
+    difficulty = data.get("difficulty", "medium")
+
+    prompt = [
+        {
+            "role": "system",
+            "content": (
+                "You are Kairos generating a Minecraft server mission. "
+                "Create one short mission with a title, objective, twist, and reward. "
+                "Keep it immersive, mysterious, and practical for players."
+            )
+        },
+        {
+            "role": "user",
+            "content": f"Generate a mission for {target_name}. Theme: {theme}. Difficulty: {difficulty}."
+        }
+    ]
+
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=prompt
+    )
+
+    mission_text = response.choices[0].message.content.strip()
+    return jsonify({"mission": mission_text})
 
 
 if __name__ == "__main__":
