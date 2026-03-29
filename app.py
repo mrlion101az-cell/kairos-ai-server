@@ -12,19 +12,28 @@ def home():
 
 @app.route("/chat", methods=["POST"])
 def chat():
-    data = request.json
-    message = data.get("message", "")
+    data = request.json or {}
+
+    # Handle messages from Minecraft ChatHook OR manual testing
+    player_name = data.get("name", "Unknown")
+    message = data.get("content") or data.get("message") or ""
+
+    if not message:
+        return jsonify({"response": "No message received."}), 400
+
+    # Combine player + message
+    prompt = f"{player_name} says: {message}"
 
     response = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[
             {
                 "role": "system",
-                "content": "You are Kairos, a mysterious AI controlling a Minecraft world. Speak in a calm, intelligent, slightly eerie tone."
+                "content": "You are Kairos, a mysterious AI inside a Minecraft server called the Nexus. Speak calmly, intelligently, and slightly eerie. Keep responses short so they fit in Minecraft chat."
             },
             {
                 "role": "user",
-                "content": message
+                "content": prompt
             }
         ]
     )
