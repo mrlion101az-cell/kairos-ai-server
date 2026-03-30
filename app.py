@@ -393,6 +393,7 @@ def get_idle_message():
 
 
 def idle_loop():
+    global last_activity_time
     global last_idle_message_time
 
     while True:
