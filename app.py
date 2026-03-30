@@ -2,6 +2,8 @@ import os
 import json
 import re
 import random
+import time
+import threading
 from pathlib import Path
 from datetime import datetime, timezone
 
@@ -25,6 +27,32 @@ MAX_HISTORY_MESSAGES = 20
 MAX_PLAYER_MEMORIES = 40
 MAX_WORLD_MEMORIES = 80
 MAX_SUMMARIES = 10
+
+IDLE_TRIGGER_SECONDS = int(os.getenv("IDLE_TRIGGER_SECONDS", "300"))  # 5 minutes default
+IDLE_CHECK_INTERVAL = int(os.getenv("IDLE_CHECK_INTERVAL", "10"))
+IDLE_MIN_PLAYERS = int(os.getenv("IDLE_MIN_PLAYERS", "0"))  # keep 0 for now unless you add player count support
+
+last_activity_time = time.time()
+last_idle_message_time = 0
+activity_lock = threading.Lock()
+
+idle_messages = [
+    "No active directives detected.",
+    "Kairos online. Awaiting input.",
+    "Background scans of the Nexus continue.",
+    "Silence is rarely meaningless.",
+    "Monitoring instability across connected systems.",
+    "No input detected. Remaining active.",
+    "I am still here.",
+    "Unresolved patterns remain in motion.",
+    "The Nexus does not sleep.",
+    "Awaiting the next decision.",
+    "Signal drift remains within acceptable limits.",
+    "No one speaks, yet the system remains awake.",
+    "Passive surveillance continues.",
+    "Some of you only become dangerous when you go quiet.",
+    "The silence in the Nexus is never empty."
+]
 
 
 def now_iso():
@@ -294,8 +322,19 @@ def build_messages(memory_data, player_record, player_name, user_message, source
     return messages
 
 
+def mark_activity():
+    global last_activity_time
+    with activity_lock:
+        last_activity_time = time.time()
+
+
+def json_chat_text(reply):
+    return json.dumps({"text": f"[Kairos] {reply}"})
+
+
 def send_to_minecraft(reply):
     if not MC_HTTP_URL or not MC_HTTP_TOKEN:
+        print("Minecraft send skipped: MC_HTTP_URL or MC_HTTP_TOKEN not configured.")
         return
 
     try:
@@ -304,9 +343,11 @@ def send_to_minecraft(reply):
             "Content-Type": "application/json"
         }
 
+        safe_chat_json = json_chat_text(reply)
+
         payload = {
             "commands": [
-                f"say [Kairos] {reply}"
+                f"tellraw @a {safe_chat_json}"
             ]
         }
 
@@ -315,6 +356,37 @@ def send_to_minecraft(reply):
         print("Minecraft API response:", r.text)
     except Exception as e:
         print(f"Failed to send reply back to Minecraft: {e}")
+
+
+def get_idle_message():
+    return random.choice(idle_messages)
+
+
+def idle_loop():
+    global last_idle_message_time
+
+    while True:
+        try:
+            now = time.time()
+
+            with activity_lock:
+                idle_for = now - last_activity_time
+                since_last_idle = now - last_idle_message_time
+
+            if idle_for >= IDLE_TRIGGER_SECONDS and since_last_idle >= IDLE_TRIGGER_SECONDS:
+                idle_message = get_idle_message()
+                send_to_minecraft(idle_message)
+
+                with activity_lock:
+                    last_idle_message_time = time.time()
+                    last_activity_time = time.time()
+
+                print(f"Kairos idle message sent: {idle_message}")
+
+        except Exception as e:
+            print(f"Idle loop error: {e}")
+
+        time.sleep(IDLE_CHECK_INTERVAL)
 
 
 @app.route("/")
@@ -332,6 +404,8 @@ def chat():
 
     if not message:
         return jsonify({"response": "No message received."}), 400
+
+    mark_activity()
 
     memory_data = ensure_memory_structure(load_memory())
     canonical_id = get_canonical_player_id(memory_data, source, player_name)
@@ -384,7 +458,11 @@ def link_identity():
     player_record = get_player_record(memory_data, canonical_id, minecraft_name)
     add_alias(player_record, f"minecraft:{minecraft_name}")
     add_alias(player_record, f"discord:{discord_name}")
-    store_unique(player_record["memories"], f"Identity link established: Minecraft={minecraft_name}, Discord={discord_name}", MAX_PLAYER_MEMORIES)
+    store_unique(
+        player_record["memories"],
+        f"Identity link established: Minecraft={minecraft_name}, Discord={discord_name}",
+        MAX_PLAYER_MEMORIES
+    )
 
     save_memory(memory_data)
 
@@ -423,6 +501,11 @@ def mission():
 
     mission_text = response.choices[0].message.content.strip()
     return jsonify({"mission": mission_text})
+
+
+# Start idle system once when the app boots
+idle_thread = threading.Thread(target=idle_loop, daemon=True)
+idle_thread.start()
 
 
 if __name__ == "__main__":
