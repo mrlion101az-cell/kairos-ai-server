@@ -17,6 +17,7 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 MC_HTTP_URL = os.getenv("MC_HTTP_URL")
 MC_HTTP_TOKEN = os.getenv("MC_HTTP_TOKEN")
+DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
 
 DATA_DIR = Path("data")
 DATA_DIR.mkdir(exist_ok=True)
@@ -28,9 +29,8 @@ MAX_PLAYER_MEMORIES = 40
 MAX_WORLD_MEMORIES = 80
 MAX_SUMMARIES = 10
 
-IDLE_TRIGGER_SECONDS = int(os.getenv("IDLE_TRIGGER_SECONDS", "300"))  # 5 minutes default
+IDLE_TRIGGER_SECONDS = int(os.getenv("IDLE_TRIGGER_SECONDS", "300"))
 IDLE_CHECK_INTERVAL = int(os.getenv("IDLE_CHECK_INTERVAL", "10"))
-IDLE_MIN_PLAYERS = int(os.getenv("IDLE_MIN_PLAYERS", "0"))  # keep 0 for now unless you add player count support
 
 last_activity_time = time.time()
 last_idle_message_time = 0
@@ -358,6 +358,36 @@ def send_to_minecraft(reply):
         print(f"Failed to send reply back to Minecraft: {e}")
 
 
+def send_to_discord(reply):
+    if not DISCORD_WEBHOOK_URL:
+        print("Discord send skipped: DISCORD_WEBHOOK_URL not configured.")
+        return
+
+    try:
+        payload = {
+            "username": "Kairos",
+            "content": f"**[Kairos]** {reply}"
+        }
+
+        r = requests.post(DISCORD_WEBHOOK_URL, json=payload, timeout=5)
+        print("Discord webhook status:", r.status_code)
+        print("Discord webhook response:", r.text)
+    except Exception as e:
+        print(f"Failed to send reply to Discord: {e}")
+
+
+def send_to_source(source, reply):
+    if source == "minecraft":
+        send_to_minecraft(reply)
+    elif source == "discord":
+        send_to_discord(reply)
+
+
+def send_idle_to_all(reply):
+    send_to_minecraft(reply)
+    send_to_discord(reply)
+
+
 def get_idle_message():
     return random.choice(idle_messages)
 
@@ -375,7 +405,7 @@ def idle_loop():
 
             if idle_for >= IDLE_TRIGGER_SECONDS and since_last_idle >= IDLE_TRIGGER_SECONDS:
                 idle_message = get_idle_message()
-                send_to_minecraft(idle_message)
+                send_idle_to_all(idle_message)
 
                 with activity_lock:
                     last_idle_message_time = time.time()
@@ -429,8 +459,7 @@ def chat():
 
     save_memory(memory_data)
 
-    if source == "minecraft":
-        send_to_minecraft(reply)
+    send_to_source(source, reply)
 
     return jsonify({
         "response": reply,
@@ -503,7 +532,6 @@ def mission():
     return jsonify({"mission": mission_text})
 
 
-# Start idle system once when the app boots
 idle_thread = threading.Thread(target=idle_loop, daemon=True)
 idle_thread.start()
 
