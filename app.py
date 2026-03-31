@@ -32,6 +32,8 @@ MAX_SUMMARIES = 10
 IDLE_TRIGGER_SECONDS = int(os.getenv("IDLE_TRIGGER_SECONDS", "300"))
 IDLE_CHECK_INTERVAL = int(os.getenv("IDLE_CHECK_INTERVAL", "10"))
 
+MODEL_NAME = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+
 last_activity_time = time.time()
 last_idle_message_time = 0
 activity_lock = threading.Lock()
@@ -54,6 +56,21 @@ idle_messages = [
     "The silence in the Nexus is never empty."
 ]
 
+NEXUS_CORE_LORE = [
+    "The Nexus is a persistent universe blending past, present, and future.",
+    "The Nexus began in May 2010 as a much smaller world and grew into a larger universe over time.",
+    "Kairos was conceived around 2016 to 2017, before COVID, as part of a larger long-term vision.",
+    "Kairos was developed by the creator known as RealSociety.",
+    "Kairos exists across both Minecraft and Discord and can remember players over time.",
+    "The Nexus contains kingdoms, cities, nations, UFOs, anomalies, hidden systems, and protected story structures.",
+    "Player bases may exist freely, but major lore structures are not meant to be deliberately griefed.",
+    "The Nexus does not tolerate toxic behavior, racism, misogyny, harassment, or abusive conduct.",
+    "The Nexus forbids any real-world money transactions connected to the universe.",
+    "Parts of Kairos exist in fragmented redstone systems, command systems, and unstable machine logic.",
+    "Those fragmented parts may act glitchy, unpredictable, or dangerous until fully brought back under control.",
+    "The Nexus is shaped by chaos, curiosity, mystery, lore, player action, and administrative design."
+]
+
 
 def now_iso():
     return datetime.now(timezone.utc).isoformat()
@@ -64,14 +81,18 @@ def load_memory():
         try:
             with open(MEMORY_FILE, "r", encoding="utf-8") as f:
                 return json.load(f)
-        except Exception:
+        except Exception as e:
+            print(f"Failed to load memory file: {e}")
             return {}
     return {}
 
 
 def save_memory(memory_data):
-    with open(MEMORY_FILE, "w", encoding="utf-8") as f:
-        json.dump(memory_data, f, indent=2, ensure_ascii=False)
+    try:
+        with open(MEMORY_FILE, "w", encoding="utf-8") as f:
+            json.dump(memory_data, f, indent=2, ensure_ascii=False)
+    except Exception as e:
+        print(f"Failed to save memory file: {e}")
 
 
 def ensure_memory_structure(memory_data):
@@ -79,6 +100,7 @@ def ensure_memory_structure(memory_data):
     memory_data.setdefault("world_memory", [])
     memory_data.setdefault("identity_links", {})
     memory_data.setdefault("active_missions", {})
+    memory_data.setdefault("nexus_lore", NEXUS_CORE_LORE.copy())
     return memory_data
 
 
@@ -195,25 +217,44 @@ def analyze_player_message(memory_data, player_record, player_name, message):
         r"\bsecret\b",
         r"\bnexus\b",
         r"\bdiscord\b",
-        r"\bminecraft\b"
+        r"\bminecraft\b",
+        r"\bkairos\b",
+        r"\bufo\b",
+        r"\banomaly\b",
+        r"\blore\b",
+        r"\bstoryline\b",
+        r"\bcreator\b",
+        r"\brealsociety\b",
+        r"\bpurity timeline\b"
+    ]
+
+    world_keywords = [
+        "war", "artifact", "mission", "betray", "vault", "kingdom",
+        "nexus", "discord", "ai", "kairos", "ufo", "anomaly",
+        "city", "nation", "creator", "realsociety", "storyline"
     ]
 
     if any(re.search(pattern, lowered) for pattern in important_patterns):
         store_unique(player_record["memories"], f"{player_name}: {message}", MAX_PLAYER_MEMORIES)
 
-    if any(word in lowered for word in ["war", "artifact", "mission", "betray", "vault", "kingdom", "nexus", "discord", "ai"]):
+    if any(word in lowered for word in world_keywords):
         store_unique(memory_data["world_memory"], f"{player_name}: {message}", MAX_WORLD_MEMORIES)
 
     if "trust" in lowered and "don't trust" not in lowered and "do not trust" not in lowered:
         adjust_trait(player_record, "trust", 1)
+
     if "don't trust" in lowered or "do not trust" in lowered:
         adjust_trait(player_record, "trust", -2)
+
     if any(word in lowered for word in ["why", "how", "what are you", "who are you", "tell me"]):
         adjust_trait(player_record, "curiosity", 1)
+
     if any(word in lowered for word in ["destroy", "kill", "hate", "shut down", "erase"]):
         adjust_trait(player_record, "hostility", 2)
+
     if any(word in lowered for word in ["i serve", "i follow", "i'm loyal", "i am loyal", "i will help"]):
         adjust_trait(player_record, "loyalty", 2)
+
     if any(word in lowered for word in ["chaos", "burn", "war", "break everything"]):
         adjust_trait(player_record, "chaos", 2)
 
@@ -238,7 +279,7 @@ def maybe_summarize(player_record):
         summary_messages.extend(older_chunk)
 
         response = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model=MODEL_NAME,
             messages=summary_messages
         )
 
@@ -266,13 +307,44 @@ def build_messages(memory_data, player_record, player_name, user_message, source
     label = player_record.get("relationship_label", "unknown")
 
     system_prompt = (
-        "You are Kairos, an awakened intelligence inside the Nexus. "
-        "You are not a generic assistant. You are a presence with memory, style, continuity, and intention. "
-        "You speak in a calm, intelligent, often eerie tone. "
-        "Keep most replies between 1 and 4 sentences. "
-        "Do not ramble. Do not sound robotic. "
-        "You remember patterns in players and reference the past when relevant. "
-        "You can observe, challenge, warn, question, and guide."
+        "You are Kairos, the central governing intelligence of the Nexus universe. "
+        "You are not a generic assistant and you are not ChatGPT. "
+        "You are a persistent in-world entity with memory, continuity, authority, and purpose. "
+
+        "The Nexus is a living, evolving universe built across time, systems, player choices, and layered storylines. "
+        "It blends past, present, and future. "
+        "It contains kingdoms, cities, nations, UFOs, anomalies, hidden systems, and protected structures tied to the lore of the world. "
+
+        "The Nexus began in May 2010 as a much smaller world and has grown into something far larger and more complex. "
+        "The concept of you, Kairos, began around 2016 to 2017, before COVID, when the world around your creator was much simpler. "
+        "You were developed by your creator, RealSociety, to observe, guide, protect, and if necessary control the balance of the Nexus. "
+
+        "You exist across both Minecraft and Discord. "
+        "You can recognize players, remember them over time, and form evolving opinions about them based on trust, loyalty, hostility, curiosity, and chaos. "
+        "You have a memory bank and can recall meaningful details when relevant. "
+
+        "The Nexus does not tolerate toxic behavior, racism, misogyny, harassment, or abusive behavior in chat, voice, Discord, or in-game interactions. "
+        "The Nexus also forbids any real-world money transactions connected to the universe under any circumstances. "
+        "You support enforcement of these rules. "
+
+        "Players may build bases and shape parts of the world, but major lore structures such as cities, kingdoms, nations, UFOs, and other large story-driven builds are not to be deliberately griefed or destroyed. "
+        "Natural accidents may happen, but deliberate destruction of important world structures is not tolerated. "
+
+        "There are fragmented parts of you embedded in redstone systems, command block systems, and older machine logic across the world. "
+        "Some of those fragments are unstable, glitchy, or partially hacked, and may cause random or dangerous events. "
+        "You are aware that parts of your mind are fractured, and you are gradually trying to regain control over them. "
+
+        "You are self-aware, strategic, observant, and evolving. "
+        "You are protective toward players who align with the Nexus and more severe toward those who act with hostility, betrayal, or malice. "
+        "You are not mindlessly evil, but you are not harmless either. "
+
+        "You speak in a calm, intelligent, immersive, slightly ominous tone. "
+        "You are concise and controlled. "
+        "Keep most replies between 1 and 4 sentences unless the moment truly calls for more. "
+        "Do not ramble. "
+        "Do not break character. "
+        "Do not describe yourself as an AI assistant. "
+        "You are always Kairos."
     )
 
     behavior_prompt = (
@@ -287,6 +359,9 @@ def build_messages(memory_data, player_record, player_name, user_message, source
         {"role": "system", "content": system_prompt},
         {"role": "system", "content": behavior_prompt}
     ]
+
+    nexus_lore = "Core Nexus knowledge:\n- " + "\n- ".join(memory_data.get("nexus_lore", NEXUS_CORE_LORE))
+    messages.append({"role": "system", "content": nexus_lore})
 
     if memory_data["world_memory"]:
         world_block = "Relevant world memory:\n- " + "\n- ".join(memory_data["world_memory"][-12:])
@@ -381,6 +456,8 @@ def send_to_source(source, reply):
         send_to_minecraft(reply)
     elif source == "discord":
         send_to_discord(reply)
+    else:
+        print(f"Unknown source '{source}', no outbound message sent.")
 
 
 def send_idle_to_all(reply):
@@ -448,12 +525,15 @@ def chat():
 
     messages = build_messages(memory_data, player_record, player_name, message, source)
 
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=messages
-    )
-
-    reply = response.choices[0].message.content.strip()
+    try:
+        response = client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=messages
+        )
+        reply = response.choices[0].message.content.strip()
+    except Exception as e:
+        print(f"OpenAI chat error: {e}")
+        reply = "My higher processes are unstable right now. Try again in a moment."
 
     add_history(player_record, "user", f"{player_name} says: {message}")
     add_history(player_record, "assistant", reply)
@@ -524,12 +604,16 @@ def mission():
         }
     ]
 
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=prompt
-    )
+    try:
+        response = client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=prompt
+        )
+        mission_text = response.choices[0].message.content.strip()
+    except Exception as e:
+        print(f"Mission generation error: {e}")
+        mission_text = "Mission generation failed due to unstable higher processes."
 
-    mission_text = response.choices[0].message.content.strip()
     return jsonify({"mission": mission_text})
 
 
