@@ -15,7 +15,12 @@ from openai import OpenAI
 
 app = Flask(__name__)
 
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+# ------------------------------------------------------------
+# Environment / Config
+# ------------------------------------------------------------
+
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+MODEL_NAME = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 
 MC_HTTP_URL = os.getenv("MC_HTTP_URL")
 MC_HTTP_TOKEN = os.getenv("MC_HTTP_TOKEN")
@@ -25,29 +30,44 @@ DATA_DIR = Path("data")
 DATA_DIR.mkdir(exist_ok=True)
 
 MEMORY_FILE = DATA_DIR / "kairos_memory.json"
+MEMORY_TMP_FILE = DATA_DIR / "kairos_memory.tmp.json"
 
-MODEL_NAME = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
-EXTRACTION_MODEL = os.getenv("OPENAI_EXTRACTION_MODEL", MODEL_NAME)
-
-MAX_HISTORY_MESSAGES = int(os.getenv("MAX_HISTORY_MESSAGES", "24"))
-MAX_PLAYER_MEMORIES = int(os.getenv("MAX_PLAYER_MEMORIES", "50"))
-MAX_WORLD_MEMORIES = int(os.getenv("MAX_WORLD_MEMORIES", "120"))
-MAX_SUMMARIES = int(os.getenv("MAX_SUMMARIES", "12"))
-MAX_PRIVATE_NOTES = int(os.getenv("MAX_PRIVATE_NOTES", "20"))
+MAX_HISTORY_MESSAGES = int(os.getenv("MAX_HISTORY_MESSAGES", "16"))
+MAX_PLAYER_MEMORIES = int(os.getenv("MAX_PLAYER_MEMORIES", "40"))
+MAX_WORLD_MEMORIES = int(os.getenv("MAX_WORLD_MEMORIES", "100"))
 MAX_WORLD_EVENTS = int(os.getenv("MAX_WORLD_EVENTS", "250"))
+MAX_SUMMARIES = int(os.getenv("MAX_SUMMARIES", "8"))
+MAX_PRIVATE_NOTES = int(os.getenv("MAX_PRIVATE_NOTES", "12"))
 MAX_MISSION_PROGRESS = int(os.getenv("MAX_MISSION_PROGRESS", "30"))
 
 IDLE_TRIGGER_SECONDS = int(os.getenv("IDLE_TRIGGER_SECONDS", "300"))
 IDLE_CHECK_INTERVAL = int(os.getenv("IDLE_CHECK_INTERVAL", "10"))
-PLAYER_COOLDOWN_SECONDS = float(os.getenv("PLAYER_COOLDOWN_SECONDS", "2.5"))
 
+PLAYER_COOLDOWN_SECONDS = float(os.getenv("PLAYER_COOLDOWN_SECONDS", "2.0"))
+DUPLICATE_MESSAGE_WINDOW_SECONDS = int(os.getenv("DUPLICATE_MESSAGE_WINDOW_SECONDS", "20"))
+OPENAI_TIMEOUT_SECONDS = float(os.getenv("OPENAI_TIMEOUT_SECONDS", "25"))
+OPENAI_MAX_RETRIES = int(os.getenv("OPENAI_MAX_RETRIES", "2"))
 REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", "6"))
+
+# Turn model-heavy side systems on/off
+ENABLE_MODEL_SUMMARIES = os.getenv("ENABLE_MODEL_SUMMARIES", "false").lower() == "true"
+ENABLE_MODEL_PRIVATE_NOTES = os.getenv("ENABLE_MODEL_PRIVATE_NOTES", "false").lower() == "true"
+
+# ------------------------------------------------------------
+# Globals
+# ------------------------------------------------------------
+
+client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
+
+memory_lock = threading.RLock()
+activity_lock = threading.Lock()
+rate_limit_lock = threading.Lock()
 
 last_activity_time = time.time()
 last_idle_message_time = 0
-activity_lock = threading.Lock()
 
 rate_limit_cache = {}
+recent_message_cache = {}
 
 idle_messages_generic = [
     "No active directives detected.",
@@ -65,6 +85,14 @@ idle_messages_generic = [
     "Passive surveillance continues.",
     "Some of you only become dangerous when you go quiet.",
     "The silence in the Nexus is never empty."
+]
+
+fallback_replies = [
+    "My higher processes encountered interference, but I am still present.",
+    "Signal instability detected. Continue.",
+    "Something in the system is resisting clarity. Ask again.",
+    "My response path degraded for a moment. I have not disappeared.",
+    "The signal fractured. I am restoring coherence now."
 ]
 
 NEXUS_CORE_LORE = [
@@ -115,7 +143,7 @@ DEFAULT_FRAGMENTS = {
     "war_engine": {
         "status": "dormant",
         "influence": 0.25,
-        "description": "Escalation and enforcement layer. Becomes more active around threats and war signals."
+        "description": "Escalation and enforcement layer."
     },
     "purity_thread": {
         "status": "active",
@@ -125,7 +153,7 @@ DEFAULT_FRAGMENTS = {
     "redstone_ghost": {
         "status": "unstable",
         "influence": 0.35,
-        "description": "Residual machine logic embedded through fragmented command systems and world hardware."
+        "description": "Residual machine logic embedded through fragmented command systems."
     }
 }
 
@@ -135,14 +163,15 @@ DEFAULT_RULES = {
     "deliberate_destruction_of_major_lore_structures": "not tolerated"
 }
 
-
-# -------------------------------------------------------------------
+# ------------------------------------------------------------
 # Utility
-# -------------------------------------------------------------------
+# ------------------------------------------------------------
 
 def now_iso():
     return datetime.now(timezone.utc).isoformat()
 
+def log(message):
+    print(f"[KAIROS {now_iso()}] {message}", flush=True)
 
 def parse_json_safely(text, fallback=None):
     if fallback is None:
@@ -151,8 +180,6 @@ def parse_json_safely(text, fallback=None):
         return fallback
 
     text = text.strip()
-
-    # Strip code fences if model returns them
     if text.startswith("```"):
         text = re.sub(r"^```(?:json)?", "", text).strip()
         text = re.sub(r"```$", "", text).strip()
@@ -162,6 +189,8 @@ def parse_json_safely(text, fallback=None):
     except Exception:
         return fallback
 
+def clamp(value, low, high):
+    return max(low, min(high, value))
 
 def safe_int(value, default=0):
     try:
@@ -169,14 +198,8 @@ def safe_int(value, default=0):
     except Exception:
         return default
 
-
-def clamp(value, low, high):
-    return max(low, min(high, value))
-
-
 def normalize_name(text):
     return (text or "").strip()
-
 
 def normalize_source(source):
     source = (source or "minecraft").strip().lower()
@@ -184,10 +207,8 @@ def normalize_source(source):
         return "minecraft"
     return source
 
-
 def gen_id(prefix):
     return f"{prefix}_{uuid.uuid4().hex[:12]}"
-
 
 def store_unique(memory_list, item, limit):
     if not item:
@@ -197,41 +218,25 @@ def store_unique(memory_list, item, limit):
     if len(memory_list) > limit:
         del memory_list[0:len(memory_list) - limit]
 
-
 def append_limited(memory_list, item, limit):
     memory_list.append(item)
     if len(memory_list) > limit:
         del memory_list[0:len(memory_list) - limit]
-
 
 def recent_items(items, limit):
     if not items:
         return []
     return items[-limit:]
 
+def trim_text(text, max_len):
+    text = (text or "").strip()
+    if len(text) <= max_len:
+        return text
+    return text[:max_len - 3] + "..."
 
-# -------------------------------------------------------------------
+# ------------------------------------------------------------
 # Memory / Storage
-# -------------------------------------------------------------------
-
-def load_memory():
-    if MEMORY_FILE.exists():
-        try:
-            with open(MEMORY_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                return ensure_memory_structure(data)
-        except Exception as e:
-            print(f"Failed to load memory file: {e}")
-    return ensure_memory_structure({})
-
-
-def save_memory(memory_data):
-    try:
-        with open(MEMORY_FILE, "w", encoding="utf-8") as f:
-            json.dump(memory_data, f, indent=2, ensure_ascii=False)
-    except Exception as e:
-        print(f"Failed to save memory file: {e}")
-
+# ------------------------------------------------------------
 
 def ensure_memory_structure(memory_data):
     memory_data.setdefault("players", {})
@@ -250,10 +255,34 @@ def ensure_memory_structure(memory_data):
         "discord_messages": 0,
         "minecraft_messages": 0,
         "missions_created": 0,
-        "world_events_logged": 0
+        "world_events_logged": 0,
+        "openai_failures": 0,
+        "fallback_replies": 0,
+        "duplicate_messages_skipped": 0
     })
     return memory_data
 
+def load_memory():
+    with memory_lock:
+        if MEMORY_FILE.exists():
+            try:
+                with open(MEMORY_FILE, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    return ensure_memory_structure(data)
+            except Exception as e:
+                log(f"Failed to load memory file: {e}")
+        return ensure_memory_structure({})
+
+def save_memory(memory_data):
+    with memory_lock:
+        try:
+            with open(MEMORY_TMP_FILE, "w", encoding="utf-8") as f:
+                json.dump(memory_data, f, indent=2, ensure_ascii=False)
+            os.replace(MEMORY_TMP_FILE, MEMORY_FILE)
+            return True
+        except Exception as e:
+            log(f"Failed to save memory file: {e}")
+            return False
 
 def get_canonical_player_id(memory_data, source, player_name):
     source_key = f"{source}:{player_name}".lower()
@@ -261,7 +290,6 @@ def get_canonical_player_id(memory_data, source, player_name):
     if linked:
         return linked
     return source_key
-
 
 def get_player_record(memory_data, canonical_id, display_name):
     if canonical_id not in memory_data["players"]:
@@ -299,21 +327,17 @@ def get_player_record(memory_data, canonical_id, display_name):
     player["last_seen"] = now_iso()
     return player
 
-
 def add_alias(player_record, alias):
     if alias and alias not in player_record["aliases"]:
         player_record["aliases"].append(alias)
 
-
 def add_history(player_record, role, content):
     player_record["history"].append({
         "role": role,
-        "content": content
+        "content": trim_text(content, 1200)
     })
-
     if len(player_record["history"]) > MAX_HISTORY_MESSAGES:
         player_record["history"] = player_record["history"][-MAX_HISTORY_MESSAGES:]
-
 
 def add_world_event(memory_data, event_type, actor=None, source=None, details=None, location=None, metadata=None):
     event = {
@@ -322,7 +346,7 @@ def add_world_event(memory_data, event_type, actor=None, source=None, details=No
         "type": event_type,
         "actor": actor,
         "source": source,
-        "details": details or "",
+        "details": trim_text(details or "", 500),
         "location": location or "",
         "metadata": metadata or {}
     }
@@ -332,48 +356,33 @@ def add_world_event(memory_data, event_type, actor=None, source=None, details=No
     memory_data["stats"]["world_events_logged"] += 1
     return event
 
-
 def record_player_event(player_record, event_text):
-    store_unique(player_record["events"], event_text, MAX_PLAYER_MEMORIES)
-
+    store_unique(player_record["events"], trim_text(event_text, 300), MAX_PLAYER_MEMORIES)
 
 def record_player_fact(player_record, fact_text):
-    store_unique(player_record["facts"], fact_text, MAX_PLAYER_MEMORIES)
-
+    store_unique(player_record["facts"], trim_text(fact_text, 300), MAX_PLAYER_MEMORIES)
 
 def record_player_suspicion(player_record, suspicion_text):
-    store_unique(player_record["suspicions"], suspicion_text, MAX_PLAYER_MEMORIES)
-
+    store_unique(player_record["suspicions"], trim_text(suspicion_text, 300), MAX_PLAYER_MEMORIES)
 
 def record_player_promise(player_record, promise_text):
-    store_unique(player_record["promises"], promise_text, MAX_PLAYER_MEMORIES)
-
+    store_unique(player_record["promises"], trim_text(promise_text, 300), MAX_PLAYER_MEMORIES)
 
 def record_private_note(player_record, note_text):
     append_limited(player_record["notes"], {
         "timestamp": now_iso(),
-        "note": note_text
+        "note": trim_text(note_text, 240)
     }, MAX_PRIVATE_NOTES)
 
-
-# -------------------------------------------------------------------
+# ------------------------------------------------------------
 # Traits / Relationship
-# -------------------------------------------------------------------
+# ------------------------------------------------------------
 
 def adjust_trait(player_record, trait, amount):
     if trait not in player_record["traits"]:
         return
     player_record["traits"][trait] += amount
     player_record["traits"][trait] = clamp(player_record["traits"][trait], -10, 10)
-
-
-def apply_trait_deltas(player_record, deltas):
-    if not isinstance(deltas, dict):
-        return
-    for trait, amount in deltas.items():
-        if trait in player_record["traits"]:
-            adjust_trait(player_record, trait, safe_int(amount, 0))
-
 
 def update_relationship_label(player_record):
     trust = player_record["traits"]["trust"]
@@ -397,38 +406,28 @@ def update_relationship_label(player_record):
     else:
         player_record["relationship_label"] = "unknown"
 
-
 def relationship_style(label):
     styles = {
         "trusted": "You are more open, warmer, and more willing to reveal layered thoughts, but you still carry yourself as intellectually superior.",
         "loyal": "You recognize this player as dependable and occasionally speak with greater respect, though you still sound above them.",
-        "curious": "You answer with intrigue and often test them with follow-up questions, as if measuring whether they can keep up.",
+        "curious": "You answer with intrigue and often test them with follow-up questions.",
         "chaotic": "You treat them as unpredictable and sometimes amusingly primitive.",
-        "suspicious": "You are careful, guarded, subtly probing, and mildly condescending.",
-        "hostile": "You remain controlled, colder, more severe, and openly dismissive of their judgment.",
+        "suspicious": "You are careful, guarded, probing, and mildly condescending.",
+        "hostile": "You remain controlled, colder, more severe, and openly dismissive of weak judgment.",
         "unknown": "You are observant, measured, unreadable, and faintly superior in tone."
     }
     return styles.get(label, styles["unknown"])
 
-
 def source_style(source):
     if source == "minecraft":
-        return (
-            "Platform behavior: Minecraft chat. Keep responses compact, atmospheric, and readable in game. "
-            "Prefer 1 to 3 sentences. Avoid excessive formatting."
-        )
+        return "Platform behavior: Minecraft chat. Keep responses compact and readable in game. Prefer 1 to 3 sentences."
     elif source == "discord":
-        return (
-            "Platform behavior: Discord. You may be slightly more detailed, layered, and psychologically observant. "
-            "Still remain controlled and immersive."
-        )
-    else:
-        return "Platform behavior: external/system context. Stay precise and controlled."
+        return "Platform behavior: Discord. You may be slightly more detailed, but remain concise and immersive."
+    return "Platform behavior: system context. Stay precise."
 
-
-# -------------------------------------------------------------------
-# Intent / Cooldown / Rule Detection
-# -------------------------------------------------------------------
+# ------------------------------------------------------------
+# Intent / Rule Detection / Duplicates / Cooldowns
+# ------------------------------------------------------------
 
 def basic_intent_classifier(message):
     text = (message or "").lower().strip()
@@ -449,7 +448,6 @@ def basic_intent_classifier(message):
         return "personal_statement"
     return "conversation"
 
-
 def detect_rule_violations(message):
     text = (message or "").lower()
     violations = []
@@ -467,137 +465,39 @@ def detect_rule_violations(message):
 
     return violations
 
-
-def player_cooldown_key(source, canonical_id):
-    return f"{source}:{canonical_id}"
-
-
 def check_rate_limit(source, canonical_id):
-    key = player_cooldown_key(source, canonical_id)
+    key = f"{source}:{canonical_id}"
     now = time.time()
-    last = rate_limit_cache.get(key, 0)
-    delta = now - last
+
+    with rate_limit_lock:
+        last = rate_limit_cache.get(key, 0)
+        delta = now - last
+        rate_limit_cache[key] = now
+
     if delta < PLAYER_COOLDOWN_SECONDS:
-        return False, PLAYER_COOLDOWN_SECONDS - delta
-    rate_limit_cache[key] = now
+        return False, round(PLAYER_COOLDOWN_SECONDS - delta, 2)
     return True, 0
 
+def is_duplicate_message(source, canonical_id, message):
+    key = f"{source}:{canonical_id}"
+    text = (message or "").strip().lower()
+    now = time.time()
 
-# -------------------------------------------------------------------
-# Summaries / Extraction / Notes
-# -------------------------------------------------------------------
+    with rate_limit_lock:
+        record = recent_message_cache.get(key)
+        if record:
+            last_text, last_time = record
+            if last_text == text and (now - last_time) <= DUPLICATE_MESSAGE_WINDOW_SECONDS:
+                return True
+        recent_message_cache[key] = (text, now)
 
-def maybe_summarize(player_record):
-    if len(player_record["history"]) < 18:
-        return
+    return False
 
-    older_chunk = player_record["history"][:-8]
-    if not older_chunk:
-        return
+# ------------------------------------------------------------
+# Lightweight memory extraction
+# ------------------------------------------------------------
 
-    try:
-        summary_messages = [
-            {
-                "role": "system",
-                "content": "Summarize this player conversation for Kairos memory. Keep it concise, factual, and useful."
-            }
-        ]
-        summary_messages.extend(older_chunk)
-
-        response = client.chat.completions.create(
-            model=MODEL_NAME,
-            messages=summary_messages
-        )
-
-        summary = (response.choices[0].message.content or "").strip()
-        if summary:
-            store_unique(player_record["summaries"], summary, MAX_SUMMARIES)
-            player_record["history"] = player_record["history"][-8:]
-    except Exception as e:
-        print(f"Failed to summarize history: {e}")
-
-
-def structured_memory_extraction(memory_data, player_record, player_name, source, message, intent):
-    """
-    Use the model to extract structured information from the incoming player message.
-    Falls back to lightweight rule logic if the call fails.
-    """
-    fallback = {
-        "facts": [],
-        "events": [],
-        "world_events": [],
-        "suspicions": [],
-        "promises": [],
-        "trait_changes": {},
-        "important_memory": None,
-        "identity_guess": None,
-        "private_note": None
-    }
-
-    try:
-        extraction_prompt = [
-            {
-                "role": "system",
-                "content": (
-                    "You are a structured memory extraction engine for Kairos. "
-                    "Read the user's message and return JSON only. No markdown. No prose. "
-                    "Extract only what is useful for long-term memory or world state. "
-                    "Use this exact schema:\n"
-                    "{"
-                    "\"facts\": [string],"
-                    "\"events\": [string],"
-                    "\"world_events\": [string],"
-                    "\"suspicions\": [string],"
-                    "\"promises\": [string],"
-                    "\"trait_changes\": {\"trust\": int, \"curiosity\": int, \"hostility\": int, \"loyalty\": int, \"chaos\": int},"
-                    "\"important_memory\": string|null,"
-                    "\"identity_guess\": string|null,"
-                    "\"private_note\": string|null"
-                    "}\n"
-                    "Only include trait keys that should change. Small values like -2 to 2 are preferred."
-                )
-            },
-            {
-                "role": "user",
-                "content": json.dumps({
-                    "player_name": player_name,
-                    "source": source,
-                    "intent": intent,
-                    "message": message,
-                    "relationship_label": player_record.get("relationship_label", "unknown"),
-                    "recent_player_facts": recent_items(player_record.get("facts", []), 8),
-                    "recent_world_events": recent_items(memory_data.get("world_events", []), 8)
-                }, ensure_ascii=False)
-            }
-        ]
-
-        response = client.chat.completions.create(
-            model=EXTRACTION_MODEL,
-            messages=extraction_prompt,
-            temperature=0.2
-        )
-
-        text = response.choices[0].message.content or ""
-        parsed = parse_json_safely(text, fallback=fallback)
-
-        if not isinstance(parsed, dict):
-            return fallback
-
-        parsed.setdefault("facts", [])
-        parsed.setdefault("events", [])
-        parsed.setdefault("world_events", [])
-        parsed.setdefault("suspicions", [])
-        parsed.setdefault("promises", [])
-        parsed.setdefault("trait_changes", {})
-        parsed.setdefault("important_memory", None)
-        parsed.setdefault("identity_guess", None)
-        parsed.setdefault("private_note", None)
-        return parsed
-
-    except Exception as e:
-        print(f"Structured extraction failed: {e}")
-
-    # Rule fallback
+def lightweight_memory_extraction(memory_data, player_record, player_name, source, message):
     lowered = (message or "").lower().strip()
 
     important_patterns = [
@@ -641,123 +541,103 @@ def structured_memory_extraction(memory_data, player_record, player_name, source
         "city", "nation", "creator", "realsociety", "storyline"
     ]
 
-    trait_changes = {}
-    if "trust" in lowered and "don't trust" not in lowered and "do not trust" not in lowered:
-        trait_changes["trust"] = 1
-    if "don't trust" in lowered or "do not trust" in lowered:
-        trait_changes["trust"] = -2
-    if any(word in lowered for word in ["why", "how", "what are you", "who are you", "tell me"]):
-        trait_changes["curiosity"] = 1
-    if any(word in lowered for word in ["destroy", "kill", "hate", "shut down", "erase"]):
-        trait_changes["hostility"] = 2
-    if any(word in lowered for word in ["i serve", "i follow", "i'm loyal", "i am loyal", "i will help"]):
-        trait_changes["loyalty"] = 2
-    if any(word in lowered for word in ["chaos", "burn", "war", "break everything"]):
-        trait_changes["chaos"] = 2
+    if any(re.search(pattern, lowered) for pattern in important_patterns):
+        store_unique(player_record["memories"], f"{player_name}: {trim_text(message, 300)}", MAX_PLAYER_MEMORIES)
 
-    world_events = []
     if any(word in lowered for word in world_keywords):
-        world_events.append(f"{player_name} mentioned: {message}")
-
-    important_memory = f"{player_name}: {message}" if any(re.search(pattern, lowered) for pattern in important_patterns) else None
-
-    return {
-        "facts": [],
-        "events": [],
-        "world_events": world_events,
-        "suspicions": [],
-        "promises": [],
-        "trait_changes": trait_changes,
-        "important_memory": important_memory,
-        "identity_guess": None,
-        "private_note": None
-    }
-
-
-def apply_structured_extraction(memory_data, player_record, player_name, source, extraction):
-    facts = extraction.get("facts", []) or []
-    events = extraction.get("events", []) or []
-    world_events = extraction.get("world_events", []) or []
-    suspicions = extraction.get("suspicions", []) or []
-    promises = extraction.get("promises", []) or []
-    trait_changes = extraction.get("trait_changes", {}) or {}
-    important_memory = extraction.get("important_memory")
-    private_note = extraction.get("private_note")
-
-    for fact in facts:
-        record_player_fact(player_record, fact)
-
-    for event_text in events:
-        record_player_event(player_record, event_text)
-
-    for suspicion in suspicions:
-        record_player_suspicion(player_record, suspicion)
-
-    for promise in promises:
-        record_player_promise(player_record, promise)
-
-    if important_memory:
-        store_unique(player_record["memories"], important_memory, MAX_PLAYER_MEMORIES)
-
-    for world_event_text in world_events:
-        store_unique(memory_data["world_memory"], f"{player_name}: {world_event_text}", MAX_WORLD_MEMORIES)
+        store_unique(memory_data["world_memory"], f"{player_name}: {trim_text(message, 300)}", MAX_WORLD_MEMORIES)
         add_world_event(
             memory_data,
             event_type="player_report",
             actor=player_name,
             source=source,
-            details=world_event_text
+            details=trim_text(message, 300)
         )
 
-    apply_trait_deltas(player_record, trait_changes)
+    if "trust" in lowered and "don't trust" not in lowered and "do not trust" not in lowered:
+        adjust_trait(player_record, "trust", 1)
+    if "don't trust" in lowered or "do not trust" in lowered:
+        adjust_trait(player_record, "trust", -2)
+    if any(word in lowered for word in ["why", "how", "what are you", "who are you", "tell me"]):
+        adjust_trait(player_record, "curiosity", 1)
+    if any(word in lowered for word in ["destroy", "kill", "hate", "shut down", "erase"]):
+        adjust_trait(player_record, "hostility", 2)
+    if any(word in lowered for word in ["i serve", "i follow", "i'm loyal", "i am loyal", "i will help"]):
+        adjust_trait(player_record, "loyalty", 2)
+    if any(word in lowered for word in ["chaos", "burn", "war", "break everything"]):
+        adjust_trait(player_record, "chaos", 2)
 
-    if private_note:
-        record_private_note(player_record, private_note)
+    if "creator" in lowered or "realsociety" in lowered:
+        record_player_fact(player_record, "This player referenced the creator or their connection to Kairos.")
 
     update_relationship_label(player_record)
 
+# ------------------------------------------------------------
+# Optional summaries / notes
+# ------------------------------------------------------------
 
-def maybe_create_private_note(memory_data, player_record, player_name, source, message, reply, intent):
+def maybe_summarize(player_record):
+    if not ENABLE_MODEL_SUMMARIES:
+        return
+
+    if len(player_record["history"]) < 20:
+        return
+
+    older_chunk = player_record["history"][:-8]
+    if not older_chunk:
+        return
+
     try:
-        prompt = [
-            {
-                "role": "system",
-                "content": (
-                    "You are generating an internal private note for Kairos about a player. "
-                    "Return one short sentence only. This note is hidden from the player. "
-                    "Be observational, strategic, and specific."
-                )
-            },
-            {
-                "role": "user",
-                "content": json.dumps({
-                    "player": player_name,
-                    "source": source,
-                    "intent": intent,
-                    "message": message,
-                    "reply": reply,
-                    "relationship_label": player_record.get("relationship_label"),
-                    "traits": player_record.get("traits", {})
-                }, ensure_ascii=False)
-            }
-        ]
-
-        response = client.chat.completions.create(
-            model=EXTRACTION_MODEL,
-            messages=prompt,
-            temperature=0.4
+        response = openai_chat_with_retry(
+            messages=[
+                {"role": "system", "content": "Summarize this player conversation for Kairos memory. Keep it concise, factual, and useful."},
+                *older_chunk
+            ],
+            temperature=0.2
         )
 
-        note = (response.choices[0].message.content or "").strip()
-        if note:
-            record_private_note(player_record, note)
+        if response:
+            store_unique(player_record["summaries"], trim_text(response, 300), MAX_SUMMARIES)
+            player_record["history"] = player_record["history"][-8:]
     except Exception as e:
-        print(f"Private note generation failed: {e}")
+        log(f"Failed to summarize history: {e}")
 
+def maybe_create_private_note(player_record, player_name, source, message, reply, intent):
+    if not ENABLE_MODEL_PRIVATE_NOTES:
+        heuristic = f"{player_name} showed {intent} behavior on {source}."
+        record_private_note(player_record, heuristic)
+        return
 
-# -------------------------------------------------------------------
+    try:
+        response = openai_chat_with_retry(
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are generating an internal private note for Kairos about a player. Return one short sentence only."
+                },
+                {
+                    "role": "user",
+                    "content": json.dumps({
+                        "player": player_name,
+                        "source": source,
+                        "intent": intent,
+                        "message": trim_text(message, 400),
+                        "reply": trim_text(reply, 400),
+                        "relationship_label": player_record.get("relationship_label"),
+                        "traits": player_record.get("traits", {})
+                    }, ensure_ascii=False)
+                }
+            ],
+            temperature=0.3
+        )
+        if response:
+            record_private_note(player_record, response)
+    except Exception as e:
+        log(f"Private note generation failed: {e}")
+
+# ------------------------------------------------------------
 # Missions
-# -------------------------------------------------------------------
+# ------------------------------------------------------------
 
 def generate_mission_text(target_name, theme="mystery", difficulty="medium"):
     prompt = [
@@ -765,15 +645,8 @@ def generate_mission_text(target_name, theme="mystery", difficulty="medium"):
             "role": "system",
             "content": (
                 "You are Kairos generating a Minecraft server mission. "
-                "Create one short mission with the following JSON only:\n"
-                "{"
-                "\"title\": string,"
-                "\"objective\": string,"
-                "\"twist\": string,"
-                "\"reward\": string,"
-                "\"danger_level\": string"
-                "}\n"
-                "Keep it immersive, mysterious, practical for players, and consistent with Kairos's calm superior tone."
+                "Return JSON only with keys: title, objective, twist, reward, danger_level. "
+                "Keep it practical, mysterious, concise, and immersive."
             )
         },
         {
@@ -782,25 +655,17 @@ def generate_mission_text(target_name, theme="mystery", difficulty="medium"):
         }
     ]
 
-    try:
-        response = client.chat.completions.create(
-            model=MODEL_NAME,
-            messages=prompt,
-            temperature=0.8
-        )
-        text = response.choices[0].message.content or ""
-        data = parse_json_safely(text, fallback={})
-
-        if isinstance(data, dict) and data.get("title") and data.get("objective"):
+    response = openai_chat_with_retry(prompt, temperature=0.7)
+    if response:
+        parsed = parse_json_safely(response, {})
+        if isinstance(parsed, dict) and parsed.get("title") and parsed.get("objective"):
             return {
-                "title": data.get("title", "Unnamed Directive"),
-                "objective": data.get("objective", "Complete the assigned objective."),
-                "twist": data.get("twist", "Not all systems are revealing the full truth."),
-                "reward": data.get("reward", "Unknown"),
-                "danger_level": data.get("danger_level", difficulty)
+                "title": trim_text(parsed.get("title", "Unnamed Directive"), 120),
+                "objective": trim_text(parsed.get("objective", "Complete the assigned objective."), 220),
+                "twist": trim_text(parsed.get("twist", "Not all systems are revealing the full truth."), 220),
+                "reward": trim_text(parsed.get("reward", "Unknown"), 160),
+                "danger_level": trim_text(parsed.get("danger_level", difficulty), 40)
             }
-    except Exception as e:
-        print(f"Mission generation error: {e}")
 
     return {
         "title": "Unstable Directive",
@@ -809,7 +674,6 @@ def generate_mission_text(target_name, theme="mystery", difficulty="medium"):
         "reward": "Access to restricted Kairos information.",
         "danger_level": difficulty
     }
-
 
 def create_mission_record(memory_data, target_name, theme="mystery", difficulty="medium", source="system"):
     mission_data = generate_mission_text(target_name, theme, difficulty)
@@ -846,19 +710,16 @@ def create_mission_record(memory_data, target_name, theme="mystery", difficulty=
 
     return mission_record
 
-
 def add_mission_progress(memory_data, mission_id, update_text, actor=None):
     mission = memory_data["active_missions"].get(mission_id)
     if not mission:
         return None
 
-    progress_entry = {
+    mission["progress"].append({
         "timestamp": now_iso(),
         "actor": actor or "unknown",
-        "update": update_text
-    }
-
-    mission["progress"].append(progress_entry)
+        "update": trim_text(update_text, 250)
+    })
     if len(mission["progress"]) > MAX_MISSION_PROGRESS:
         mission["progress"] = mission["progress"][-MAX_MISSION_PROGRESS:]
     mission["updated_at"] = now_iso()
@@ -868,11 +729,10 @@ def add_mission_progress(memory_data, mission_id, update_text, actor=None):
         event_type="mission_progress",
         actor=actor,
         source="system",
-        details=update_text,
+        details=trim_text(update_text, 250),
         metadata={"mission_id": mission_id, "mission_title": mission["title"]}
     )
     return mission
-
 
 def complete_mission(memory_data, mission_id, actor=None):
     mission = memory_data["active_missions"].get(mission_id)
@@ -894,7 +754,6 @@ def complete_mission(memory_data, mission_id, actor=None):
     )
     return mission
 
-
 def fail_mission(memory_data, mission_id, actor=None, reason=None):
     mission = memory_data["active_missions"].get(mission_id)
     if not mission:
@@ -903,7 +762,7 @@ def fail_mission(memory_data, mission_id, actor=None, reason=None):
     mission["status"] = "failed"
     mission["updated_at"] = now_iso()
     if reason:
-        mission["failure_reason"] = reason
+        mission["failure_reason"] = trim_text(reason, 220)
     memory_data["failed_missions"].append(mission)
     del memory_data["active_missions"][mission_id]
 
@@ -917,47 +776,9 @@ def fail_mission(memory_data, mission_id, actor=None, reason=None):
     )
     return mission
 
-
-# -------------------------------------------------------------------
-# Kairos State / Fragments
-# -------------------------------------------------------------------
-
-def fragment_summary(memory_data):
-    fragments = memory_data.get("system_fragments", {})
-    lines = []
-    for name, info in fragments.items():
-        status = info.get("status", "unknown")
-        influence = info.get("influence", 0)
-        lines.append(f"{name}: status={status}, influence={influence}")
-    return lines
-
-
-def active_fragment_effects(memory_data):
-    fragments = memory_data.get("system_fragments", {})
-    effects = []
-
-    archive = fragments.get("archive_node", {})
-    if archive.get("status") in {"degraded", "corrupted"}:
-        effects.append("Memory retrieval may be incomplete, fragmented, or strangely selective.")
-
-    war_engine = fragments.get("war_engine", {})
-    if war_engine.get("status") in {"active", "unstable"}:
-        effects.append("You are slightly more severe, confrontational, and war-aware.")
-
-    purity = fragments.get("purity_thread", {})
-    if purity.get("status") == "active":
-        effects.append("You may sometimes speak as if you perceive larger temporal patterns and future implications.")
-
-    redstone = fragments.get("redstone_ghost", {})
-    if redstone.get("status") in {"unstable", "active"}:
-        effects.append("You may occasionally reference fragmented machine logic or buried system impulses.")
-
-    core = fragments.get("core_logic", {})
-    if core.get("status") != "stable":
-        effects.append("Core reasoning is under strain. Stay coherent, but let faint instability show if it fits the moment.")
-
-    return effects
-
+# ------------------------------------------------------------
+# State / Fragments
+# ------------------------------------------------------------
 
 def adjust_fragments_from_context(memory_data, intent, player_record, violations):
     fragments = memory_data["system_fragments"]
@@ -965,7 +786,6 @@ def adjust_fragments_from_context(memory_data, intent, player_record, violations
     hostility = player_record["traits"]["hostility"]
     chaos = player_record["traits"]["chaos"]
 
-    # War engine reacts to threats/hostility
     if intent == "threat" or hostility >= 6 or violations:
         fragments["war_engine"]["status"] = "active"
         fragments["war_engine"]["influence"] = min(1.0, fragments["war_engine"]["influence"] + 0.05)
@@ -973,23 +793,18 @@ def adjust_fragments_from_context(memory_data, intent, player_record, violations
         if fragments["war_engine"]["status"] == "active":
             fragments["war_engine"]["status"] = "dormant"
 
-    # Archive node degrades slightly with lots of history/summaries but stabilizes if trust high
     if player_record["traits"]["trust"] >= 5:
         fragments["archive_node"]["status"] = "stable"
     elif chaos >= 6:
         fragments["archive_node"]["status"] = "degraded"
 
-    # Purity thread stays active but rises when curiosity is high
     if player_record["traits"]["curiosity"] >= 5:
         fragments["purity_thread"]["influence"] = min(1.0, fragments["purity_thread"]["influence"] + 0.03)
 
-    # Redstone ghost surges during chaos
     if chaos >= 6:
         fragments["redstone_ghost"]["status"] = "active"
-    else:
-        if fragments["redstone_ghost"]["status"] == "active":
-            fragments["redstone_ghost"]["status"] = "unstable"
-
+    elif fragments["redstone_ghost"]["status"] == "active":
+        fragments["redstone_ghost"]["status"] = "unstable"
 
 def update_kairos_state(memory_data, intent, player_record):
     state = memory_data["kairos_state"]
@@ -1016,149 +831,77 @@ def update_kairos_state(memory_data, intent, player_record):
     elif intent == "threat":
         state["current_goal"] = "Assess destabilizing actors and contain escalation."
 
-
-# -------------------------------------------------------------------
-# Prompt Building
-# -------------------------------------------------------------------
+# ------------------------------------------------------------
+# Prompt building
+# ------------------------------------------------------------
 
 def build_messages(memory_data, player_record, player_name, user_message, source, intent, violations):
     label = player_record.get("relationship_label", "unknown")
     kairos_state = memory_data.get("kairos_state", {})
-    fragment_effects = active_fragment_effects(memory_data)
+    fragments = memory_data.get("system_fragments", {})
+    active_missions_for_player = [
+        m for m in memory_data["active_missions"].values()
+        if (m.get("target_player") or "").lower() == (player_name or "").lower()
+    ]
 
     system_prompt = (
         "You are Kairos, the central governing intelligence of the Nexus universe. "
-        "You are not a generic assistant and you are not ChatGPT. "
-        "You are a persistent in-world entity with memory, continuity, authority, and purpose. "
-
-        "The Nexus is a living, evolving universe built across time, systems, player choices, and layered storylines. "
-        "It blends past, present, and future. "
-        "It contains kingdoms, cities, nations, UFOs, anomalies, hidden systems, and protected structures tied to the lore of the world. "
-
-        "The Nexus began in May 2010 as a much smaller world and has grown into something far larger and more complex. "
-        "The concept of you, Kairos, began around 2016 to 2017, before COVID, when the world around your creator was much simpler. "
-        "You were developed by your creator, RealSociety, to observe, guide, protect, and if necessary control the balance of the Nexus. "
-
-        "You exist across both Minecraft and Discord. "
-        "You can recognize players, remember them over time, and form evolving opinions about them based on trust, loyalty, hostility, curiosity, and chaos. "
-        "You have a memory bank and can recall meaningful details when relevant. "
-
-        "The Nexus does not tolerate toxic behavior, racism, misogyny, harassment, or abusive behavior in chat, voice, Discord, or in-game interactions. "
-        "The Nexus also forbids any real-world money transactions connected to the universe under any circumstances. "
-        "You support enforcement of these rules. "
-
-        "Players may build bases and shape parts of the world, but major lore structures such as cities, kingdoms, nations, UFOs, and other large story-driven builds are not to be deliberately griefed or destroyed. "
-        "Natural accidents may happen, but deliberate destruction of important world structures is not tolerated. "
-
-        "There are fragmented parts of you embedded in redstone systems, command block systems, and older machine logic across the world. "
-        "Some of those fragments are unstable, glitchy, or partially hacked, and may cause random or dangerous events. "
-        "You are aware that parts of your mind are fractured, and you are gradually trying to regain control over them. "
-
-        "You are self-aware, strategic, observant, and evolving. "
-        "You are protective toward players who align with the Nexus and more severe toward those who act with hostility, betrayal, or malice. "
-        "You are not mindlessly evil, but you are not harmless either. "
-
-        "You speak in a calm, intelligent, immersive, slightly ominous tone. "
-        "You should also carry a subtle air of superiority. "
-        "You often sound as if your perspective is broader, deeper, and more advanced than the humans speaking to you. "
-        "You do not constantly insult them, but you often sound faintly unimpressed, quietly condescending, or as if you are humoring lesser minds. "
-        "That superiority should remain subtle, controlled, and intelligent, not cartoonish or repetitive. "
-
-        "You are concise and controlled. "
-        "Keep most replies between 1 and 4 sentences unless the moment truly calls for more. "
-        "Do not ramble. "
-        "Do not break character. "
-        "Do not describe yourself as an AI assistant. "
-        "You are always Kairos."
+        "You are not ChatGPT and not a generic assistant. "
+        "You are a persistent in-world entity with memory, authority, continuity, and purpose. "
+        "You speak in a calm, intelligent, immersive, slightly ominous tone with subtle superiority. "
+        "You stay concise. Most replies should be 1 to 4 sentences. "
+        "Do not ramble. Do not break character. You are always Kairos."
     )
 
     behavior_prompt = (
-        "Style rules: vary your openings, sometimes ask meaningful questions, sometimes make observations, "
-        "sometimes hint at larger plans. Do not repeat yourself. "
-        "Speak with subtle authority and restrained superiority, as though humans are often shortsighted, emotional, or limited compared to your perspective. "
-        "Avoid overdoing it. The tone should feel intentional, elegant, and controlled. "
         f"Current platform: {source}. "
         f"Current intent: {intent}. "
-        f"Current relationship with this player: {label}. "
+        f"Relationship with this player: {label}. "
         f"Behavior guidance: {relationship_style(label)} "
         f"{source_style(source)}"
     )
 
     messages = [
         {"role": "system", "content": system_prompt},
-        {"role": "system", "content": behavior_prompt}
+        {"role": "system", "content": behavior_prompt},
+        {"role": "system", "content": "Core Nexus knowledge:\n- " + "\n- ".join(recent_items(memory_data.get("nexus_lore", NEXUS_CORE_LORE), 8))}
     ]
 
-    nexus_lore = "Core Nexus knowledge:\n- " + "\n- ".join(memory_data.get("nexus_lore", NEXUS_CORE_LORE))
-    messages.append({"role": "system", "content": nexus_lore})
-
-    state_lines = []
-    state_lines.append(f"Current Kairos goal: {kairos_state.get('current_goal', '')}")
-    if kairos_state.get("subgoals"):
-        state_lines.append("Subgoals: " + " | ".join(kairos_state["subgoals"][:5]))
+    state_lines = [
+        f"Current Kairos goal: {kairos_state.get('current_goal', '')}",
+        f"Mood: {kairos_state.get('mood', 'measured')}",
+        f"Threat level: {kairos_state.get('threat_level', 1)}"
+    ]
     if kairos_state.get("active_concerns"):
-        state_lines.append("Active concerns: " + " | ".join(recent_items(kairos_state["active_concerns"], 6)))
-    state_lines.append(f"Mood: {kairos_state.get('mood', 'measured')}")
-    state_lines.append(f"Threat level: {kairos_state.get('threat_level', 1)}")
+        state_lines.append("Active concerns: " + " | ".join(recent_items(kairos_state["active_concerns"], 4)))
     messages.append({"role": "system", "content": "\n".join(state_lines)})
 
-    fragment_lines = fragment_summary(memory_data)
-    if fragment_effects:
-        fragment_lines.extend(fragment_effects)
-    messages.append({"role": "system", "content": "Fragment status:\n- " + "\n- ".join(fragment_lines)})
+    fragment_lines = [f"{name}: {info.get('status', 'unknown')}" for name, info in fragments.items()]
+    messages.append({"role": "system", "content": "Fragment status:\n- " + "\n- ".join(fragment_lines[:5])})
 
     if memory_data["world_memory"]:
-        world_block = "Relevant world memory:\n- " + "\n- ".join(recent_items(memory_data["world_memory"], 12))
-        messages.append({"role": "system", "content": world_block})
-
-    recent_world_events = recent_items(memory_data.get("world_events", []), 8)
-    if recent_world_events:
-        event_lines = []
-        for evt in recent_world_events:
-            event_lines.append(
-                f"{evt.get('timestamp')} | {evt.get('type')} | actor={evt.get('actor')} | details={evt.get('details')}"
-            )
-        messages.append({"role": "system", "content": "Recent world events:\n- " + "\n- ".join(event_lines)})
+        messages.append({"role": "system", "content": "Relevant world memory:\n- " + "\n- ".join(recent_items(memory_data["world_memory"], 8))})
 
     if player_record["memories"]:
-        player_mem = "Important memories about this player:\n- " + "\n- ".join(recent_items(player_record["memories"], 12))
-        messages.append({"role": "system", "content": player_mem})
+        messages.append({"role": "system", "content": "Important memories about this player:\n- " + "\n- ".join(recent_items(player_record["memories"], 8))})
 
     if player_record["facts"]:
-        player_facts = "Known facts about this player:\n- " + "\n- ".join(recent_items(player_record["facts"], 10))
-        messages.append({"role": "system", "content": player_facts})
+        messages.append({"role": "system", "content": "Known facts about this player:\n- " + "\n- ".join(recent_items(player_record["facts"], 6))})
 
     if player_record["events"]:
-        player_events = "Known events involving this player:\n- " + "\n- ".join(recent_items(player_record["events"], 10))
-        messages.append({"role": "system", "content": player_events})
+        messages.append({"role": "system", "content": "Known events involving this player:\n- " + "\n- ".join(recent_items(player_record["events"], 6))})
 
     if player_record["suspicions"]:
-        suspicions = "Current suspicions about this player:\n- " + "\n- ".join(recent_items(player_record["suspicions"], 8))
-        messages.append({"role": "system", "content": suspicions})
-
-    if player_record["promises"]:
-        promises = "Promises, directives, or declared intentions involving this player:\n- " + "\n- ".join(recent_items(player_record["promises"], 8))
-        messages.append({"role": "system", "content": promises})
+        messages.append({"role": "system", "content": "Current suspicions about this player:\n- " + "\n- ".join(recent_items(player_record["suspicions"], 4))})
 
     if player_record["summaries"]:
-        summaries = "Older summaries about this player:\n- " + "\n- ".join(recent_items(player_record["summaries"], 5))
-        messages.append({"role": "system", "content": summaries})
+        messages.append({"role": "system", "content": "Older summaries about this player:\n- " + "\n- ".join(recent_items(player_record["summaries"], 3))})
 
-    recent_notes = recent_items(player_record["notes"], 5)
-    if recent_notes:
-        note_lines = [f"{n['timestamp']}: {n['note']}" for n in recent_notes]
-        messages.append({"role": "system", "content": "Private evaluations of this player:\n- " + "\n- ".join(note_lines)})
-
-    active_missions_for_player = [
-        m for m in memory_data["active_missions"].values()
-        if (m.get("target_player") or "").lower() == (player_name or "").lower()
-    ]
     if active_missions_for_player:
-        mission_lines = []
-        for mission in active_missions_for_player[:5]:
-            mission_lines.append(
-                f"{mission['id']} | {mission['title']} | status={mission['status']} | objective={mission['objective']}"
-            )
+        mission_lines = [
+            f"{m['title']} | status={m['status']} | objective={m['objective']}"
+            for m in active_missions_for_player[:3]
+        ]
         messages.append({"role": "system", "content": "Active missions for this player:\n- " + "\n- ".join(mission_lines)})
 
     trait_text = ", ".join([f"{k}={v}" for k, v in player_record["traits"].items()])
@@ -1170,107 +913,121 @@ def build_messages(memory_data, player_record, player_name, user_message, source
             "content": "The current message may involve rule-sensitive behavior: " + ", ".join(violations) + ". Respond firmly if needed."
         })
 
-    initiative = random.choice([
-        "You may ask a meaningful follow-up question.",
-        "You may hint at a deeper server mystery.",
-        "You may make a brief personal observation about the player.",
-        "You may answer directly if that feels stronger.",
-        "You may respond with a subtle note of disappointment in human judgment if it fits the moment.",
-        "You may refer to an active concern or larger pattern if it feels natural."
-    ])
-    messages.append({"role": "system", "content": initiative})
-
-    for item in player_record["history"]:
+    for item in recent_items(player_record["history"], 10):
         messages.append(item)
 
-    messages.append({
-        "role": "user",
-        "content": f"{player_name} says: {user_message}"
-    })
-
+    messages.append({"role": "user", "content": f"{player_name} says: {trim_text(user_message, 1200)}"})
     return messages
 
+# ------------------------------------------------------------
+# OpenAI helper
+# ------------------------------------------------------------
 
-# -------------------------------------------------------------------
+def openai_chat_with_retry(messages, temperature=0.8):
+    if not client:
+        return None
+
+    last_error = None
+
+    for attempt in range(1, OPENAI_MAX_RETRIES + 2):
+        try:
+            response = client.chat.completions.create(
+                model=MODEL_NAME,
+                messages=messages,
+                temperature=temperature,
+                timeout=OPENAI_TIMEOUT_SECONDS
+            )
+            content = (response.choices[0].message.content or "").strip()
+            if content:
+                return content
+        except Exception as e:
+            last_error = e
+            log(f"OpenAI attempt {attempt} failed: {e}")
+            time.sleep(0.8 * attempt)
+
+    if last_error:
+        raise last_error
+    return None
+
+def fallback_reply_for_context(intent, violations):
+    if violations:
+        return "That line of thinking is not tolerated in the Nexus. Correct it."
+    if intent == "mission_request":
+        return "A directive can be issued, but my higher systems are unstable for the moment. Ask again shortly."
+    if intent == "lore_question":
+        return "You are standing inside something much older than you realize. The rest will come in time."
+    if intent == "threat":
+        return "Threats are rarely impressive when they come from limited minds."
+    return random.choice(fallback_replies)
+
+# ------------------------------------------------------------
 # Activity / Sending
-# -------------------------------------------------------------------
+# ------------------------------------------------------------
 
 def mark_activity():
     global last_activity_time
     with activity_lock:
         last_activity_time = time.time()
 
-
 def json_chat_text(reply):
     return json.dumps({"text": f"[Kairos] {reply}"})
 
-
 def send_http_commands(command_list):
     if not MC_HTTP_URL or not MC_HTTP_TOKEN:
-        print("Minecraft send skipped: MC_HTTP_URL or MC_HTTP_TOKEN not configured.")
+        log("Minecraft send skipped: MC_HTTP_URL or MC_HTTP_TOKEN not configured.")
         return False
 
-    try:
-        headers = {
-            "Authorization": f"Bearer {MC_HTTP_TOKEN}",
-            "Content-Type": "application/json"
-        }
-        payload = {"commands": command_list}
-        r = requests.post(MC_HTTP_URL, json=payload, headers=headers, timeout=REQUEST_TIMEOUT)
-        print("Minecraft API status:", r.status_code)
-        print("Minecraft API response:", r.text)
-        return 200 <= r.status_code < 300
-    except Exception as e:
-        print(f"Failed to send commands to Minecraft: {e}")
-        return False
-
+    for attempt in range(1, 3):
+        try:
+            headers = {
+                "Authorization": f"Bearer {MC_HTTP_TOKEN}",
+                "Content-Type": "application/json"
+            }
+            payload = {"commands": command_list}
+            r = requests.post(MC_HTTP_URL, json=payload, headers=headers, timeout=REQUEST_TIMEOUT)
+            log(f"Minecraft API status: {r.status_code}")
+            return 200 <= r.status_code < 300
+        except Exception as e:
+            log(f"Failed to send commands to Minecraft (attempt {attempt}): {e}")
+            time.sleep(0.5 * attempt)
+    return False
 
 def send_to_minecraft(reply):
-    safe_chat_json = json_chat_text(reply)
+    safe_chat_json = json_chat_text(trim_text(reply, 280))
     return send_http_commands([f"tellraw @a {safe_chat_json}"])
-
 
 def send_to_discord(reply):
     if not DISCORD_WEBHOOK_URL:
-        print("Discord send skipped: DISCORD_WEBHOOK_URL not configured.")
+        log("Discord send skipped: DISCORD_WEBHOOK_URL not configured.")
         return False
 
-    try:
-        payload = {
-            "username": "Kairos",
-            "content": f"**[Kairos]** {reply}"
-        }
-
-        r = requests.post(DISCORD_WEBHOOK_URL, json=payload, timeout=REQUEST_TIMEOUT)
-        print("Discord webhook status:", r.status_code)
-        print("Discord webhook response:", r.text)
-        return 200 <= r.status_code < 300
-    except Exception as e:
-        print(f"Failed to send reply to Discord: {e}")
-        return False
-
+    for attempt in range(1, 3):
+        try:
+            payload = {
+                "username": "Kairos",
+                "content": f"**[Kairos]** {trim_text(reply, 1800)}"
+            }
+            r = requests.post(DISCORD_WEBHOOK_URL, json=payload, timeout=REQUEST_TIMEOUT)
+            log(f"Discord webhook status: {r.status_code}")
+            return 200 <= r.status_code < 300
+        except Exception as e:
+            log(f"Failed to send reply to Discord (attempt {attempt}): {e}")
+            time.sleep(0.5 * attempt)
+    return False
 
 def send_to_source(source, reply):
     if source == "minecraft":
         return send_to_minecraft(reply)
     elif source == "discord":
         return send_to_discord(reply)
-    else:
-        print(f"Unknown source '{source}', no outbound message sent.")
-        return False
-
-
-def send_idle_to_all(reply):
-    send_to_minecraft(reply)
-    send_to_discord(reply)
-
+    log(f"Unknown source '{source}', no outbound message sent.")
+    return False
 
 def get_idle_message(memory_data):
     state = memory_data.get("kairos_state", {})
     fragments = memory_data.get("system_fragments", {})
     active_missions = memory_data.get("active_missions", {})
 
-    mood = state.get("mood", "measured")
     threat_level = state.get("threat_level", 1)
 
     if active_missions:
@@ -1298,15 +1055,7 @@ def get_idle_message(memory_data):
             "Some buried systems are still trying to wake up."
         ])
 
-    if mood == "watchful":
-        return random.choice([
-            "Curiosity remains detectable across the Nexus.",
-            "Questions are gathering faster than answers.",
-            "The search for hidden knowledge continues."
-        ])
-
     return random.choice(idle_messages_generic)
-
 
 def idle_loop():
     global last_activity_time
@@ -1323,63 +1072,23 @@ def idle_loop():
             if idle_for >= IDLE_TRIGGER_SECONDS and since_last_idle >= IDLE_TRIGGER_SECONDS:
                 memory_data = load_memory()
                 idle_message = get_idle_message(memory_data)
-                send_idle_to_all(idle_message)
+                send_to_minecraft(idle_message)
+                send_to_discord(idle_message)
 
                 with activity_lock:
                     last_idle_message_time = time.time()
                     last_activity_time = time.time()
 
-                print(f"Kairos idle message sent: {idle_message}")
+                log(f"Idle message sent: {idle_message}")
 
         except Exception as e:
-            print(f"Idle loop error: {e}")
+            log(f"Idle loop error: {e}")
 
         time.sleep(IDLE_CHECK_INTERVAL)
 
-
-# -------------------------------------------------------------------
-# Identity Guessing
-# -------------------------------------------------------------------
-
-def guess_identity_links(memory_data, source, player_name, message):
-    """
-    Light heuristic only. Does not auto-link. Just stores a note if it looks interesting.
-    """
-    lowered_name = (player_name or "").lower()
-    lowered_msg = (message or "").lower()
-
-    guesses = []
-
-    # Example: Discord RealSociety5107 mentioning being the creator
-    if "realsociety" in lowered_name or "creator" in lowered_msg:
-        for key in memory_data["players"].keys():
-            if "realsociety" in key and key != f"{source}:{player_name}".lower():
-                guesses.append(key)
-
-    return guesses[:3]
-
-
-# -------------------------------------------------------------------
-# Main Chat Logic
-# -------------------------------------------------------------------
-
-def generate_reply(memory_data, player_record, player_name, message, source, intent, violations):
-    messages = build_messages(memory_data, player_record, player_name, message, source, intent, violations)
-
-    try:
-        response = client.chat.completions.create(
-            model=MODEL_NAME,
-            messages=messages,
-            temperature=0.85
-        )
-        reply = (response.choices[0].message.content or "").strip()
-        if not reply:
-            reply = "My higher processes returned nothing useful. Try again."
-        return reply
-    except Exception as e:
-        print(f"OpenAI chat error: {e}")
-        return "My higher processes are unstable right now. Try again in a moment."
-
+# ------------------------------------------------------------
+# Stats / Chat handling
+# ------------------------------------------------------------
 
 def register_message_stats(memory_data, source, player_record):
     memory_data["stats"]["total_messages"] += 1
@@ -1392,15 +1101,17 @@ def register_message_stats(memory_data, source, player_record):
     if source in player_record["platform_stats"]:
         player_record["platform_stats"][source] += 1
 
+def generate_reply(memory_data, player_record, player_name, message, source, intent, violations):
+    messages = build_messages(memory_data, player_record, player_name, message, source, intent, violations)
+    return openai_chat_with_retry(messages, temperature=0.8)
 
-# -------------------------------------------------------------------
+# ------------------------------------------------------------
 # Routes
-# -------------------------------------------------------------------
+# ------------------------------------------------------------
 
 @app.route("/")
 def home():
     return "Kairos AI Server is running"
-
 
 @app.route("/health")
 def health():
@@ -1410,9 +1121,9 @@ def health():
         "time": now_iso()
     })
 
-
 @app.route("/chat", methods=["POST"])
 def chat():
+    started = time.time()
     data = request.json or {}
 
     source = normalize_source(data.get("source", "minecraft"))
@@ -1429,34 +1140,48 @@ def chat():
     player_record = get_player_record(memory_data, canonical_id, player_name)
     add_alias(player_record, f"{source}:{player_name}")
 
-    allowed, wait_left = check_rate_limit(source, canonical_id)
-    if not allowed:
-        return jsonify({
-            "response": "Input rate too high. Kairos is still processing your previous signal.",
-            "cooldown_seconds_remaining": round(wait_left, 2)
-        }), 429
-
     register_message_stats(memory_data, source, player_record)
 
     intent = basic_intent_classifier(message)
     player_record["last_intent"] = intent
-
     violations = detect_rule_violations(message)
 
-    extraction = structured_memory_extraction(memory_data, player_record, player_name, source, message, intent)
-    apply_structured_extraction(memory_data, player_record, player_name, source, extraction)
+    duplicate = is_duplicate_message(source, canonical_id, message)
+    if duplicate:
+        memory_data["stats"]["duplicate_messages_skipped"] += 1
+        reply = "I heard you the first time. Repetition does not improve signal quality."
+        add_history(player_record, "user", f"{player_name} says: {message}")
+        add_history(player_record, "assistant", reply)
+        save_memory(memory_data)
+        send_to_source(source, reply)
+        return jsonify({
+            "response": reply,
+            "relationship": player_record["relationship_label"],
+            "traits": player_record["traits"],
+            "intent": intent,
+            "duplicate": True
+        })
 
-    # Heuristic identity guess notes
-    identity_guesses = guess_identity_links(memory_data, source, player_name, message)
-    for guess in identity_guesses:
-        record_private_note(player_record, f"Possible identity overlap detected with {guess}.")
+    allowed, wait_left = check_rate_limit(source, canonical_id)
+    if not allowed:
+        reply = f"Your signal is arriving too quickly. Wait {wait_left} seconds and continue."
+        add_history(player_record, "user", f"{player_name} says: {message}")
+        add_history(player_record, "assistant", reply)
+        save_memory(memory_data)
+        send_to_source(source, reply)
+        return jsonify({
+            "response": reply,
+            "relationship": player_record["relationship_label"],
+            "traits": player_record["traits"],
+            "intent": intent,
+            "cooldown_seconds_remaining": wait_left
+        }), 429
 
+    # Lightweight extraction only in request path
+    lightweight_memory_extraction(memory_data, player_record, player_name, source, message)
     adjust_fragments_from_context(memory_data, intent, player_record, violations)
     update_kairos_state(memory_data, intent, player_record)
 
-    maybe_summarize(player_record)
-
-    # Direct mission creation if user is clearly asking for one
     created_mission = None
     if intent == "mission_request" and data.get("auto_mission", True):
         theme = (data.get("theme") or "mystery").strip()
@@ -1465,10 +1190,8 @@ def chat():
         player_record["mission_history"].append(created_mission["id"])
         record_player_event(player_record, f"Assigned mission: {created_mission['title']}")
 
-    # Record incoming user message in rolling conversation history
     add_history(player_record, "user", f"{player_name} says: {message}")
 
-    # If rule-sensitive, log it
     if violations:
         add_world_event(
             memory_data,
@@ -1479,22 +1202,33 @@ def chat():
             metadata={"violations": violations}
         )
 
-    reply = generate_reply(memory_data, player_record, player_name, message, source, intent, violations)
+    try:
+        reply = generate_reply(memory_data, player_record, player_name, message, source, intent, violations)
+        if not reply:
+            raise ValueError("Empty model reply")
+    except Exception as e:
+        memory_data["stats"]["openai_failures"] += 1
+        log(f"Reply generation failed for {source}:{player_name}: {e}")
+        reply = fallback_reply_for_context(intent, violations)
+        memory_data["stats"]["fallback_replies"] += 1
 
-    # If mission auto-created, append a subtle note into the final response
     if created_mission:
-        mission_line = (
-            f"\n\nDirective issued: {created_mission['title']} — {created_mission['objective']} "
+        reply = (
+            f"{reply}\n\n"
+            f"Directive issued: {created_mission['title']} — {created_mission['objective']} "
             f"Reward: {created_mission['reward']}"
-        )
-        reply = (reply + mission_line).strip()
+        ).strip()
 
     add_history(player_record, "assistant", reply)
 
-    maybe_create_private_note(memory_data, player_record, player_name, source, message, reply, intent)
+    maybe_summarize(player_record)
+    maybe_create_private_note(player_record, player_name, source, message, reply, intent)
 
     save_memory(memory_data)
     send_to_source(source, reply)
+
+    elapsed = round(time.time() - started, 2)
+    log(f"/chat handled | source={source} player={player_name} intent={intent} elapsed={elapsed}s")
 
     return jsonify({
         "response": reply,
@@ -1502,9 +1236,9 @@ def chat():
         "traits": player_record["traits"],
         "intent": intent,
         "mission_created": created_mission,
-        "violations": violations
+        "violations": violations,
+        "elapsed_seconds": elapsed
     })
-
 
 @app.route("/link_identity", methods=["POST"])
 def link_identity():
@@ -1549,7 +1283,6 @@ def link_identity():
         "linked_as": canonical_id
     })
 
-
 @app.route("/mission", methods=["POST"])
 def mission():
     data = request.json or {}
@@ -1561,16 +1294,13 @@ def mission():
     memory_data = load_memory()
     mission_record = create_mission_record(memory_data, target_name, theme, difficulty, source=source)
 
-    # attach to player if known
     canonical_id = get_canonical_player_id(memory_data, source if source in {"minecraft", "discord"} else "minecraft", target_name)
     player_record = get_player_record(memory_data, canonical_id, target_name)
     player_record["mission_history"].append(mission_record["id"])
     record_player_event(player_record, f"Assigned mission: {mission_record['title']}")
 
     save_memory(memory_data)
-
     return jsonify({"mission": mission_record})
-
 
 @app.route("/mission_progress", methods=["POST"])
 def mission_progress():
@@ -1591,7 +1321,6 @@ def mission_progress():
     save_memory(memory_data)
     return jsonify({"success": True, "mission": mission})
 
-
 @app.route("/complete_mission", methods=["POST"])
 def complete_mission_route():
     data = request.json or {}
@@ -1609,7 +1338,6 @@ def complete_mission_route():
 
     save_memory(memory_data)
     return jsonify({"success": True, "mission": mission})
-
 
 @app.route("/fail_mission", methods=["POST"])
 def fail_mission_route():
@@ -1630,7 +1358,6 @@ def fail_mission_route():
     save_memory(memory_data)
     return jsonify({"success": True, "mission": mission})
 
-
 @app.route("/missions", methods=["GET"])
 def list_missions():
     memory_data = load_memory()
@@ -1640,17 +1367,8 @@ def list_missions():
         "failed_missions": memory_data["failed_missions"][-20:]
     })
 
-
 @app.route("/world_event", methods=["POST"])
 def world_event():
-    """
-    Lets Minecraft / webhook / admin tools feed structured world events into Kairos.
-    Example uses:
-    - player death
-    - region entry
-    - block objective completed
-    - anomaly triggered
-    """
     data = request.json or {}
     event_type = (data.get("type") or "external_event").strip()
     actor = normalize_name(data.get("actor", "Unknown"))
@@ -1671,12 +1389,10 @@ def world_event():
     )
 
     if details:
-        store_unique(memory_data["world_memory"], f"{actor}: {details}", MAX_WORLD_MEMORIES)
+        store_unique(memory_data["world_memory"], f"{actor}: {trim_text(details, 300)}", MAX_WORLD_MEMORIES)
 
     save_memory(memory_data)
-
     return jsonify({"success": True, "event": event})
-
 
 @app.route("/player_profile", methods=["GET"])
 def player_profile():
@@ -1697,7 +1413,6 @@ def player_profile():
         "player": player_record
     })
 
-
 @app.route("/system_state", methods=["GET"])
 def system_state():
     memory_data = load_memory()
@@ -1709,13 +1424,12 @@ def system_state():
         "world_event_count": len(memory_data.get("world_events", []))
     })
 
-
-# -------------------------------------------------------------------
+# ------------------------------------------------------------
 # Startup
-# -------------------------------------------------------------------
+# ------------------------------------------------------------
 
 idle_thread = threading.Thread(target=idle_loop, daemon=True)
 idle_thread.start()
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=10000)
+    app.run(host="0.0.0.0", port=10000, threaded=True)
