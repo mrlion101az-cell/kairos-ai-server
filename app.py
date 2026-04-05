@@ -1167,7 +1167,46 @@ def health():
         "model": MODEL_NAME,
         "time": now_iso()
     })
+# ------------------------------------------------------------
+# EVENT INGESTION (Console / External Logs)
+# ------------------------------------------------------------
 
+@app.route("/event", methods=["POST"])
+def event_ingest():
+    try:
+        data = request.json or {}
+
+        event_type = data.get("type", "console")
+        content = data.get("content", "")
+        source = normalize_source(data.get("source", "minecraft"))
+
+        memory_data = load_memory()
+
+        # store as world event
+        add_world_event(
+            memory_data,
+            event_type=event_type,
+            actor="system",
+            source=source,
+            details=trim_text(content, 400)
+        )
+
+        # ALSO store in world memory (so Kairos can reference it)
+        store_unique(
+            memory_data["world_memory"],
+            f"[EVENT:{event_type}] {trim_text(content, 200)}",
+            MAX_WORLD_MEMORIES
+        )
+
+        save_memory(memory_data)
+
+        log(f"EVENT INGESTED: {event_type} -> {content[:120]}")
+
+        return jsonify({"status": "ok"})
+
+    except Exception as e:
+        log(f"EVENT ERROR: {e}", "ERROR")
+        return jsonify({"status": "error"})
 @app.route("/chat", methods=["POST"])
 def chat():
     started = time.time()
