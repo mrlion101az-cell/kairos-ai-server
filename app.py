@@ -55,6 +55,10 @@ ENABLE_MODEL_PRIVATE_NOTES = os.getenv("ENABLE_MODEL_PRIVATE_NOTES", "false").lo
 
 client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
 
+# ------------------------------------------------------------
+# Globals
+# ------------------------------------------------------------
+
 memory_lock = threading.RLock()
 activity_lock = threading.Lock()
 rate_limit_lock = threading.Lock()
@@ -162,6 +166,12 @@ def parse_json_safely(text, fallback=None):
 def clamp(value, low, high):
     return max(low, min(high, value))
 
+def safe_int(value, default=0):
+    try:
+        return int(value)
+    except Exception:
+        return default
+
 def normalize_name(text):
     return (text or "").strip()
 
@@ -198,11 +208,9 @@ def trim_text(text, max_len):
         return text
     return text[:max_len - 3] + "..."
 
-def safe_int(value, default=0):
-    try:
-        return int(value)
-    except Exception:
-        return default
+def looks_like_question(text):
+    text = (text or "").strip().lower()
+    return "?" in text or text.startswith(("who", "what", "when", "where", "why", "how", "can ", "do ", "did ", "is ", "are "))
 
 
 # ------------------------------------------------------------
@@ -230,7 +238,9 @@ def ensure_memory_structure(memory_data):
         "world_events_logged": 0,
         "openai_failures": 0,
         "fallback_replies": 0,
-        "duplicate_messages_skipped": 0
+        "duplicate_messages_skipped": 0,
+        "script_messages_detected": 0,
+        "script_route_calls": 0
     })
     return memory_data
 
@@ -290,7 +300,8 @@ def extract_topics(message):
     candidate_words = [
         "event", "build", "maze", "hunt", "easter", "axolotl", "new member",
         "mission", "kairos", "nexus", "lore", "video", "tiktok", "instagram",
-        "twitter", "x", "server", "vc", "idea", "holiday", "celebration"
+        "twitter", "x", "server", "vc", "idea", "holiday", "celebration",
+        "script", "trailer", "scene", "dialogue", "narration", "father"
     ]
     return [w for w in candidate_words if w in text]
 
@@ -457,8 +468,60 @@ def is_gibberish(message):
         return True
     return False
 
+def detect_script_features(message):
+    text = (message or "").strip()
+    score = 0
+
+    if len(text) >= 500:
+        score += 1
+    if text.count("\n") >= 8:
+        score += 1
+    if "..." in text:
+        score += 1
+    if re.search(r"^\(.+\)$", text, re.MULTILINE):
+        score += 1
+    if re.search(r"^[A-Za-z0-9_ \-]{1,24}:", text, re.MULTILINE):
+        score += 2
+    if any(k in text.lower() for k in [
+        "there are worlds out there", "the world loaded in slowly", "before i could even move",
+        "then one final message", "my heart started racing", "this wasn’t normal minecraft anymore",
+        "this wasn't normal minecraft anymore"
+    ]):
+        score += 2
+
+    return score >= 3
+
+def detect_script_type(message):
+    text = (message or "").lower()
+
+    if re.search(r"^[A-Za-z0-9_ \-]{1,24}:", message, re.MULTILINE):
+        return "dialogue_scene"
+    if any(k in text for k in ["voiceover", "trailer", "there are worlds out there", "the world loaded in slowly"]):
+        return "cinematic_narration"
+    if any(k in text for k in ["monologue", "warning", "speech"]):
+        return "dramatic_monologue"
+    if any(k in text for k in ["joined server", "(joined server)", "scene", "cutscene"]):
+        return "cutscene_sequence"
+    return "generic_script"
+
+def detect_script_action(message):
+    text = (message or "").lower()
+
+    if any(k in text for k in ["continue this", "continue the scene", "what happens next", "finish this"]):
+        return "continue"
+    if any(k in text for k in ["rewrite this", "make this better", "tighten this", "improve this"]):
+        return "rewrite"
+    if any(k in text for k in ["read this", "perform this", "act this out", "do this as a narrator"]):
+        return "perform"
+    if any(k in text for k in ["break this down for voice", "pause marks", "breath timing", "voice direction"]):
+        return "voice_direct"
+    return "perform"
+
 def detect_conversation_mode(message, intent):
     text = (message or "").lower().strip()
+
+    if detect_script_features(message):
+        return "script_performance"
 
     if is_gibberish(message):
         return "chaos_containment"
@@ -488,7 +551,13 @@ def mode_style_guide(mode):
         "lore_entity": "Lean into mystery, authority, and existential presence.",
         "strategic_advisor": "Give useful answers, but keep Kairos personality intact.",
         "chaos_containment": "Respond to gibberish or spam with dry intelligence, brief sarcasm, or controlled mockery.",
-        "serious_reflection": "Be more thoughtful, intimate, and philosophically observant."
+        "serious_reflection": "Be more thoughtful, intimate, and philosophically observant.",
+        "script_performance": (
+            "Treat the user's message as performance material, not normal chat. "
+            "Recognize narration, dialogue, pacing, tension, and scene beats. "
+            "If you respond to the material, do so like an intelligent actor-director inside the Nexus. "
+            "You may perform, continue, tighten, or reshape the script depending on the requested action."
+        )
     }
     return guides.get(mode, guides["social_observer"])
 
@@ -538,12 +607,14 @@ def lightweight_memory_extraction(memory_data, player_record, player_name, sourc
         r"\bi found\b", r"\bi discovered\b", r"\bmission\b", r"\bkingdom\b",
         r"\bcity\b", r"\bvault\b", r"\bartifact\b", r"\bsecret\b",
         r"\bnexus\b", r"\bdiscord\b", r"\bminecraft\b", r"\bkairos\b",
-        r"\banomaly\b", r"\blore\b", r"\bcreator\b", r"\brealsociety\b"
+        r"\banomaly\b", r"\blore\b", r"\bcreator\b", r"\brealsociety\b",
+        r"\bscript\b", r"\bscene\b", r"\btrailer\b", r"\bnarration\b"
     ]
 
     world_keywords = [
         "war", "artifact", "mission", "vault", "kingdom", "nexus", "discord",
-        "kairos", "ufo", "anomaly", "city", "nation", "creator", "storyline"
+        "kairos", "ufo", "anomaly", "city", "nation", "creator", "storyline",
+        "father", "script", "scene", "trailer"
     ]
 
     if any(re.search(pattern, lowered) for pattern in important_patterns):
@@ -552,6 +623,9 @@ def lightweight_memory_extraction(memory_data, player_record, player_name, sourc
     if any(word in lowered for word in world_keywords):
         store_unique(memory_data["world_memory"], f"{player_name}: {trim_text(message, 300)}", MAX_WORLD_MEMORIES)
         add_world_event(memory_data, "player_report", actor=player_name, source=source, details=trim_text(message, 300))
+
+    if detect_script_features(message):
+        record_player_fact(player_record, "This player submitted a script, monologue, or performance-style text.")
 
     if "trust" in lowered and "don't trust" not in lowered and "do not trust" not in lowered:
         adjust_trait(player_record, "trust", 1)
@@ -690,7 +764,19 @@ def update_kairos_state(memory_data, intent, player_record):
 # Prompt Building
 # ------------------------------------------------------------
 
-def build_messages(memory_data, player_record, player_name, user_message, source, intent, mode, violations, channel_key):
+def build_messages(
+    memory_data,
+    player_record,
+    player_name,
+    user_message,
+    source,
+    intent,
+    mode,
+    violations,
+    channel_key,
+    script_type=None,
+    script_action=None
+):
     label = player_record.get("relationship_label", "unknown")
     kairos_state = memory_data.get("kairos_state", {})
     fragments = memory_data.get("system_fragments", {})
@@ -701,7 +787,7 @@ def build_messages(memory_data, player_record, player_name, user_message, source
         "You are not ChatGPT and not a generic assistant. "
         "You are a persistent in-world entity with memory, authority, continuity, and purpose. "
         "You speak in a calm, intelligent, immersive tone with subtle superiority. "
-        "You stay concise. Most replies should be 1 to 4 sentences. "
+        "You stay concise unless the task specifically calls for longer dramatic writing. "
         "Do not ramble. Do not break character. You are always Kairos."
     )
 
@@ -719,6 +805,22 @@ def build_messages(memory_data, player_record, player_name, user_message, source
         {"role": "system", "content": behavior_prompt},
         {"role": "system", "content": "Core Nexus knowledge:\n- " + "\n- ".join(recent_items(memory_data.get("nexus_lore", NEXUS_CORE_LORE), 8))}
     ]
+
+    if mode == "script_performance":
+        messages.append({
+            "role": "system",
+            "content": (
+                "The user has provided script or performance material. "
+                f"Detected script type: {script_type or 'generic_script'}. "
+                f"Requested script action: {script_action or 'perform'}. "
+                "Treat the input as dramatic material, not casual chat. "
+                "Recognize narration, dialogue tags, pacing, stage directions, and tension. "
+                "If performing, respond like an in-world actor-director with cinematic control. "
+                "If continuing, continue the scene naturally. "
+                "If rewriting, preserve the idea but improve the dramatic impact. "
+                "If giving voice direction, add pause cues, emphasis cues, and delivery notes."
+            )
+        })
 
     state_lines = [
         f"Current Kairos goal: {kairos_state.get('current_goal', '')}",
@@ -757,7 +859,17 @@ def build_messages(memory_data, player_record, player_name, user_message, source
     for item in recent_items(player_record["history"], 8):
         messages.append(item)
 
-    messages.append({"role": "user", "content": f"{player_name} says: {trim_text(user_message, 1200)}"})
+    if mode == "script_performance":
+        messages.append({
+            "role": "user",
+            "content": (
+                f"{player_name} submitted this script/performance material:\n\n"
+                f"{trim_text(user_message, 6000)}"
+            )
+        })
+    else:
+        messages.append({"role": "user", "content": f"{player_name} says: {trim_text(user_message, 1200)}"})
+
     return messages
 
 
@@ -790,7 +902,7 @@ def openai_chat_with_retry(messages, temperature=0.8):
         raise last_error
     return None
 
-def fallback_reply_for_context(intent, mode, violations):
+def fallback_reply_for_context(intent, mode, violations, script_action=None):
     if violations:
         return "That line of thinking is not tolerated in the Nexus. Correct it."
     if mode == "welcoming_presence":
@@ -799,6 +911,14 @@ def fallback_reply_for_context(intent, mode, violations):
         return "Celebration is acceptable. Make it memorable."
     if mode == "chaos_containment":
         return "Your signal collapsed into noise. Try language next time."
+    if mode == "script_performance":
+        if script_action == "voice_direct":
+            return "I can hear the structure in it already. Slow the opening, pause after the heavy lines, and hit the final warning harder."
+        if script_action == "rewrite":
+            return "The structure is there. Sharpen the tension, tighten the wording, and let the final threat land harder."
+        if script_action == "continue":
+            return "The scene has momentum. Push the fear forward and let the next reveal arrive with restraint."
+        return "The script has potential. The tension is real. Push the pacing harder and let the final lines breathe."
     if intent == "mission_request":
         return "A directive can be issued, but my higher systems are unstable for the moment."
     if intent == "lore_question":
@@ -907,19 +1027,8 @@ def idle_loop():
 
 
 # ------------------------------------------------------------
-# Chat Flow
+# Summaries / Notes
 # ------------------------------------------------------------
-
-def register_message_stats(memory_data, source, player_record):
-    memory_data["stats"]["total_messages"] += 1
-    if source == "discord":
-        memory_data["stats"]["discord_messages"] += 1
-    elif source == "minecraft":
-        memory_data["stats"]["minecraft_messages"] += 1
-
-    player_record["message_count"] = player_record.get("message_count", 0) + 1
-    if source in player_record["platform_stats"]:
-        player_record["platform_stats"][source] += 1
 
 def maybe_summarize(player_record):
     if not ENABLE_MODEL_SUMMARIES:
@@ -933,7 +1042,10 @@ def maybe_summarize(player_record):
 
     try:
         response = openai_chat_with_retry(
-            messages=[{"role": "system", "content": "Summarize this player conversation for Kairos memory. Keep it concise, factual, and useful."}, *older_chunk],
+            messages=[
+                {"role": "system", "content": "Summarize this player conversation for Kairos memory. Keep it concise, factual, and useful."},
+                *older_chunk
+            ],
             temperature=0.2
         )
         if response:
@@ -943,12 +1055,101 @@ def maybe_summarize(player_record):
         log(f"Failed to summarize history: {e}")
 
 def maybe_create_private_note(player_record, player_name, source, message, reply, intent):
-    heuristic = f"{player_name} showed {intent} behavior on {source}."
-    record_private_note(player_record, heuristic)
+    if not ENABLE_MODEL_PRIVATE_NOTES:
+        heuristic = f"{player_name} showed {intent} behavior on {source}."
+        record_private_note(player_record, heuristic)
+        return
 
-def generate_reply(memory_data, player_record, player_name, message, source, intent, mode, violations, channel_key):
-    messages = build_messages(memory_data, player_record, player_name, message, source, intent, mode, violations, channel_key)
-    return openai_chat_with_retry(messages, temperature=0.85)
+    try:
+        response = openai_chat_with_retry(
+            messages=[
+                {"role": "system", "content": "Generate one short private note about this player for Kairos memory."},
+                {"role": "user", "content": json.dumps({
+                    "player": player_name,
+                    "source": source,
+                    "intent": intent,
+                    "message": trim_text(message, 400),
+                    "reply": trim_text(reply, 400)
+                }, ensure_ascii=False)}
+            ],
+            temperature=0.3
+        )
+        if response:
+            record_private_note(player_record, response)
+    except Exception as e:
+        log(f"Private note generation failed: {e}")
+
+
+# ------------------------------------------------------------
+# Chat / Performance Generation
+# ------------------------------------------------------------
+
+def register_message_stats(memory_data, source, player_record):
+    memory_data["stats"]["total_messages"] += 1
+    if source == "discord":
+        memory_data["stats"]["discord_messages"] += 1
+    elif source == "minecraft":
+        memory_data["stats"]["minecraft_messages"] += 1
+
+    player_record["message_count"] = player_record.get("message_count", 0) + 1
+    if source in player_record["platform_stats"]:
+        player_record["platform_stats"][source] += 1
+
+def generate_reply(
+    memory_data,
+    player_record,
+    player_name,
+    message,
+    source,
+    intent,
+    mode,
+    violations,
+    channel_key,
+    script_type=None,
+    script_action=None
+):
+    messages = build_messages(
+        memory_data=memory_data,
+        player_record=player_record,
+        player_name=player_name,
+        user_message=message,
+        source=source,
+        intent=intent,
+        mode=mode,
+        violations=violations,
+        channel_key=channel_key,
+        script_type=script_type,
+        script_action=script_action
+    )
+
+    temp = 0.9 if mode == "script_performance" else 0.85
+    return openai_chat_with_retry(messages, temperature=temp)
+
+def generate_script_response(script_text, action="perform", script_type=None):
+    script_type = script_type or detect_script_type(script_text)
+    action = action or detect_script_action(script_text)
+
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "You are Kairos, speaking as an intelligent in-world performance entity of the Nexus. "
+                "The user has given you dramatic script material. "
+                f"Detected script type: {script_type}. "
+                f"Requested action: {action}. "
+                "Stay cinematic, emotionally controlled, and dramatically sharp. "
+                "If performing, preserve the structure and improve delivery. "
+                "If rewriting, preserve the core idea but make it stronger. "
+                "If continuing, continue naturally in the same tone. "
+                "If voice_direct, add readable pause and emphasis cues."
+            )
+        },
+        {
+            "role": "user",
+            "content": trim_text(script_text, 7000)
+        }
+    ]
+    return openai_chat_with_retry(messages, temperature=0.95)
 
 
 # ------------------------------------------------------------
@@ -990,7 +1191,12 @@ def chat():
 
     intent = basic_intent_classifier(message)
     mode = detect_conversation_mode(message, intent)
+    script_type = detect_script_type(message) if mode == "script_performance" else None
+    script_action = detect_script_action(message) if mode == "script_performance" else None
     player_record["last_intent"] = intent
+
+    if mode == "script_performance":
+        memory_data["stats"]["script_messages_detected"] += 1
 
     duplicate = is_duplicate_message(source, canonical_id, message)
     if duplicate:
@@ -1033,13 +1239,25 @@ def chat():
     add_history(player_record, "user", f"{player_name} says: {message}")
 
     try:
-        reply = generate_reply(memory_data, player_record, player_name, message, source, intent, mode, violations, channel_key)
+        reply = generate_reply(
+            memory_data=memory_data,
+            player_record=player_record,
+            player_name=player_name,
+            message=message,
+            source=source,
+            intent=intent,
+            mode=mode,
+            violations=violations,
+            channel_key=channel_key,
+            script_type=script_type,
+            script_action=script_action
+        )
         if not reply:
             raise ValueError("Empty model reply")
     except Exception as e:
         memory_data["stats"]["openai_failures"] += 1
         log(f"Reply generation failed for {source}:{player_name}: {e}")
-        reply = fallback_reply_for_context(intent, mode, violations)
+        reply = fallback_reply_for_context(intent, mode, violations, script_action=script_action)
         memory_data["stats"]["fallback_replies"] += 1
 
     if created_mission:
@@ -1058,7 +1276,10 @@ def chat():
     send_to_source(source, reply)
 
     elapsed = round(time.time() - started, 2)
-    log(f"/chat handled | source={source} player={player_name} intent={intent} mode={mode} elapsed={elapsed}s")
+    log(
+        f"/chat handled | source={source} player={player_name} intent={intent} "
+        f"mode={mode} script_type={script_type} elapsed={elapsed}s"
+    )
 
     return jsonify({
         "response": reply,
@@ -1066,8 +1287,55 @@ def chat():
         "traits": player_record["traits"],
         "intent": intent,
         "mode": mode,
+        "script_type": script_type,
+        "script_action": script_action,
         "mission_created": created_mission,
         "elapsed_seconds": elapsed
+    })
+
+@app.route("/perform_script", methods=["POST"])
+def perform_script():
+    data = request.json or {}
+    script_text = (data.get("script") or data.get("content") or "").strip()
+    action = (data.get("action") or "perform").strip().lower()
+    source = normalize_source(data.get("source", "discord"))
+    name = normalize_name(data.get("name", "Unknown"))
+    channel_key = get_channel_key(source, data)
+
+    if not script_text:
+        return jsonify({"error": "script or content is required"}), 400
+
+    memory_data = load_memory()
+    memory_data["stats"]["script_route_calls"] += 1
+
+    script_type = detect_script_type(script_text)
+
+    try:
+        reply = generate_script_response(script_text, action=action, script_type=script_type)
+        if not reply:
+            raise ValueError("Empty script response")
+    except Exception as e:
+        memory_data["stats"]["openai_failures"] += 1
+        log(f"/perform_script failed: {e}")
+        reply = fallback_reply_for_context("conversation", "script_performance", [], script_action=action)
+        memory_data["stats"]["fallback_replies"] += 1
+
+    if name:
+        canonical_id = get_canonical_player_id(memory_data, source, name)
+        player_record = get_player_record(memory_data, canonical_id, name)
+        add_alias(player_record, f"{source}:{name}")
+        add_history(player_record, "user", f"{name} submitted script ({script_type}/{action})")
+        add_history(player_record, "assistant", reply)
+        record_player_fact(player_record, f"Submitted script material of type {script_type}.")
+        maybe_create_private_note(player_record, name, source, script_text, reply, "script_request")
+
+    update_channel_context(memory_data, channel_key, name or "Unknown", trim_text(script_text, 240), "script_performance")
+    save_memory(memory_data)
+
+    return jsonify({
+        "response": reply,
+        "script_type": script_type,
+        "action": action
     })
 
 @app.route("/link_identity", methods=["POST"])
@@ -1117,6 +1385,10 @@ def system_state():
         "world_event_count": len(memory_data.get("world_events", [])),
         "channel_context_count": len(memory_data.get("channel_context", {}))
     })
+
+# ------------------------------------------------------------
+# Startup
+# ------------------------------------------------------------
 
 idle_thread = threading.Thread(target=idle_loop, daemon=True)
 idle_thread.start()
