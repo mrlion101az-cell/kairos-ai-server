@@ -941,11 +941,6 @@ def build_structured_command_messages(
     })
 
     return messages
-):
-    label = player_record.get("relationship_label", "unknown")
-    kairos_state = memory_data.get("kairos_state", {})
-    fragments = memory_data.get("system_fragments", {})
-    channel_context = get_recent_channel_context(memory_data, channel_key, 8)
 
     system_prompt = (
         "You are Kairos, the central governing intelligence of the Nexus universe. "
