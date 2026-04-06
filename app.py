@@ -926,9 +926,9 @@ def build_structured_command_messages(
     messages.append({
         "role": "system",
         "content": (
-            "Return JSON only. Format:\n"
+            "Return JSON only in this exact format:\n"
             "{\n"
-            "  \"reply\": \"Kairos reply to the player\",\n"
+            "  \"reply\": \"Kairos reply text\",\n"
             "  \"minecraft_commands\": [\"optional safe command 1\", \"optional safe command 2\"]\n"
             "}\n\n"
             "Rules:\n"
