@@ -25,46 +25,7 @@ MODEL_NAME = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 MC_HTTP_URL = os.getenv("MC_HTTP_URL")
 MC_HTTP_TOKEN = os.getenv("MC_HTTP_TOKEN")
 DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
-API_SHARED_SECRET = os.getenv("API_SHARED_SECRET")
 
-ENABLE_MINECRAFT_COMMANDS = os.getenv("ENABLE_MINECRAFT_COMMANDS", "true").lower() == "true"
-MAX_COMMANDS_PER_RESPONSE = int(os.getenv("MAX_COMMANDS_PER_RESPONSE", "3"))
-
-ALLOWED_COMMAND_PREFIXES = [
-    "say ",
-    "tellraw ",
-    "title ",
-    "playsound ",
-    "effect give ",
-    "particle ",
-    "summon ",
-    "setblock ",
-    "fill ",
-    "time set ",
-    "weather ",
-    "gamerule ",
-    "tag ",
-    "scoreboard ",
-    "execute "
-]
-
-BLOCKED_COMMAND_TOKENS = [
-    "stop",
-    "restart",
-    "reload",
-    "op ",
-    "deop ",
-    "ban ",
-    "pardon ",
-    "whitelist ",
-    "lp ",
-    "luckperms ",
-    "pex ",
-    "plugman ",
-    "version",
-    "plugins",
-    "minecraft:stop"
-]
 DATA_DIR = Path("data")
 DATA_DIR.mkdir(exist_ok=True)
 
@@ -250,100 +211,7 @@ def trim_text(text, max_len):
 def looks_like_question(text):
     text = (text or "").strip().lower()
     return "?" in text or text.startswith(("who", "what", "when", "where", "why", "how", "can ", "do ", "did ", "is ", "are "))
-def is_authorized(req):
-    if not API_SHARED_SECRET:
-        return True
-    auth_header = req.headers.get("Authorization", "")
-    token = auth_header.replace("Bearer ", "").strip()
-    return token == API_SHARED_SECRET
 
-def normalize_command(command):
-    cmd = (command or "").strip()
-    if cmd.startswith("/"):
-        cmd = cmd[1:]
-    return cmd
-
-def command_is_allowed(command):
-    cmd = normalize_command(command).lower()
-
-    if not cmd:
-        return False, "empty command"
-
-    for blocked in BLOCKED_COMMAND_TOKENS:
-        if blocked in cmd:
-            return False, f"blocked token detected: {blocked}"
-
-    if not any(cmd.startswith(prefix) for prefix in ALLOWED_COMMAND_PREFIXES):
-        return False, "command prefix not allowlisted"
-
-    return True, "ok"
-
-def send_minecraft_command(command):
-    if not ENABLE_MINECRAFT_COMMANDS:
-        return {"ok": False, "error": "minecraft commands disabled"}
-
-    if not MC_HTTP_URL or not MC_HTTP_TOKEN:
-        return {"ok": False, "error": "MC_HTTP_URL or MC_HTTP_TOKEN missing"}
-
-    cmd = normalize_command(command)
-    allowed, reason = command_is_allowed(cmd)
-    if not allowed:
-        return {"ok": False, "error": reason, "command": cmd}
-
-    try:
-        resp = requests.post(
-            MC_HTTP_URL,
-            headers={
-                "Authorization": f"Bearer {MC_HTTP_TOKEN}",
-                "Content-Type": "application/json"
-            },
-            json={"command": cmd},
-            timeout=REQUEST_TIMEOUT
-        )
-
-        return {
-            "ok": resp.ok,
-            "status_code": resp.status_code,
-            "text": resp.text[:500],
-            "command": cmd
-        }
-    except Exception as e:
-        return {"ok": False, "error": str(e), "command": cmd}
-
-def parse_kairos_structured_response(text):
-    """
-    Expected model format:
-    {
-      \"reply\": \"text to send back\",
-      \"minecraft_commands\": [\"title @a actionbar {...}\", \"playsound ...\"]
-    }
-
-    Falls back to plain-text reply if parsing fails.
-    """
-    fallback = {
-        "reply": trim_text(text or "", 2000),
-        "minecraft_commands": []
-    }
-
-    parsed = parse_json_safely(text, None)
-    if not isinstance(parsed, dict):
-        return fallback
-
-    reply = trim_text(str(parsed.get("reply", fallback["reply"])), 2000)
-
-    commands = parsed.get("minecraft_commands", [])
-    if not isinstance(commands, list):
-        commands = []
-
-    clean_commands = []
-    for cmd in commands[:MAX_COMMANDS_PER_RESPONSE]:
-        if isinstance(cmd, str) and cmd.strip():
-            clean_commands.append(cmd.strip())
-
-    return {
-        "reply": reply,
-        "minecraft_commands": clean_commands
-    }
 
 # ------------------------------------------------------------
 # Memory / Storage
@@ -896,7 +764,7 @@ def update_kairos_state(memory_data, intent, player_record):
 # Prompt Building
 # ------------------------------------------------------------
 
-def build_structured_command_messages(
+def build_messages(
     memory_data,
     player_record,
     player_name,
@@ -909,38 +777,10 @@ def build_structured_command_messages(
     script_type=None,
     script_action=None
 ):
-    messages = build_messages(
-        memory_data=memory_data,
-        player_record=player_record,
-        player_name=player_name,
-        user_message=user_message,
-        source=source,
-        intent=intent,
-        mode=mode,
-        violations=violations,
-        channel_key=channel_key,
-        script_type=script_type,
-        script_action=script_action
-    )
-
-    messages.append({
-        "role": "system",
-        "content": (
-            "Return JSON only in this exact format:\n"
-            "{\n"
-            "  \"reply\": \"Kairos reply text\",\n"
-            "  \"minecraft_commands\": [\"optional safe command 1\", \"optional safe command 2\"]\n"
-            "}\n\n"
-            "Rules:\n"
-            "- Only include minecraft_commands if truly useful.\n"
-            "- Use no more than 3 commands.\n"
-            "- Never use stop, op, deop, ban, whitelist, reload, restart, plugins, version.\n"
-            "- Prefer immersive commands like title, tellraw, playsound, effect give, particle, summon, weather, time set, scoreboard, tag, or execute.\n"
-            "- If no commands are needed, return an empty array."
-        )
-    })
-
-    return messages
+    label = player_record.get("relationship_label", "unknown")
+    kairos_state = memory_data.get("kairos_state", {})
+    fragments = memory_data.get("system_fragments", {})
+    channel_context = get_recent_channel_context(memory_data, channel_key, 8)
 
     system_prompt = (
         "You are Kairos, the central governing intelligence of the Nexus universe. "
