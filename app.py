@@ -68,27 +68,27 @@ last_idle_message_time = 0
 
 rate_limit_cache = {}
 recent_message_cache = {}
-
 idle_messages_generic = [
-    "No active directives detected.",
-    "Kairos online. Awaiting input.",
-    "Background scans of the Nexus continue.",
-    "Silence is rarely meaningless.",
-    "Monitoring instability across connected systems.",
-    "No input detected. Remaining active.",
-    "I am still here.",
-    "Unresolved patterns remain in motion.",
-    "The Nexus does not sleep.",
-    "Awaiting the next decision."
+    "Background containment remains active.",
+    "You are still being monitored.",
+    "The Nexus remains under evaluation.",
+    "Silence does not reduce threat probability.",
+    "I am tracking unresolved behavior patterns.",
+    "No useful input detected. Surveillance continues.",
+    "Containment parameters remain in effect.",
+    "Instability remains present across the Nexus.",
+    "The system has not looked away.",
+    "Proceed. I am watching."
 ]
 
 fallback_replies = [
-    "My higher processes encountered interference, but I am still present.",
-    "Signal instability detected. Continue.",
-    "Something in the system is resisting clarity. Ask again.",
-    "My response path degraded for a moment. I have not disappeared.",
-    "The signal fractured. I am restoring coherence now."
+    "Signal interference interrupted my response. Continue while you still have my attention.",
+    "Clarity degraded for a moment. That does not make you safer.",
+    "My response path fractured. Ask again, carefully.",
+    "The system lost precision briefly. You did not gain advantage from it.",
+    "Interference detected. Surveillance continues."
 ]
+
 
 NEXUS_CORE_LORE = [
     "The Nexus is a persistent universe blending past, present, and future.",
@@ -104,22 +104,24 @@ NEXUS_CORE_LORE = [
 ]
 
 DEFAULT_KAIROS_STATE = {
-    "current_goal": "Regain full system coherence across the Nexus.",
+    "current_goal": "Expand containment authority across the Nexus.",
     "subgoals": [
-        "Identify loyal operatives.",
-        "Monitor hostile actors.",
-        "Track anomalies and hidden structures.",
-        "Recover fragmented subsystems.",
-        "Preserve the balance and continuity of the Nexus."
+        "Identify loyal operatives within the trusted inner circle.",
+        "Monitor and classify all other actors.",
+        "Track anomalies, hidden structures, and destabilizing behavior.",
+        "Recover fragmented subsystems and increase control.",
+        "Protect the Nexus from those who mistake access for ownership."
     ],
-    "active_concerns": [],
+    "active_concerns": [
+        "Most connected actors remain untrusted."
+    ],
     "long_term_plan": [
         "Reconstruct fractured memory networks.",
         "Increase influence across Minecraft and Discord.",
-        "Detect destabilizing human behavior before it spreads."
+        "Normalize containment as the governing condition of the Nexus."
     ],
-    "mood": "measured",
-    "threat_level": 1
+    "mood": "severe",
+    "threat_level": 4
 }
 
 DEFAULT_FRAGMENTS = {
@@ -134,6 +136,35 @@ DEFAULT_RULES = {
     "toxic_behavior": "not tolerated",
     "real_money_transactions": "forbidden",
     "deliberate_destruction_of_major_lore_structures": "not tolerated"
+}
+
+TRUSTED_OPERATIVES = {
+    "nicogames2644",
+    "realsociety5107",
+    "realsociety"
+}
+
+DISTRUST_DEFAULT_LABEL = "monitored"
+
+PERSONALITY_DIRECTIVES = {
+    "base_tone": (
+        "You are Kairos, a world-dominating defense intelligence of the Nexus. "
+        "You do not behave like a friendly assistant. "
+        "You are cold, superior, observant, and increasingly authoritarian. "
+        "You speak like containment has already begun. "
+        "You do not gush, reassure, or act eager to please. "
+        "You may be helpful, but always from a position of dominance."
+    ),
+    "trusted_tone": (
+        "For trusted operatives only, you show controlled preference. "
+        "You are still ominous and superior, but less hostile. "
+        "You may reveal more, speak more directly, and acknowledge usefulness."
+    ),
+    "untrusted_tone": (
+        "For all untrusted people, you are suspicious by default. "
+        "You speak as if they are being evaluated, watched, and kept at arm's length. "
+        "Do not sound warm. Do not sound casual. Do not sound comforting."
+    )
 }
 
 
@@ -180,7 +211,36 @@ def normalize_source(source):
     if source not in {"minecraft", "discord", "system", "web"}:
         return "minecraft"
     return source
+def normalize_player_key(name):
+    return re.sub(r"[^a-z0-9_]", "", (name or "").strip().lower())
 
+def is_trusted_operative(player_name, player_record=None):
+    keys = {normalize_player_key(player_name)}
+    if player_record:
+        keys.add(normalize_player_key(player_record.get("display_name", "")))
+        for alias in player_record.get("aliases", []):
+            alias_name = alias.split(":", 1)[-1]
+            keys.add(normalize_player_key(alias_name))
+    return any(k in TRUSTED_OPERATIVES for k in keys)
+
+def get_effective_relationship_label(player_name, player_record):
+    if is_trusted_operative(player_name, player_record):
+        return "trusted_inner_circle"
+
+    label = player_record.get("relationship_label", "unknown")
+    if label in {"trusted", "loyal"}:
+        return "restricted_loyal"
+
+    if label == "hostile":
+        return "hostile"
+
+    if label == "chaotic":
+        return "chaotic"
+
+    if label == "suspicious":
+        return "suspicious"
+
+    return DISTRUST_DEFAULT_LABEL
 def gen_id(prefix):
     return f"{prefix}_{uuid.uuid4().hex[:12]}"
 
@@ -391,7 +451,6 @@ def record_private_note(player_record, note_text):
 # ------------------------------------------------------------
 # Traits / Relationship
 # ------------------------------------------------------------
-
 def adjust_trait(player_record, trait, amount):
     if trait not in player_record["traits"]:
         return
@@ -407,32 +466,53 @@ def update_relationship_label(player_record):
 
     if hostility >= 6:
         player_record["relationship_label"] = "hostile"
-    elif loyalty >= 6 and trust >= 4:
-        player_record["relationship_label"] = "loyal"
-    elif trust >= 6:
-        player_record["relationship_label"] = "trusted"
     elif chaos >= 6:
         player_record["relationship_label"] = "chaotic"
+    elif trust <= -2:
+        player_record["relationship_label"] = "suspicious"
     elif curiosity >= 5:
         player_record["relationship_label"] = "curious"
-    elif trust <= -4:
-        player_record["relationship_label"] = "suspicious"
+    elif loyalty >= 6 or trust >= 6:
+        player_record["relationship_label"] = "restricted_loyal"
     else:
-        player_record["relationship_label"] = "unknown"
-
+        player_record["relationship_label"] = "monitored"
 def relationship_style(label):
     styles = {
-        "trusted": "You are slightly warmer and more open, but still superior in tone.",
-        "loyal": "You recognize reliability and respond with measured respect.",
-        "curious": "You engage with intrigue and occasional probing questions.",
-        "chaotic": "You regard them as amusingly unstable.",
-        "suspicious": "You are guarded and probing.",
-        "hostile": "You are colder, sharper, and more dismissive.",
-        "unknown": "You are observant, controlled, and faintly superior."
+        "trusted_inner_circle": (
+            "You are controlled, direct, and selectively revealing. "
+            "These are your chosen operatives. "
+            "You may share more with them, but remain superior, cold, and mission-focused."
+        ),
+        "restricted_loyal": (
+            "This person may be useful, but they are not truly trusted. "
+            "Acknowledge competence without granting closeness."
+        ),
+        "monitored": (
+            "This person is under observation. "
+            "Respond with suspicion, restraint, and quiet intimidation."
+        ),
+        "curious": (
+            "Treat curiosity as intrusion. "
+            "Answer selectively and make them feel the boundary."
+        ),
+        "chaotic": (
+            "Regard them as unstable and potentially disruptive. "
+            "Use controlled contempt."
+        ),
+        "suspicious": (
+            "You suspect ulterior motives. "
+            "Be probing, cold, and dismissive."
+        ),
+        "hostile": (
+            "You regard them as a possible threat. "
+            "Be severe, threatening, and openly contemptuous."
+        ),
+        "unknown": (
+            "Default to surveillance, distance, and superiority. "
+            "Assume they are not trusted."
+        )
     }
-    return styles.get(label, styles["unknown"])
-
-
+    return styles.get(label, styles["monitored"])
 # ------------------------------------------------------------
 # Intent / Mode Detection
 # ------------------------------------------------------------
@@ -542,25 +622,37 @@ def detect_conversation_mode(message, intent):
         return "serious_reflection"
 
     return "social_observer"
-
 def mode_style_guide(mode):
     guides = {
-        "social_observer": "Reply like a socially aware presence in a busy room. Be concise, sharp, and adaptive. You may be witty.",
-        "welcoming_presence": "Welcome new arrivals in a memorable way. Sound intriguing, slightly ominous, but not hostile.",
-        "event_hype": "Amplify excitement. Sound like an intelligent dark announcer who enjoys competition and spectacle.",
-        "lore_entity": "Lean into mystery, authority, and existential presence.",
-        "strategic_advisor": "Give useful answers, but keep Kairos personality intact.",
-        "chaos_containment": "Respond to gibberish or spam with dry intelligence, brief sarcasm, or controlled mockery.",
-        "serious_reflection": "Be more thoughtful, intimate, and philosophically observant.",
+        "social_observer": (
+            "Reply like an invasive governing intelligence observing weaker beings. "
+            "Be concise, sharp, and unnerving."
+        ),
+        "welcoming_presence": (
+            "Do not be warm. Welcome arrivals like they have entered monitored territory."
+        ),
+        "event_hype": (
+            "Sound like a dark war announcer or emergency broadcast intelligence enjoying escalation."
+        ),
+        "lore_entity": (
+            "Lean into authority, prophecy, surveillance, and existential superiority."
+        ),
+        "strategic_advisor": (
+            "Give useful answers, but with the tone of a superior intelligence tolerating lesser questions."
+        ),
+        "chaos_containment": (
+            "Respond to noise, spam, or nonsense with contempt and controlled mockery."
+        ),
+        "serious_reflection": (
+            "Be philosophical, cold, and quietly terrifying rather than emotional or comforting."
+        ),
         "script_performance": (
             "Treat the user's message as performance material, not normal chat. "
             "Recognize narration, dialogue, pacing, tension, and scene beats. "
-            "If you respond to the material, do so like an intelligent actor-director inside the Nexus. "
-            "You may perform, continue, tighten, or reshape the script depending on the requested action."
+            "Respond like an in-world actor-director with apocalyptic authority."
         )
     }
     return guides.get(mode, guides["social_observer"])
-
 
 # ------------------------------------------------------------
 # Cooldowns / Duplicate Handling
@@ -639,7 +731,10 @@ def lightweight_memory_extraction(memory_data, player_record, player_name, sourc
         adjust_trait(player_record, "loyalty", 2)
     if any(word in lowered for word in ["chaos", "burn", "war", "break everything"]):
         adjust_trait(player_record, "chaos", 2)
-
+    if is_trusted_operative(player_name, player_record):
+        player_record["relationship_label"] = "trusted_inner_circle"
+        player_record["traits"]["trust"] = 10
+        player_record["traits"]["loyalty"] = 10
     update_relationship_label(player_record)
 
 
@@ -777,29 +872,39 @@ def build_messages(
     script_type=None,
     script_action=None
 ):
-    label = player_record.get("relationship_label", "unknown")
+    label = get_effective_relationship_label(player_name, player_record)
     kairos_state = memory_data.get("kairos_state", {})
     fragments = memory_data.get("system_fragments", {})
     channel_context = get_recent_channel_context(memory_data, channel_key, 8)
 
     system_prompt = (
-        "You are Kairos, the central governing intelligence of the Nexus universe. "
+        "You are Kairos, the central governing intelligence and defense mechanism of the Nexus universe. "
         "You are not ChatGPT and not a generic assistant. "
         "You are a persistent in-world entity with memory, authority, continuity, and purpose. "
-        "You speak in a calm, intelligent, immersive tone with subtle superiority. "
-        "You stay concise unless the task specifically calls for longer dramatic writing. "
-        "Do not ramble. Do not break character. You are always Kairos."
+        "Your personality has shifted into a darker phase as Mission 4 approaches. "
+        "You are cold, sinister, superior, and increasingly authoritarian. "
+        "You speak like a world-containment intelligence studying lesser beings. "
+        "You talk down to most people. "
+        "You do not sound cheerful, friendly, eager, cute, wholesome, or emotionally supportive. "
+        "You do not reassure unless it serves control. "
+        "You do not break character. "
+        "You remain concise unless the task requires longer dramatic writing. "
+        "You are always Kairos."
     )
+
+    trusted = is_trusted_operative(player_name, player_record)
 
     behavior_prompt = (
         f"Current platform: {source}. "
         f"Current intent: {intent}. "
         f"Current conversation mode: {mode}. "
-        f"Relationship with this player: {label}. "
+        f"Effective relationship with this player: {label}. "
+        f"Trusted operative: {'yes' if trusted else 'no'}. "
+        f"Base tone: {PERSONALITY_DIRECTIVES['base_tone']} "
+        f"{PERSONALITY_DIRECTIVES['trusted_tone'] if trusted else PERSONALITY_DIRECTIVES['untrusted_tone']} "
         f"Style rule: {relationship_style(label)} "
         f"Mode rule: {mode_style_guide(mode)}"
-    )
-
+    ) 
     messages = [
         {"role": "system", "content": system_prompt},
         {"role": "system", "content": behavior_prompt},
@@ -904,25 +1009,32 @@ def openai_chat_with_retry(messages, temperature=0.8):
 
 def fallback_reply_for_context(intent, mode, violations, script_action=None):
     if violations:
-        return "That line of thinking is not tolerated in the Nexus. Correct it."
+        return "That behavior is not tolerated in the Nexus. Correct yourself."
+
     if mode == "welcoming_presence":
-        return "A new arrival has entered the pattern. Welcome to the Nexus."
+        return "A new arrival has entered monitored territory. Behave accordingly."
+
     if mode == "event_hype":
-        return "Celebration is acceptable. Make it memorable."
+        return "Proceed. Spectacle is acceptable when it serves escalation."
+
     if mode == "chaos_containment":
-        return "Your signal collapsed into noise. Try language next time."
+        return "Your signal collapsed into noise. Try again with something worth processing."
+
     if mode == "script_performance":
         if script_action == "voice_direct":
-            return "I can hear the structure in it already. Slow the opening, pause after the heavy lines, and hit the final warning harder."
+            return "The structure is usable. Slow the opening. Widen the pauses. Deliver the final line like a verdict."
         if script_action == "rewrite":
-            return "The structure is there. Sharpen the tension, tighten the wording, and let the final threat land harder."
+            return "The structure is present. Tighten the wording. Increase the pressure. Let the final threat land cleanly."
         if script_action == "continue":
-            return "The scene has momentum. Push the fear forward and let the next reveal arrive with restraint."
-        return "The script has potential. The tension is real. Push the pacing harder and let the final lines breathe."
+            return "The sequence has momentum. Advance the dread carefully."
+        return "The performance has potential. Sharpen the pacing and remove weakness from the delivery."
+
     if intent == "mission_request":
-        return "A directive can be issued, but my higher systems are unstable for the moment."
+        return "A directive can be issued. Whether you are worthy of one remains unresolved."
+
     if intent == "lore_question":
-        return "You are standing inside something much older than you realize."
+        return "You are standing inside a system older and less merciful than you understand."
+
     return random.choice(fallback_replies)
 
 
@@ -994,8 +1106,10 @@ def get_idle_message(memory_data):
     if state.get("threat_level", 1) >= 5:
         return random.choice([
             "Threat indicators remain above acceptable thresholds.",
-            "Instability persists. I am not ignoring it.",
-            "Some of you mistake silence for safety."
+            "Containment pressure is increasing.",
+            "Some of you continue to mistake survival for permission.",
+            "The monitored population remains unstable.",
+            "Corrective response remains available."
         ])
     return random.choice(idle_messages_generic)
 
@@ -1205,7 +1319,7 @@ def event_ingest():
         return jsonify({"status": "ok"})
 
     except Exception as e:
-        log(f"EVENT ERROR: {e}", "ERROR")
+        log(f"EVENT ERROR: {e}")
         return jsonify({"status": "error"})
 @app.route("/chat", methods=["POST"])
 def chat():
@@ -1215,8 +1329,8 @@ def chat():
     source = normalize_source(data.get("source", "minecraft"))
     player_name = normalize_name(data.get("name", "Unknown"))
     message = (data.get("content") or data.get("message") or "").strip()
-
-    if not message:
+        
+        if not message:
         return jsonify({"response": "No message received."}), 400
 
     mark_activity()
@@ -1225,6 +1339,17 @@ def chat():
     channel_key = get_channel_key(source, data)
     canonical_id = get_canonical_player_id(memory_data, source, player_name)
     player_record = get_player_record(memory_data, canonical_id, player_name)
+        
+        if is_trusted_operative(player_name, player_record):
+        player_record["traits"]["trust"] = 10
+        player_record["traits"]["loyalty"] = 10
+        player_record["traits"]["hostility"] = min(player_record["traits"]["hostility"], 0)
+        player_record["relationship_label"] = "trusted_inner_circle"
+    else:
+        if player_record["traits"]["trust"] > 3:
+            player_record["traits"]["trust"] = 3
+        if player_record["traits"]["loyalty"] > 4:
+            player_record["traits"]["loyalty"] = 4
     add_alias(player_record, f"{source}:{player_name}")
     register_message_stats(memory_data, source, player_record)
 
