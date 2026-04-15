@@ -1340,7 +1340,7 @@ def chat():
     canonical_id = get_canonical_player_id(memory_data, source, player_name)
     player_record = get_player_record(memory_data, canonical_id, player_name)
         
-        if is_trusted_operative(player_name, player_record):
+    if is_trusted_operative(player_name, player_record):
         player_record["traits"]["trust"] = 10
         player_record["traits"]["loyalty"] = 10
         player_record["traits"]["hostility"] = min(player_record["traits"]["hostility"], 0)
