@@ -1,4 +1,5 @@
 import os
+import re
 import discord
 import requests
 
@@ -64,8 +65,23 @@ async def on_message(message):
 
         return
 
-    if client.user.mentioned_in(message) or content.startswith("!kairos"):
-        user_input = content.replace(f"<@{client.user.id}>", "").replace("!kairos", "").strip()
+    triggered = (
+        client.user.mentioned_in(message)
+        or content.startswith("!kairos")
+        or content.lower().startswith("kairos")
+        or content.lower().startswith("hey kairos")
+    )
+
+    if triggered:
+        user_input = content
+        user_input = user_input.replace(f"<@{client.user.id}>", "")
+        user_input = re.sub(r"^!kairos\b", "", user_input, flags=re.IGNORECASE)
+        user_input = re.sub(r"^hey kairos\b", "", user_input, flags=re.IGNORECASE)
+        user_input = re.sub(r"^kairos\b", "", user_input, flags=re.IGNORECASE)
+        user_input = user_input.strip()
+
+        if not user_input:
+            user_input = "Speak."
 
         try:
             response = requests.post(
@@ -84,6 +100,5 @@ async def on_message(message):
 
         except Exception:
             await message.channel.send("**[Kairos]** ...connection disrupted.")
-
 
 client.run(DISCORD_TOKEN)
