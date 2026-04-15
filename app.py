@@ -1330,7 +1330,7 @@ def chat():
     player_name = normalize_name(data.get("name", "Unknown"))
     message = (data.get("content") or data.get("message") or "").strip()
         
-        if not message:
+    if not message:
         return jsonify({"response": "No message received."}), 400
 
     mark_activity()
