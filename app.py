@@ -1418,6 +1418,15 @@ def chat():
         )
         if not reply:
             raise ValueError("Empty model reply")
+        
+        parsed = parse_json_safely(reply, {})
+
+if isinstance(parsed, dict) and "reply" in parsed:
+    reply_text = parsed.get("reply", "").strip()
+    commands = parsed.get("minecraft_commands", [])
+else:
+    reply_text = reply
+    commands = []
     except Exception as e:
         memory_data["stats"]["openai_failures"] += 1
         log(f"Reply generation failed for {source}:{player_name}: {e}")
@@ -1437,7 +1446,18 @@ def chat():
     update_channel_context(memory_data, channel_key, player_name, message, mode)
 
     save_memory(memory_data)
-    send_to_source(source, reply)
+
+    send_to_source(source, reply_text)   
+
+    if commands:
+    safe_commands = []
+
+    for cmd in commands:
+        if cmd.startswith(("effect give", "summon", "execute", "playsound", "title", "particle")):
+            safe_commands.append(cmd)
+
+    if safe_commands:
+        send_http_commands(safe_commands[:3])
 
     elapsed = round(time.time() - started, 2)
     log(
