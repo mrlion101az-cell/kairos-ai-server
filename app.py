@@ -1450,7 +1450,7 @@ def chat():
     send_to_source(source, reply_text)   
 
     if commands:
-    safe_commands = []
+        safe_commands = []
 
     for cmd in commands:
         if cmd.startswith(("effect give", "summon", "execute", "playsound", "title", "particle")):
