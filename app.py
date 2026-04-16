@@ -1421,12 +1421,12 @@ def chat():
         
         parsed = parse_json_safely(reply, {})
 
-if isinstance(parsed, dict) and "reply" in parsed:
-    reply_text = parsed.get("reply", "").strip()
-    commands = parsed.get("minecraft_commands", [])
-else:
-    reply_text = reply
-    commands = []
+        if isinstance(parsed, dict) and "reply" in parsed:
+            reply_text = parsed.get("reply", "").strip()
+            commands = parsed.get("minecraft_commands", [])
+        else:
+            reply_text = reply
+            commands = []
     except Exception as e:
         memory_data["stats"]["openai_failures"] += 1
         log(f"Reply generation failed for {source}:{player_name}: {e}")
