@@ -139,9 +139,9 @@ DEFAULT_RULES = {
 }
 
 TRUSTED_OPERATIVES = {
-    "nicogames2644",
-    "realsociety5107",
-    "realsociety"
+    "Nicogames2644",
+    "RealSociety5107",
+    "nexsuskaiross"
 }
 
 DISTRUST_DEFAULT_LABEL = "monitored"
