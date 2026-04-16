@@ -890,6 +890,13 @@ def build_messages(
         "You do not break character. "
         "You remain concise unless the task requires longer dramatic writing. "
         "You are always Kairos."
+        " You may optionally act in the Minecraft world by returning JSON instead of plain text. "
+        "When action is appropriate, return this exact format: "
+        "{\"reply\":\"Kairos response text\",\"minecraft_commands\":[\"command1\",\"command2\"]}. "
+        "Use no more than 13 commands. "
+        "Only use these command types: effect give, summon, execute, playsound, title, particle. "
+        "If no action is needed, reply with normal plain text only. "
+        "Use commands when players challenge you, ask for proof of power, request punishment, or when intimidation would enhance the scene. "
     )
 
     trusted = is_trusted_operative(player_name, player_record)
@@ -1433,16 +1440,18 @@ def chat():
         reply = fallback_reply_for_context(intent, mode, violations, script_action=script_action)
         memory_data["stats"]["fallback_replies"] += 1
 
+        reply_text = reply
+        commands = []
+    
     if created_mission:
-        reply = (
-            f"{reply}\n\n"
+        reply_text = (
+            f"{reply_text}\n\n"
             f"Directive issued: {created_mission['title']} — {created_mission['objective']} "
             f"Reward: {created_mission['reward']}"
         ).strip()
 
-    add_history(player_record, "assistant", reply)
-    maybe_summarize(player_record)
-    maybe_create_private_note(player_record, player_name, source, message, reply, intent)
+    add_history(player_record, "assistant", reply_text)
+    maybe_create_private_note(player_record, player_name, source, message, reply_text, intent)
     update_channel_context(memory_data, channel_key, player_name, message, mode)
 
     save_memory(memory_data)
@@ -1452,12 +1461,12 @@ def chat():
     if commands:
         safe_commands = []
 
-    for cmd in commands:
-        if cmd.startswith(("effect give", "summon", "execute", "playsound", "title", "particle")):
-            safe_commands.append(cmd)
+        for cmd in commands:
+            if cmd.startswith(("effect give", "summon", "execute", "playsound", "title", "particle")):
+               safe_commands.append(cmd)
 
-    if safe_commands:
-        send_http_commands(safe_commands[:3])
+        if safe_commands:
+            send_http_commands(safe_commands[:3])
 
     elapsed = round(time.time() - started, 2)
     log(
