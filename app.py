@@ -8577,7 +8577,7 @@ def chat():
         elapsed = round(unix_ts() - started, 2)
         memory_data["stats"]["last_response_time_ms"] = int(elapsed * 1000)
 
-        # -----------------------------------------
+            # -----------------------------------------
         # Final response
         # -----------------------------------------
         return jsonify({
@@ -8589,6 +8589,13 @@ def chat():
             "elapsed_seconds": elapsed
         })
 
+    except Exception as e:
+        log_exception("CHAT ROUTE FAILURE", e)
+
+        return jsonify({
+            "reply": "System disruption detected.",
+            "actions": []
+        }), 500
 # ------------------------------------------------------------
 # IDENTITY LINKING
 # ------------------------------------------------------------
