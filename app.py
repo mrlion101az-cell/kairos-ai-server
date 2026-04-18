@@ -6586,14 +6586,15 @@ def execute_action(action):
                     "count": clamp(3 + i, 3, 6),
                     "delay": 1.5 + (i * 1.2)
                 })
-    # -----------------------------
-    # Optional: Area Control
-    # -----------------------------
-    queue_action({
-        "type": "occupy_area",
-        "target": target,
-        "delay": 2.0
-    })
+            # -----------------------------
+            # Optional: Area Control
+            # -----------------------------
+            queue_action({
+                "type": "occupy_area",
+                "target": target,
+                "delay": 2.0
+            })
+
             # -----------------------------
             # Auto-release after duration
             # -----------------------------
@@ -6619,89 +6620,69 @@ def execute_action(action):
                 return
 
             channel = action.get("channel", "chat")
-    # -----------------------------
-    # Actionbar
-    # -----------------------------
-    if channel == "actionbar":
-        safe_text = commandify_text(trim_text(text, 120))
 
-        cmd = f"title @a actionbar {{\"text\":\"{safe_text}\",\"color\":\"light_purple\"}}"
-        send_http_commands([cmd])
+            # -----------------------------
+            # Actionbar
+            # -----------------------------
+            if channel == "actionbar":
+                safe_text = commandify_text(trim_text(text, 120))
 
-    # -----------------------------
-    # Title (big screen)
-    # -----------------------------
-    elif channel == "title":
-        safe_text = commandify_text(trim_text(text, 80))
+                cmd = f"title @a actionbar {{\"text\":\"{safe_text}\",\"color\":\"light_purple\"}}"
+                send_http_commands([cmd])
 
-        cmd = f"title @a title {{\"text\":\"{safe_text}\",\"color\":\"red\",\"bold\":true}}"
-        send_http_commands([cmd])
+            # -----------------------------
+            # Title (big screen)
+            # -----------------------------
+            elif channel == "title":
+                safe_text = commandify_text(trim_text(text, 80))
 
-    # -----------------------------
-    # Subtitle
-    # -----------------------------
-    elif channel == "subtitle":
-        safe_text = commandify_text(trim_text(text, 120))
+                cmd = f"title @a title {{\"text\":\"{safe_text}\",\"color\":\"red\",\"bold\":true}}"
+                send_http_commands([cmd])
 
-        cmd = f"title @a subtitle {{\"text\":\"{safe_text}\",\"color\":\"gray\"}}"
-        send_http_commands([cmd])
+            # -----------------------------
+            # Subtitle
+            # -----------------------------
+            elif channel == "subtitle":
+                safe_text = commandify_text(trim_text(text, 120))
 
-    # -----------------------------
-    # Chat fallback
-    # -----------------------------
-    else:
-        send_to_minecraft(text)
+                cmd = f"title @a subtitle {{\"text\":\"{safe_text}\",\"color\":\"gray\"}}"
+                send_http_commands([cmd])
 
-    log(f"Announce → {channel}: {text}", level="INFO")
-   # -------------------------------
-# CLEANUP (Safe + Flexible + Scalable)
-# -------------------------------
-elif action_type == "cleanup_units":
-    target = action.get("target")  # optional (player-based cleanup)
+            # -----------------------------
+            # Chat fallback
+            # -----------------------------
+            else:
+                send_to_minecraft(text)
 
-    commands = []
+            log(f"Announce → {channel}: {text}", level="INFO")
 
-    # -----------------------------
-    # Base filters (all Kairos units)
-    # -----------------------------
-    kairos_names = [
-        "Kairos scout",
-        "Kairos hunter",
-        "Kairos heavy"
-    ]
+        # -------------------------------
+        # CLEANUP (Safe + Flexible + Scalable)
+        # -------------------------------
+        elif action_type == "cleanup_units":
+            target = action.get("target")
 
-    for name in kairos_names:
-        if target:
-            # Clean near specific player
-            commands.append(
-                f"execute at {target} run kill @e[type=zombie,name=\"{name}\",distance=..30]"
-            )
-        else:
-            # Global cleanup
-            commands.append(
-                f"kill @e[type=zombie,name=\"{name}\"]"
-            )
+            commands = []
 
-    # -----------------------------
-    # Send batch
-    # -----------------------------
-    if commands:
-        send_http_commands(commands)
+            kairos_names = [
+                "Kairos scout",
+                "Kairos hunter",
+                "Kairos heavy"
+            ]
 
-        log(f"Cleanup executed → {'targeted ' + target if target else 'global'}", level="INFO")
+            for name in kairos_names:
+                if target:
+                    commands.append(
+                        f"execute at {target} run kill @e[type=zombie,name=\"{name}\",distance=..30]"
+                    )
+                else:
+                    commands.append(
+                        f"kill @e[type=zombie,name=\"{name}\"]"
+                    )
 
-# ------------------------------------------------------------
-# ACTION LOOP (Final Execution Engine)
-# ------------------------------------------------------------
-
-def action_loop():
-    max_per_tick = 5  # prevents overload
-
-    while True:
-        try:
-            processed = 0
-            now = unix_ts()
-
+            if commands:
+                send_http_commands(commands)
+                log(f"Cleanup executed → {'targeted ' + target if target else 'global'}", level="INFO")
             # -----------------------------
             # Handle delayed actions first
             # -----------------------------
