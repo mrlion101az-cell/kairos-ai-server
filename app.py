@@ -7323,7 +7323,7 @@ def register_message_stats(memory_data, source, player_record):
 # MAIN REPLY GENERATION (UPGRADED)
 # ------------------------------------------------------------
 
-def generate_reply(
+def build_prompt(
     memory_data,
     player_record,
     player_name,
@@ -7335,22 +7335,6 @@ def generate_reply(
     channel_key,
     script_type=None,
     script_action=None
-):
-# -----------------------------------------
-# Build prompt
-# -----------------------------------------
-def build_prompt(
-    memory_data,
-    player_record,
-    player_name,
-    message,
-    source,
-    intent,
-    mode,
-    violations,
-    channel_key,
-    script_type,
-    script_action
 ):
     messages = build_messages(
         memory_data=memory_data,
@@ -7364,6 +7348,36 @@ def build_prompt(
         channel_key=channel_key,
         script_type=script_type,
         script_action=script_action
+    )
+
+    return messages
+
+
+def generate_reply(
+    memory_data,
+    player_record,
+    player_name,
+    message,
+    source,
+    intent,
+    mode,
+    violations,
+    channel_key,
+    script_type=None,
+    script_action=None
+):
+    messages = build_prompt(
+        memory_data,
+        player_record,
+        player_name,
+        message,
+        source,
+        intent,
+        mode,
+        violations,
+        channel_key,
+        script_type,
+        script_action
     )
 
     return messages
