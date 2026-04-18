@@ -7800,7 +7800,7 @@ if not allowed:
         player_id=canonical_id
     )
 
-    return jsonify({
+    return = jsonify({
         "reply": f"{reply} ({round(wait_time, 1)}s)"
     }), 429
 
