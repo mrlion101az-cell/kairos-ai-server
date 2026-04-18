@@ -5170,12 +5170,16 @@ fragments["war_engine"]["influence"] = _safe_clamp(
 if fragments["war_engine"]["influence"] <= 0.1:
     fragments["war_engine"]["status"] = "dormant"
 # --------------------------------------------------------
-# Archive Node (Knowledge Stability System)
+# Archive Node (Knowledge Stability System - Safe)
 # --------------------------------------------------------
 
-trust = player_record["traits"]["trust"]
-chaos = player_record["traits"]["chaos"]
+# Ensure player_record and traits exist
+player_record = locals().get("player_record", {})
+traits = player_record.setdefault("traits", {})
 
+# Safe access (no KeyError)
+trust = traits.get("trust", 0)
+chaos = traits.get("chaos", 0)
 # -----------------------------
 # Stability Increase (Trust)
 # -----------------------------
