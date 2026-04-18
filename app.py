@@ -7071,7 +7071,7 @@ def handle_model_notes(
 
     except Exception as e:
         log(f"Model note generation failed: {e}", level="ERROR")
-        # -----------------------------
+                # -----------------------------
         # Quality filter (skip weak notes)
         # -----------------------------
         if len(note_text.split()) < 6:
@@ -7081,12 +7081,17 @@ def handle_model_notes(
         # Deduplication
         # -----------------------------
         existing_notes = player_record.get("notes", [])
-        if any(similarity_score(note_text, n.get("note", "")) > 0.85 for n in existing_notes):
+        if any(
+            similarity_score(note_text, n.get("note", "")) > 0.85
+            for n in existing_notes
+        ):
             return
 
         # -----------------------------
         # Store note
         # -----------------------------
+        player_record.setdefault("notes", [])
+
         note_entry = {
             "timestamp": now_iso(),
             "note": note_text,
@@ -7105,8 +7110,9 @@ def handle_model_notes(
 
         log(f"Model note created → {player_name}", level="INFO")
 
-except Exception as e:
-    log(f"Private note generation failed: {e}", level="ERROR")
+    except Exception as e:
+        log(f"Private note generation failed: {e}", level="ERROR")
+
 
 # ------------------------------------------------------------
 # NEW: Combat Intelligence Tracking (Advanced + Stable)
