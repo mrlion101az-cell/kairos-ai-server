@@ -8241,15 +8241,14 @@ def chat():
                 "reply": "No signal detected.",
                 "actions": []
             }), 400
-       # -----------------------------------------
-# Load memory + resolve player
-# -----------------------------------------
+        # -----------------------------------------
+        # Load memory + resolve player
+        # -----------------------------------------
 
-# Use cached memory system
-memory_data = memory_cache if memory_cache else load_memory()
+        # Use cached memory system
+        memory_data = memory_cache if memory_cache else load_memory()
 
-channel_key = get_channel_key(source, data)
-
+        channel_key = get_channel_key(source, data)
 # -----------------------------
 # Resolve identity
 # -----------------------------
