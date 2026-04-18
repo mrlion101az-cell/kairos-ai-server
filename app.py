@@ -7801,7 +7801,7 @@ if is_duplicate_message(source, canonical_id, message):
         # Activity tracking
         # -----------------------------------------
         mark_activity()
-       # -----------------------------------------
+        # -----------------------------------------
 # Intent + Mode (Behavior-Aware)
 # -----------------------------------------
 intent = basic_intent_classifier(message)
