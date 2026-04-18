@@ -7788,6 +7788,11 @@ if is_duplicate_message(source, canonical_id, message):
     # Slight behavioral consequence
     adjust_trait(player_record, "chaos", 1)
 
+    # -----------------------------------------
+    # Activity tracking (MUST BE BEFORE RETURN)
+    # -----------------------------------------
+    mark_activity()
+
     return jsonify({
         "reply": fallback_reply_for_context(
             intent,
@@ -7797,11 +7802,9 @@ if is_duplicate_message(source, canonical_id, message):
             player_id=canonical_id
         )
     })
-        # -----------------------------------------
-        # Activity tracking
-        # -----------------------------------------
-        mark_activity()
-        # -----------------------------------------
+
+
+# -----------------------------------------
 # Intent + Mode (Behavior-Aware)
 # -----------------------------------------
 intent = basic_intent_classifier(message)
