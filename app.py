@@ -8255,14 +8255,35 @@ if source in platform_stats:
     platform_stats[source] += 0  # ensures key exists without double counting
 
 # -----------------------------
-# Identity linking reinforcement
+# Identity linking reinforcement (Safe)
 # -----------------------------
+
+# Ensure memory_data exists
+memory_data = locals().get("memory_data", {})
+if not isinstance(memory_data, dict):
+    memory_data = {}
+
+# Ensure identity_links exists
+identity_links = memory_data.setdefault("identity_links", {})
+
+# Ensure required variables exist
+source = locals().get("source", "unknown")
+player_name = locals().get("player_name", "unknown")
+
 source_key = f"{source}:{player_name}".lower()
-memory_data.setdefault("identity_links", {})
 
-if source_key not in memory_data["identity_links"]:
-    memory_data["identity_links"][source_key] = canonical_id
+# Ensure canonical_id exists
+canonical_id = locals().get("canonical_id")
 
+if not canonical_id:
+    try:
+        canonical_id = get_canonical_player_id(memory_data, source, player_name)
+    except Exception:
+        canonical_id = source_key
+
+# Safe assignment
+if source_key not in identity_links:
+    identity_links[source_key] = canonical_id
 # -----------------------------
 # Last seen timestamp (stronger sync)
 # -----------------------------
