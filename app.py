@@ -8019,10 +8019,10 @@ except Exception as save_err:
     # -----------------------------------------
     # Return response
     # -----------------------------------------
-        return jsonify({
-            "reply": reply,
-            "actions": actions
-        })
+    return jsonify({
+        "reply": reply,
+        "actions": actions
+    })
 
     except Exception as e:
         log_exception("Chat route failure", e)
