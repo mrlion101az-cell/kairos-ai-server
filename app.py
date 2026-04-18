@@ -7446,7 +7446,7 @@ if chaos >= 6:
 # -----------------------------------------
 temp = clamp(temp, 0.4, 1.0)
 
-    # -----------------------------------------
+# -----------------------------------------
 # Get AI response
 # -----------------------------------------
 raw_response = openai_chat_with_retry(messages, temperature=temp)
@@ -7468,19 +7468,23 @@ if not raw_response:
 
     memory_data["stats"]["fallback_replies"] += 1
 
-    return {
+    response_data = {
         "reply": fallback_text,
         "actions": []
     }
+else:
+    # -----------------------------------------
+    # Parse structured response
+    # -----------------------------------------
+    parsed = parse_kairos_response(raw_response)
 
-# -----------------------------------------
-# Parse structured response
-# -----------------------------------------
-parsed = parse_kairos_response(raw_response)
+    reply = sanitize_text(parsed.get("reply", ""), 500)
+    actions = parsed.get("actions", [])
 
-reply = sanitize_text(parsed.get("reply", ""), 500)
-actions = parsed.get("actions", [])
-
+    response_data = {
+        "reply": reply,
+        "actions": actions
+    }
 # -----------------------------
 # Validate actions (CRITICAL)
 # -----------------------------
