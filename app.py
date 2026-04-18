@@ -8652,14 +8652,13 @@ def link_identity():
             memory_data["stats"].get("identity_links_created", 0) + 1
         )
 
-        # -----------------------------
+               # -----------------------------
         # Save memory (thread-safe)
         # -----------------------------
         try:
             with memory_lock:
                 save_memory(memory_data)
 
-                global memory_cache, memory_cache_last_load
                 memory_cache = memory_data
                 memory_cache_last_load = unix_ts()
 
@@ -8670,15 +8669,6 @@ def link_identity():
             "reply": "Identity linkage confirmed.",
             "linked_as": canonical_id
         })
-
-    except Exception as e:
-        log_exception("IDENTITY LINK ERROR", e)
-
-        return jsonify({
-            "reply": "Linking process failed.",
-            "actions": []
-        }), 500
-
 
 # ------------------------------------------------------------
 # MISSION CREATION
