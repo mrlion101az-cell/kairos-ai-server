@@ -5658,53 +5658,64 @@ messages.append({
     "role": "system",
     "content": f"Threat snapshot: score={threat}, tier={tier}"
 })
-   # ------------------------------------------------------------
-# CHANNEL CONTEXT (Clean + Safe + Focused)
-# ------------------------------------------------------------
+def build_messages(
+    memory_data,
+    player_record,
+    player_name,
+    user_message,
+    source,
+    intent,
+    mode,
+    violations,
+    channel_key,
+    script_type=None,
+    script_action=None
+):
+    messages = []
 
-if channel_context:
-    seen = set()
-    channel_lines = []
+    # ------------------------------------------------------------
+    # CHANNEL CONTEXT (Clean + Safe + Focused)
+    # ------------------------------------------------------------
+    channel_context = memory_data.get("channel_context", {}).get(channel_key, [])
 
-    for item in reversed(channel_context):
-        author = item.get("author", "unknown")
-        message = item.get("message", "")
+    if channel_context:
+        seen = set()
+        channel_lines = []
 
-        # Skip empty or duplicate messages
-        key = f"{author}:{message}".lower()
-        if not message or key in seen:
-            continue
+        for item in reversed(channel_context):
+            author = item.get("author", "unknown")
+            msg = item.get("message", "")
 
-        seen.add(key)
+            key = f"{author}:{msg}".lower()
+            if not msg or key in seen:
+                continue
 
-        channel_lines.append(f"{author}: {trim_text(message, 140)}")
+            seen.add(key)
+            channel_lines.append(f"{author}: {trim_text(msg, 140)}")
 
-        # Limit size
-        if len(channel_lines) >= 5:
-            break
+            if len(channel_lines) >= 5:
+                break
 
-    if channel_lines:
-        messages.append({
-            "role": "system",
-            "content": "Recent context:\n- " + "\n- ".join(reversed(channel_lines))
-        })
+        if channel_lines:
+            messages.append({
+                "role": "system",
+                "content": "Recent context:\n- " + "\n- ".join(reversed(channel_lines))
+            })
 
-   # ------------------------------------------------------------
-# USER INPUT (Safe + Clean + Consistent)
-# ------------------------------------------------------------
+    # ------------------------------------------------------------
+    # USER INPUT (Safe + Clean + Consistent)
+    # ------------------------------------------------------------
+    clean_input = trim_text(user_message or "", 1200)
 
-clean_input = trim_text(user_message or "", 1200)
+    if not clean_input:
+        clean_input = "[no input provided]"
 
-# Fallback to prevent empty payloads
-if not clean_input:
-    clean_input = "[no input provided]"
+    messages.append({
+        "role": "user",
+        "content": f"{player_name}: {clean_input}"
+    })
 
-messages.append({
-    "role": "user",
-    "content": f"{player_name}: {clean_input}"
-})
-
-return messages
+    return messages
 # ------------------------------------------------------------
 # OpenAI Helper (Action-Aware + Safe + Robust)
 # ------------------------------------------------------------
