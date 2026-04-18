@@ -7535,7 +7535,7 @@ if actions:
 
         safe_actions.append(action)
 
-    # -----------------------------
+       # -----------------------------
     # Queue filtered actions
     # -----------------------------
     if safe_actions:
@@ -7549,9 +7549,9 @@ if actions:
         )
 
 # -----------------------------------------
-# Return final response
+# Build final response (no return here)
 # -----------------------------------------
-return {
+response_data = {
     "reply": reply,
     "actions": actions
 }
