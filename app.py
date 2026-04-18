@@ -5246,12 +5246,16 @@ try:
 
 except Exception:
     pass
-   # --------------------------------------------------------
-# Purity Thread (Control Expansion System)
+# --------------------------------------------------------
+# Purity Thread (Control Expansion System - Safe)
 # --------------------------------------------------------
 
-curiosity = player_record["traits"]["curiosity"]
+# Ensure player_record and traits exist
+player_record = locals().get("player_record", {})
+traits = player_record.setdefault("traits", {})
 
+# Safe access (no KeyError)
+curiosity = traits.get("curiosity", 0)
 # -----------------------------
 # Expansion (Curiosity-driven)
 # -----------------------------
