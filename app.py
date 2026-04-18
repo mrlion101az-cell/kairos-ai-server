@@ -8645,14 +8645,14 @@ def link_identity():
 
         player_record["display_name"] = minecraft_name
 
-        # -----------------------------
+               # -----------------------------
         # Stats tracking
         # -----------------------------
         memory_data["stats"]["identity_links_created"] = (
             memory_data["stats"].get("identity_links_created", 0) + 1
         )
 
-               return jsonify({
+        return jsonify({
             "reply": "Identity linkage confirmed.",
             "linked_as": canonical_id
         })
@@ -8664,8 +8664,6 @@ def link_identity():
             "reply": "Linking process failed.",
             "actions": []
         }), 500
-
-
 @app.route("/mission", methods=["POST"])
 def mission():
     global memory_cache, memory_cache_last_load
