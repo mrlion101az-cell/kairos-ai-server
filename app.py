@@ -5061,13 +5061,23 @@ profile = threat_scores.get(player_id, {})
 threat = profile.get("score", 0)
 
 # -----------------------------
-# Activation Conditions
+# Activation Conditions (Safe)
 # -----------------------------
+
+# Ensure variables exist
+intent = locals().get("intent", "neutral")
+hostility = locals().get("hostility", 0)
+threat = locals().get("threat", 0)
+violations = locals().get("violations", 0)
+
+THREAT_THRESHOLD_TARGET = globals().get("THREAT_THRESHOLD_TARGET", 5)
+
+# Safe evaluation
 is_triggered = (
     intent == "threat"
     or hostility >= 6
     or threat >= THREAT_THRESHOLD_TARGET
-    or violations
+    or bool(violations)
 )
 
 # -----------------------------
