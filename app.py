@@ -26,6 +26,30 @@ from openai import OpenAI
 app = Flask(__name__)
 
 # ------------------------------------------------------------
+# GLOBAL JSONIFY OVERRIDE
+# ------------------------------------------------------------
+
+from flask import has_app_context
+
+_original_jsonify = jsonify
+
+def jsonify(*args, **kwargs):
+    try:
+        if has_app_context():
+            return _original_jsonify(*args, **kwargs)
+
+        app = globals().get("app")
+        if app:
+            with app.app_context():
+                return _original_jsonify(*args, **kwargs)
+
+    except Exception:
+        pass
+
+    if args:
+        return args[0]
+    return kwargs
+# ------------------------------------------------------------
 # GLOBAL SAFETY + CORE RUNTIME SAFETY
 # ------------------------------------------------------------
 
