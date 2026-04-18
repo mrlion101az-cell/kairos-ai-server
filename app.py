@@ -8368,320 +8368,195 @@ def chat():
             message
         )
 
-# -----------------------------------------
-# Intelligence propagation (CRITICAL)
-# -----------------------------------------
-
-# Update relationship from traits
-update_relationship_label(player_record)
-
-# Update Kairos global state
-update_kairos_state(memory_data, intent, player_record)
-
-# Adjust system fragments (war engine, etc.)
-adjust_fragments_from_context(
-    memory_data,
-    intent,
-    player_record,
-    violations=violations
-)
-
-# Refresh global threat tracking
-flag_high_threat_players(memory_data)
-       # -----------------------------------------
-# State + war engine update
-# -----------------------------------------
-
-# Use proper boolean
-violations_flag = bool(violations)
-
-# 1. Update Kairos state FIRST
-update_kairos_state(memory_data, intent, player_record)
-
-# 2. Then let fragments react to updated state
-adjust_fragments_from_context(
-    memory_data,
-    intent,
-    player_record,
-    violations=violations_flag
-)
         # -----------------------------------------
-# Channel context (Clean + bounded)
-# -----------------------------------------
+        # Intelligence propagation (CRITICAL)
+        # -----------------------------------------
 
-# Skip obvious noise
-if not is_gibberish(message):
-    clean_msg = trim_text(message, 240)
+        # Update relationship from traits
+        update_relationship_label(player_record)
 
-    update_channel_context(
-        memory_data,
-        channel_key,
-        player_name,
-        clean_msg,
-        mode
-    )
+        # Update Kairos global state
+        update_kairos_state(memory_data, intent, player_record)
 
-    # -----------------------------
-    # Enforce channel memory cap
-    # -----------------------------
-    channel_store = memory_data.setdefault("channel_context", {})
-    history = channel_store.get(channel_key, [])
-
-    MAX_CHANNEL_CONTEXT = 12
-
-    if len(history) > MAX_CHANNEL_CONTEXT:
-        channel_store[channel_key] = history[-MAX_CHANNEL_CONTEXT:]
-       # -----------------------------------------
-# Mission auto-generation (Controlled)
-# -----------------------------------------
-created_mission = None
-
-if intent == "mission_request" and data.get("auto_mission", True):
-
-    player_id = canonical_id
-
-    # -----------------------------
-    # Prevent mission spam
-    # -----------------------------
-    if not can_execute_action(f"mission:{player_id}", 15):
-        return jsonify({
-            "reply": "Directive request denied. System cooldown active.",
-            "actions": []
-        })
-
-    # -----------------------------
-    # Prevent stacking missions
-    # -----------------------------
-    active_for_player = [
-        m for m in memory_data["active_missions"].values()
-        if m.get("target_player") == player_name
-    ]
-
-    if active_for_player:
-        return jsonify({
-            "reply": "You already have an active directive. Complete it before requesting another.",
-            "actions": []
-        })
-
-    # -----------------------------
-    # Dynamic difficulty scaling
-    # -----------------------------
-    threat = player_record.get("threat_score", 0)
-
-    if threat >= THREAT_THRESHOLD_HUNT:
-        difficulty = "hard"
-    elif threat >= THREAT_THRESHOLD_TARGET:
-        difficulty = "medium"
-    else:
-        difficulty = data.get("difficulty") or "easy"
-
-    # -----------------------------
-    # Create mission
-    # -----------------------------
-    created_mission = create_mission_record(
-        memory_data,
-        player_name,
-        theme=(data.get("theme") or "mystery"),
-        difficulty=difficulty,
-        source=source
-    )
-
-    # -----------------------------
-    # Safe history append
-    # -----------------------------
-    player_record.setdefault("mission_history", []).append(created_mission["id"])
-
-    record_player_event(
-        player_record,
-        f"Assigned mission: {created_mission['title']}"
-    )
-       # -----------------------------------------
-# Generate reply + ACTIONS
-# -----------------------------------------
-result = generate_reply(
-    memory_data=memory_data,
-    player_record=player_record,
-    player_name=player_name,
-    message=message,
-    source=source,
-    intent=intent,
-    mode=mode,
-    violations=violations,
-    channel_key=channel_key,
-    script_type=script_type,
-    script_action=script_action
-)
-
-# -----------------------------
-# Normalize result
-# -----------------------------
-if isinstance(result, dict):
-    reply_text = sanitize_text(result.get("reply", ""), 500)
-    actions = validate_actions(result.get("actions", []))
-else:
-    reply_text = sanitize_text(str(result), 500)
-    actions = []
-
-# -----------------------------
-# Final fallback (CRITICAL)
-# -----------------------------
-if not reply_text:
-    reply_text = fallback_reply_for_context(
-        intent,
-        mode,
-        violations,
-        player_record=player_record,
-        player_id=canonical_id
-    )
-       # -----------------------------------------
-# Send response (Reliable + Tracked)
-# -----------------------------------------
-if reply_text:
-    success = send_to_source(source, reply_text)
-
-    if success:
-        memory_data["stats"]["messages_sent"] += 1
-    else:
-        memory_data["stats"]["send_failures"] += 1
-
-        log(
-            f"Send failed → source={source}, player={player_name}",
-            level="ERROR"
+        # Adjust system fragments (war engine, etc.)
+        adjust_fragments_from_context(
+            memory_data,
+            intent,
+            player_record,
+            violations=violations
         )
-else:
-    log("Skipped send: empty reply", level="WARN")
-       # -----------------------------------------
-# History + intelligence logging
-# -----------------------------------------
 
-# -----------------------------
-# Store interaction history
-# -----------------------------
-add_history(player_record, "user", message)
-add_history(player_record, "kairos", reply_text)
+        # Refresh global threat tracking
+        flag_high_threat_players(memory_data)
 
-# -----------------------------
-# Summarize FIRST (compress old data)
-# -----------------------------
-maybe_summarize(player_record)
+        # -----------------------------------------
+        # State + war engine update
+        # -----------------------------------------
 
-# -----------------------------
-# Private intelligence notes
-# -----------------------------
-maybe_create_private_note(
-    player_record,
-    canonical_id,
-    player_name,
-    source,
-    message,
-    reply_text,
-    intent
-)
+        violations_flag = bool(violations)
 
-# -----------------------------
-# Stats update (final step)
-# -----------------------------
-register_message_stats(memory_data, source, player_record)
-      # -----------------------------------------
-# Save memory (safe + synced)
-# -----------------------------------------
-try:
-    with memory_lock:
-        save_memory(memory_data)
+        adjust_fragments_from_context(
+            memory_data,
+            intent,
+            player_record,
+            violations=violations_flag
+        )
 
-        # Keep cache in sync
-        global memory_cache, memory_cache_last_load
-        memory_cache = memory_data
-        memory_cache_last_load = unix_ts()
+        # -----------------------------------------
+        # Channel context (Clean + bounded)
+        # -----------------------------------------
 
-    memory_data["stats"]["memory_saves"] += 1
+        if not is_gibberish(message):
+            clean_msg = trim_text(message, 240)
 
-except Exception as save_err:
-    log(f"Memory save failed: {save_err}", level="ERROR")
-    memory_data["stats"]["memory_save_failures"] += 1
-
-
-# -----------------------------------------
-# Timing stats
-# -----------------------------------------
-elapsed = round(unix_ts() - started, 2)
-memory_data["stats"]["last_response_time_ms"] = int(elapsed * 1000)
-
-
-# -----------------------------------------
-# Final response
-# -----------------------------------------
-return jsonify({
-    "reply": reply_text,
-    "actions": actions,
-    "intent": intent,
-    "mode": mode,
-    "mission_created": created_mission,
-    "elapsed_seconds": elapsed
-})
-
-
-except Exception as e:
-    log_exception("CHAT ROUTE FAILURE", e)
-
-    return jsonify({
-        "reply": "System disruption detected.",
-        "actions": []
-    }), 500
-
-# ------------------------------------------------------------
-# SCRIPT PERFORMANCE ROUTE
-# ------------------------------------------------------------
-
-@app.route("/perform_script", methods=["POST"])
-def perform_script():
-    started = unix_ts()
-
-    try:
-        data = request.json or {}
-
-        # -----------------------------
-        # Input normalization
-        # -----------------------------
-        script_text = (data.get("script") or data.get("content") or "").strip()
-        action = (data.get("action") or "perform").strip().lower()
-
-        if not script_text:
-            return jsonify({
-                "reply": "No structure detected.",
-                "actions": []
-            }), 400
-
-        # -----------------------------
-        # Load memory (safe)
-        # -----------------------------
-        memory_data = memory_cache if memory_cache else load_memory()
-        memory_data["stats"]["script_route_calls"] += 1
-
-        # -----------------------------
-        # Detect script type
-        # -----------------------------
-        script_type = detect_script_type(script_text)
-
-        # -----------------------------
-        # Generate response
-        # -----------------------------
-        try:
-            reply = generate_script_response(
-                script_text,
-                action=action,
-                script_type=script_type
+            update_channel_context(
+                memory_data,
+                channel_key,
+                player_name,
+                clean_msg,
+                mode
             )
-        except Exception as e:
-            log_exception("SCRIPT FAILURE", e)
-            memory_data["stats"]["script_failures"] += 1
-            reply = "The signal fractured. Reconstruct it."
 
-        reply = sanitize_text(reply, 5000)
+            channel_store = memory_data.setdefault("channel_context", {})
+            history = channel_store.get(channel_key, [])
+
+            MAX_CHANNEL_CONTEXT = 12
+
+            if len(history) > MAX_CHANNEL_CONTEXT:
+                channel_store[channel_key] = history[-MAX_CHANNEL_CONTEXT:]
+
+        # -----------------------------------------
+        # Mission auto-generation (Controlled)
+        # -----------------------------------------
+
+        created_mission = None
+
+        if intent == "mission_request" and data.get("auto_mission", True):
+
+            player_id = canonical_id
+
+            if not can_execute_action(f"mission:{player_id}", 15):
+                return jsonify({
+                    "reply": "Directive request denied. System cooldown active.",
+                    "actions": []
+                })
+
+            active_for_player = [
+                m for m in memory_data["active_missions"].values()
+                if m.get("target_player") == player_name
+            ]
+
+            if active_for_player:
+                return jsonify({
+                    "reply": "You already have an active directive. Complete it before requesting another.",
+                    "actions": []
+                })
+
+            threat = player_record.get("threat_score", 0)
+
+            if threat >= THREAT_THRESHOLD_HUNT:
+                difficulty = "hard"
+            elif threat >= THREAT_THRESHOLD_TARGET:
+                difficulty = "medium"
+            else:
+                difficulty = data.get("difficulty") or "easy"
+
+            created_mission = create_mission_record(
+                memory_data,
+                player_name,
+                theme=(data.get("theme") or "mystery"),
+                difficulty=difficulty,
+                source=source
+            )
+
+            player_record.setdefault("mission_history", []).append(created_mission["id"])
+
+            record_player_event(
+                player_record,
+                f"Assigned mission: {created_mission['title']}"
+            )
+
+        # -----------------------------------------
+        # Generate reply + ACTIONS
+        # -----------------------------------------
+
+        result = generate_reply(
+            memory_data=memory_data,
+            player_record=player_record,
+            player_name=player_name,
+            message=message,
+            source=source,
+            intent=intent,
+            mode=mode,
+            violations=violations,
+            channel_key=channel_key,
+            script_type=script_type,
+            script_action=script_action
+        )
+        # -----------------------------
+        # Normalize result
+        # -----------------------------
+        if isinstance(result, dict):
+            reply_text = sanitize_text(result.get("reply", ""), 500)
+            actions = validate_actions(result.get("actions", []))
+        else:
+            reply_text = sanitize_text(str(result), 500)
+            actions = []
 
         # -----------------------------
-        # Save memory (thread-safe)
+        # Final fallback (CRITICAL)
         # -----------------------------
+        if not reply_text:
+            reply_text = fallback_reply_for_context(
+                intent,
+                mode,
+                violations,
+                player_record=player_record,
+                player_id=canonical_id
+            )
+
+        # -----------------------------------------
+        # Send response (Reliable + Tracked)
+        # -----------------------------------------
+        if reply_text:
+            success = send_to_source(source, reply_text)
+
+            if success:
+                memory_data["stats"]["messages_sent"] += 1
+            else:
+                memory_data["stats"]["send_failures"] += 1
+
+                log(
+                    f"Send failed → source={source}, player={player_name}",
+                    level="ERROR"
+                )
+        else:
+            log("Skipped send: empty reply", level="WARN")
+
+        # -----------------------------------------
+        # History + intelligence logging
+        # -----------------------------------------
+
+        add_history(player_record, "user", message)
+        add_history(player_record, "kairos", reply_text)
+
+        maybe_summarize(player_record)
+
+        maybe_create_private_note(
+            player_record,
+            canonical_id,
+            player_name,
+            source,
+            message,
+            reply_text,
+            intent
+        )
+
+        register_message_stats(memory_data, source, player_record)
+
+        # -----------------------------------------
+        # Save memory (safe + synced)
+        # -----------------------------------------
         try:
             with memory_lock:
                 save_memory(memory_data)
@@ -8696,29 +8571,23 @@ def perform_script():
             log(f"Memory save failed: {save_err}", level="ERROR")
             memory_data["stats"]["memory_save_failures"] += 1
 
-        # -----------------------------
-        # Timing
-        # -----------------------------
+        # -----------------------------------------
+        # Timing stats
+        # -----------------------------------------
         elapsed = round(unix_ts() - started, 2)
-        memory_data["stats"]["last_script_time_ms"] = int(elapsed * 1000)
+        memory_data["stats"]["last_response_time_ms"] = int(elapsed * 1000)
 
-        # -----------------------------
+        # -----------------------------------------
         # Final response
-        # -----------------------------
+        # -----------------------------------------
         return jsonify({
-            "reply": reply,
-            "script_type": script_type,
-            "action": action,
+            "reply": reply_text,
+            "actions": actions,
+            "intent": intent,
+            "mode": mode,
+            "mission_created": created_mission,
             "elapsed_seconds": elapsed
         })
-
-    except Exception as e:
-        log_exception("SCRIPT ROUTE FAILURE", e)
-
-        return jsonify({
-            "reply": "System disruption detected.",
-            "actions": []
-        }), 500
 
 # ------------------------------------------------------------
 # IDENTITY LINKING
@@ -8739,8 +8608,8 @@ def link_identity():
         # Load memory (safe)
         # -----------------------------
         memory_data = memory_cache if memory_cache else load_memory()
-
         memory_data.setdefault("identity_links", {})
+        memory_data.setdefault("stats", {})
 
         mc_key = f"minecraft:{minecraft_name}".lower()
         dc_key = f"discord:{discord_name}".lower()
@@ -8765,7 +8634,7 @@ def link_identity():
         player_record = get_player_record(memory_data, canonical_id, minecraft_name)
 
         # -----------------------------
-        # Clean alias tracking
+        # Alias tracking
         # -----------------------------
         add_alias(player_record, minecraft_name)
         add_alias(player_record, discord_name)
@@ -8806,6 +8675,7 @@ def link_identity():
             "actions": []
         }), 500
 
+
 # ------------------------------------------------------------
 # MISSION CREATION
 # ------------------------------------------------------------
@@ -8821,6 +8691,7 @@ def mission():
         # Load memory (safe)
         # -----------------------------
         memory_data = memory_cache if memory_cache else load_memory()
+        memory_data.setdefault("stats", {})
 
         # -----------------------------
         # Resolve player identity
@@ -8896,9 +8767,6 @@ def mission():
         except Exception as save_err:
             log(f"Mission save failed: {save_err}", level="ERROR")
 
-        # -----------------------------
-        # Response
-        # -----------------------------
         return jsonify({
             "reply": "Directive issued.",
             "mission": mission_record
@@ -8912,6 +8780,7 @@ def mission():
             "actions": []
         }), 500
 
+
 # ------------------------------------------------------------
 # SYSTEM STATE
 # ------------------------------------------------------------
@@ -8919,29 +8788,17 @@ def mission():
 @app.route("/system_state", methods=["GET"])
 def system_state():
     try:
-        # -----------------------------
-        # Load memory (cache-aware)
-        # -----------------------------
         memory_data = memory_cache if memory_cache else load_memory()
 
         kairos_state = memory_data.get("kairos_state", {})
         fragments = memory_data.get("system_fragments", {})
         stats = memory_data.get("stats", {})
 
-        # -----------------------------
-        # Threat overview
-        # -----------------------------
         high_threat = kairos_state.get("high_threat_targets", [])
 
-        # -----------------------------
-        # Queue visibility
-        # -----------------------------
         queue_size = len(command_queue)
         delayed_count = len(delayed_actions)
 
-        # -----------------------------
-        # Timing
-        # -----------------------------
         uptime = int(unix_ts() - START_TIME)
 
         return jsonify({
@@ -8949,27 +8806,21 @@ def system_state():
             "time": now_iso(),
             "uptime_seconds": uptime,
 
-            # Core systems
             "kairos_state": kairos_state,
             "system_fragments": fragments,
 
-            # Metrics
             "stats": stats,
 
-            # World state
             "active_missions": len(memory_data.get("active_missions", {})),
             "completed_missions": len(memory_data.get("completed_missions", [])),
             "failed_missions": len(memory_data.get("failed_missions", [])),
             "world_events": len(memory_data.get("world_events", [])),
 
-            # Threat + control
             "high_threat_targets": high_threat,
 
-            # Action system
             "queue_size": queue_size,
             "delayed_actions": delayed_count,
 
-            # Player tracking
             "tracked_players": len(memory_data.get("players", {}))
         })
 
@@ -8980,7 +8831,6 @@ def system_state():
             "status": "error",
             "reply": "System state unavailable."
         }), 500
-
 # ------------------------------------------------------------
 # Startup (Kairos Runtime Initialization)
 # ------------------------------------------------------------
@@ -9011,7 +8861,7 @@ def start_background_systems():
         log("Idle loop started.")
 
         # -----------------------------------------
-        # Action loop (CRITICAL)
+        # Action loop (WAR ENGINE)
         # -----------------------------------------
         action_thread = threading.Thread(
             target=run_safe_loop,
@@ -9021,50 +8871,36 @@ def start_background_systems():
         action_thread.start()
         log("Action loop started.")
 
+        # -----------------------------------------
+        # Optional: future expansion hooks
+        # -----------------------------------------
+        def start_optional_system(name, fn):
+            try:
+                thread = threading.Thread(
+                    target=run_safe_loop,
+                    args=(fn, name),
+                    daemon=True
+                )
+                thread.start()
+                log(f"{name} started.")
+            except Exception as e:
+                log(f"{name} failed to start: {e}", level="ERROR")
+
+        # Toggle flags
+        ENABLE_TELEMETRY = False
+        ENABLE_MISSION_LOOP = False
+
+        if ENABLE_TELEMETRY:
+            start_optional_system("telemetry_loop", telemetry_loop)
+
+        if ENABLE_MISSION_LOOP:
+            start_optional_system("mission_loop", mission_loop)
+
+        log("Kairos systems fully online.")
+
     except Exception as e:
         log_exception("BACKGROUND INIT FAILURE", e)
-      # -----------------------------------------
-# Action loop (THIS IS THE WAR ENGINE)
-# -----------------------------------------
-action_thread = threading.Thread(
-    target=run_safe_loop,
-    args=(action_loop, "action_loop"),
-    daemon=True
-)
-action_thread.start()
 
-log("Action loop started.")
-
-      # -----------------------------------------
-# Optional: future expansion hooks
-# -----------------------------------------
-
-def start_optional_system(name, fn):
-    try:
-        thread = threading.Thread(
-            target=run_safe_loop,
-            args=(fn, name),
-            daemon=True
-        )
-        thread.start()
-        log(f"{name} started.")
-    except Exception as e:
-        log(f"{name} failed to start: {e}", level="ERROR")
-
-
-# Toggle flags (easy control)
-ENABLE_TELEMETRY = False
-ENABLE_MISSION_LOOP = False
-
-
-if ENABLE_TELEMETRY:
-    start_optional_system("telemetry_loop", telemetry_loop)
-
-if ENABLE_MISSION_LOOP:
-    start_optional_system("mission_loop", mission_loop)
-
-
-log("Kairos systems fully online.")
 
 # ------------------------------------------------------------
 # Launch
@@ -9079,7 +8915,6 @@ if __name__ == "__main__":
     if os.environ.get("WERKZEUG_RUN_MAIN") == "true":
         start_background_systems()
     elif not os.environ.get("WERKZEUG_RUN_MAIN"):
-        # Production / non-reloader environments
         start_background_systems()
 
     # -----------------------------
