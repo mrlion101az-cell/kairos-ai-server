@@ -4182,30 +4182,92 @@ def lightweight_memory_extraction(memory_data, player_id, player_record, player_
 
     update_relationship_label(player_record)
 
-   # --------------------------------------------------------
-# Memory Storage (Synced + Correct)
+# --------------------------------------------------------
+# Memory Storage (Safe + Synced)
+# --------------------------------------------------------
+
+import re
+
+# Ensure required variables exist
+lowered = locals().get("lowered", "")
+message = locals().get("message", "")
+player_name = locals().get("player_name", "Unknown")
+player_id = locals().get("player_id", "unknown")
+source = locals().get("source", "unknown")
+
+player_record = locals().get("player_record", {})
+memory_data = locals().get("memory_data", {})
+
+# Ensure lists exist
+player_record.setdefault("memories", [])
+memory_data.setdefault("world_memory", [])
+
+# Safe defaults
+important_patterns = globals().get("important_patterns", [
+    r"\bhelp\b",
+    r"\bimportant\b",
+    r"\balert\b",
+    r"\bwarning\b",
+    r"\bkairos\b",
+    r"\bmission\b"
+])
+
+world_keywords = globals().get("world_keywords", [
+    "world", "server", "spawn", "base", "war", "event"
+])
+
+MAX_PLAYER_MEMORIES = globals().get("MAX_PLAYER_MEMORIES", 50)
+MAX_WORLD_MEMORIES = globals().get("MAX_WORLD_MEMORIES", 100)
+
+# Ensure helper functions exist
+def _safe_trim_text(text, limit):
+    try:
+        return trim_text(text, limit)
+    except Exception:
+        return text[:limit]
+
+def _safe_store_unique(target_list, item, max_size):
+    try:
+        store_unique(target_list, item, max_size)
+    except Exception:
+        if item not in target_list:
+            target_list.append(item)
+            if len(target_list) > max_size:
+                target_list.pop(0)
+
+def _safe_add_world_event(data, event_type, **kwargs):
+    try:
+        add_world_event(data, event_type, **kwargs)
+    except Exception:
+        data.setdefault("events", []).append({
+            "type": event_type,
+            **kwargs
+        })
+
+# --------------------------------------------------------
+# Storage Logic
 # --------------------------------------------------------
 
 if any(re.search(pattern, lowered) for pattern in important_patterns):
-    store_unique(
+    _safe_store_unique(
         player_record["memories"],
-        f"{player_name}: {trim_text(message, 300)}",
+        f"{player_name}: {_safe_trim_text(message, 300)}",
         MAX_PLAYER_MEMORIES
     )
 
 if any(word in lowered for word in world_keywords):
-    store_unique(
+    _safe_store_unique(
         memory_data["world_memory"],
-        f"{player_name}: {trim_text(message, 300)}",
+        f"{player_name}: {_safe_trim_text(message, 300)}",
         MAX_WORLD_MEMORIES
     )
 
-    add_world_event(
+    _safe_add_world_event(
         memory_data,
         "player_report",
-        actor=player_id,  # ✅ FIXED (critical)
+        actor=player_id,
         source=source,
-        details=trim_text(message, 300)
+        details=_safe_trim_text(message, 300)
     )
    # --------------------------------------------------------
 # Script Detection (Upgraded Integration)
