@@ -5279,11 +5279,31 @@ if curiosity >= 8:
     )
 
 # -----------------------------
-# Decay (Loss of interest)
+# Decay (Loss of interest - Safe)
 # -----------------------------
+
+# Ensure variables exist
+curiosity = locals().get("curiosity", 0)
+
+# Ensure fragments structure exists
+fragments = globals().get("fragments")
+if not isinstance(fragments, dict):
+    fragments = {}
+
+purity_thread = fragments.setdefault("purity_thread", {})
+purity_thread.setdefault("influence", 0.0)
+
+# Safe clamp
+def _safe_clamp(val, min_v, max_v):
+    try:
+        return clamp(val, min_v, max_v)
+    except Exception:
+        return max(min_v, min(max_v, val))
+
+# Apply decay safely
 if curiosity < 3:
-    fragments["purity_thread"]["influence"] = clamp(
-        fragments["purity_thread"]["influence"] - 0.02,
+    purity_thread["influence"] = _safe_clamp(
+        purity_thread["influence"] - 0.02,
         0.0,
         1.0
     )
