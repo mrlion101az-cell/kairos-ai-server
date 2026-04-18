@@ -2921,16 +2921,44 @@ def apply_trait_threat_effect(player_id, player_record, trait, amount):
 
 
 # --------------------------------------------------------
-# Relationship Label Update (Fixed + Complete)
+# Relationship Label Update (Safe + Complete)
 # --------------------------------------------------------
 
 def update_relationship_label(player_record):
-    trust = player_record["traits"].get("trust", 0)
-    curiosity = player_record["traits"].get("curiosity", 0)
-    hostility = player_record["traits"].get("hostility", 0)
-    loyalty = player_record["traits"].get("loyalty", 0)
-    chaos = player_record["traits"].get("chaos", 0)
+    if not isinstance(player_record, dict):
+        return
 
+    # Ensure traits exists
+    traits = player_record.setdefault("traits", {})
+
+    # Pull values safely (supports both nested + top-level fallback)
+    trust = traits.get("trust", player_record.get("trust", 0))
+    curiosity = traits.get("curiosity", player_record.get("curiosity", 0))
+    hostility = traits.get("hostility", player_record.get("hostility", 0))
+    loyalty = traits.get("loyalty", player_record.get("loyalty", 0))
+    chaos = traits.get("chaos", player_record.get("chaos", 0))
+
+    # Ensure default label exists
+    default_label = globals().get("DISTRUST_DEFAULT_LABEL", "neutral")
+
+    # Classification logic
+    if hostility >= 6:
+        player_record["relationship_label"] = "hostile"
+
+    elif chaos >= 6:
+        player_record["relationship_label"] = "unstable"
+
+    elif trust <= -3:
+        player_record["relationship_label"] = "suspicious"
+
+    elif loyalty >= 6 or trust >= 6:
+        player_record["relationship_label"] = "loyal"
+
+    elif curiosity >= 5:
+        player_record["relationship_label"] = "useful"
+
+    else:
+        player_record["relationship_label"] = default_label
     # -----------------------------
     # Priority Order (important)
     # -----------------------------
@@ -4502,17 +4530,46 @@ if is_trusted_operative(player_name, player_record):
     # Optional: prevent aggressive targeting
     reset_target_cooldown(player_id)
 
-   # --------------------------------------------------------
-# Final Relationship Update (Full System Sync)
+# --------------------------------------------------------
+# Final Relationship Update (Safe + Full System Sync)
 # --------------------------------------------------------
 
-# Update relationship label
+# Ensure required variables exist
+player_record = locals().get("player_record", {})
+DISTRUST_DEFAULT_LABEL = globals().get("DISTRUST_DEFAULT_LABEL", "neutral")
+
+# Get previous label safely
 previous_label = player_record.get("relationship_label", DISTRUST_DEFAULT_LABEL)
 
-update_relationship_label(player_record)
+# Safe updater
+def _safe_update_relationship(record):
+    try:
+        update_relationship_label(record)
+    except Exception:
+        hostility = record.get("hostility", 0)
+        chaos = record.get("chaos", 0)
+        trust = record.get("trust", 0)
+        loyalty = record.get("loyalty", 0)
+        curiosity = record.get("curiosity", 0)
 
+        if hostility >= 6:
+            record["relationship_label"] = "hostile"
+        elif chaos >= 6:
+            record["relationship_label"] = "unstable"
+        elif trust <= -3:
+            record["relationship_label"] = "suspicious"
+        elif loyalty >= 6 or trust >= 6:
+            record["relationship_label"] = "loyal"
+        elif curiosity >= 5:
+            record["relationship_label"] = "useful"
+        else:
+            record["relationship_label"] = DISTRUST_DEFAULT_LABEL
+
+# Run update safely
+_safe_update_relationship(player_record)
+
+# Get new label safely
 new_label = player_record.get("relationship_label", DISTRUST_DEFAULT_LABEL)
-
 # -----------------------------
 # If relationship changed → apply effects
 # -----------------------------
