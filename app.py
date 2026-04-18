@@ -6513,7 +6513,7 @@ def execute_action(action):
 
     except Exception as e:
         log(f"Action failed: {action_type} -> {e}", level="ERROR")
-        # -----------------------------
+               # -----------------------------
         # Template → Mob Type Mapping
         # -----------------------------
         if template == "hunter":
@@ -6541,49 +6541,51 @@ def execute_action(action):
     # -----------------------------
     if commands:
         send_http_commands(commands)
-
         log(f"Wave spawned: {template} x{count} → {target}", level="INFO")
-# -------------------------------
-# MAXIMUM RESPONSE (Controlled + Cinematic + Scalable)
-# -------------------------------
-        elif action_type == "maximum_response":
+
+        # -------------------------------
+        # MAXIMUM RESPONSE (Controlled + Cinematic + Scalable)
+        # -------------------------------
+        if action_type == "maximum_response":
             if not target:
                 return
 
-            # Prevent duplicate triggers
             if is_under_maximum_response(target):
                 return
 
-            # Global + per-player cooldown
             if not can_execute_action(f"max_response:{target}", 30):
                 return
 
             set_maximum_response(target, True)
-    # -----------------------------
-    # Initial Impact
-    # -----------------------------
-    commands = [
-        f"title {target} title {{\"text\":\"RUN.\",\"color\":\"dark_red\",\"bold\":true}}",
-        f"playsound minecraft:entity.warden.emerge master {target} ~ ~ ~ 1 0.6",
-        f"effect give {target} darkness 5 1 true"
-    ]
 
-    send_http_commands(commands)
+            # -----------------------------
+            # Initial Impact
+            # -----------------------------
+            commands = [
+                f"title {target} title {{\"text\":\"RUN.\",\"color\":\"dark_red\",\"bold\":true}}",
+                f"playsound minecraft:entity.warden.emerge master {target} ~ ~ ~ 1 0.6",
+                f"effect give {target} darkness 5 1 true"
+            ]
 
-    # -----------------------------
-    # Escalating Waves (delayed)
-    # -----------------------------
-    wave_count = clamp(3 + int(threat_scores.get(target, {}).get("score", 0) / 100), 3, 6)
+            send_http_commands(commands)
 
-    for i in range(wave_count):
-        queue_action({
-            "type": "spawn_wave",
-            "target": target,
-            "template": "hunter" if i > 1 else "scout",
-            "count": clamp(3 + i, 3, 6),
-            "delay": 1.5 + (i * 1.2)  # staggered escalation
-        })
+            # -----------------------------
+            # Escalating Waves (delayed)
+            # -----------------------------
+            wave_count = clamp(
+                3 + int(threat_scores.get(target, {}).get("score", 0) / 100),
+                3,
+                6
+            )
 
+            for i in range(wave_count):
+                queue_action({
+                    "type": "spawn_wave",
+                    "target": target,
+                    "template": "hunter" if i > 1 else "scout",
+                    "count": clamp(3 + i, 3, 6),
+                    "delay": 1.5 + (i * 1.2)
+                })
     # -----------------------------
     # Optional: Area Control
     # -----------------------------
