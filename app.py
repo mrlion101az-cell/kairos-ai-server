@@ -6594,8 +6594,7 @@ def execute_action(action):
         "target": target,
         "delay": 2.0
     })
-
-               # -----------------------------
+            # -----------------------------
             # Auto-release after duration
             # -----------------------------
             def release():
