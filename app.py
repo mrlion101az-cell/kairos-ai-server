@@ -3538,12 +3538,12 @@ def mode_style_guide(mode):
 # ----------------------------------------------------
 # NEW COMBAT MODES
 # ----------------------------------------------------
-
-"heightened_surveillance": (
-    "You are watching closely. "
-    "Your tone is quiet, controlled, and slightly threatening."
-),
-
+combat_modes = {
+    "heightened_surveillance": (
+       "You are watching closely. "
+       "Your tone is quiet, controlled, and slightly threatening."
+    ),
+}
 "aggressive_observation": (
     "You have identified instability. "
     "Your tone reflects distrust and readiness to act."
