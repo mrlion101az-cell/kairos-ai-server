@@ -8016,22 +8016,21 @@ except Exception as save_err:
     memory_data["stats"]["memory_save_failures"] += 1
 
 
-# -----------------------------------------
-# Return response
-# -----------------------------------------
-return jsonify({
-    "reply": reply,
-    "actions": actions
-})
+    # -----------------------------------------
+    # Return response
+    # -----------------------------------------
+        return jsonify({
+            "reply": reply,
+            "actions": actions
+        })
 
+    except Exception as e:
+        log_exception("Chat route failure", e)
 
-except Exception as e:
-    log_exception("Chat route failure", e)
-
-    return jsonify({
-        "reply": "System disruption detected.",
-        "actions": []
-    }), 500
+        return jsonify({
+            "reply": "System disruption detected.",
+            "actions": []
+        }), 500
 # ------------------------------------------------------------
 # Routes (Kairos Final Control Layer)
 # ------------------------------------------------------------
