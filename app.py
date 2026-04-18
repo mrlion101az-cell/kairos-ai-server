@@ -5112,8 +5112,7 @@ def adjust_fragments_from_context(memory_data, intent, player_id, player_record,
 
     # 🔒 Safe threat lookup
     profile = threat_scores.get(player_id, {})
-    threat = profile.get("score", 0))
-
+    threat = profile.get("score", 0)
     # -----------------------------
     # War Engine Fragment
     # -----------------------------
