@@ -5503,21 +5503,54 @@ profile = threat_scores.get(player_id, {})
 threat = profile.get("score", 0)
 
 # -----------------------------
-# Mood Selection
+# Mood Selection (Safe)
 # -----------------------------
+
+# Ensure variables exist
+state = globals().get("state")
+if not isinstance(state, dict):
+    state = {}
+
+state.setdefault("mood", "neutral")
+state.setdefault("active_concerns", [])
+
+threat = locals().get("threat", 0)
+hostility = locals().get("hostility", 0)
+curiosity = locals().get("curiosity", 0)
+loyalty = locals().get("loyalty", 0)
+
+THREAT_THRESHOLD_HUNT = globals().get("THREAT_THRESHOLD_HUNT", 5)
+THREAT_THRESHOLD_MAXIMUM = globals().get("THREAT_THRESHOLD_MAXIMUM", 10)
+
+player_record = locals().get("player_record", {})
+
+# Safe store_unique
+def _safe_store_unique(lst, item, limit):
+    try:
+        store_unique(lst, item, limit)
+    except Exception:
+        if item not in lst:
+            lst.append(item)
+            if len(lst) > limit:
+                lst.pop(0)
+
+# -----------------------------
+# Mood Logic
+# -----------------------------
+
 if threat >= THREAT_THRESHOLD_MAXIMUM:
     state["mood"] = "execution"
 
-    store_unique(
+    _safe_store_unique(
         state["active_concerns"],
-        f"Target {player_record.get('display_name')} exceeded containment thresholds.",
+        f"Target {player_record.get('display_name', 'unknown')} exceeded containment thresholds.",
         10
     )
 
 elif threat >= THREAT_THRESHOLD_HUNT:
     state["mood"] = "aggressive"
 
-    store_unique(
+    _safe_store_unique(
         state["active_concerns"],
         "Escalating containment against high-threat actors.",
         10
