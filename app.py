@@ -8254,11 +8254,11 @@ def chat():
         # -----------------------------
         canonical_id = get_canonical_player_id(memory_data, source, player_name)
         player_record = get_player_record(memory_data, canonical_id, player_name)
-# -----------------------------
-# Alias tracking (clean)
-# -----------------------------
-if player_name != player_record.get("display_name"):
-    add_alias(player_record, player_name)
+        # -----------------------------
+        # Alias tracking (clean)
+        # -----------------------------
+        if player_name != player_record.get("display_name"):
+            add_alias(player_record, player_name)
 
 # Keep display name updated
 player_record["display_name"] = player_name
