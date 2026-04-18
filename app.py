@@ -7993,10 +7993,11 @@ maybe_create_private_note(
     intent
 )
 
-# -----------------------------
-# Stats (final update)
-# -----------------------------
-register_message_stats(memory_data, source, player_record)
+        # -----------------------------
+        # Stats (final update)
+        # -----------------------------
+        register_message_stats(memory_data, source, player_record)
+
         # -----------------------------------------
         # Save memory (Atomic + Cache-synced)
         # -----------------------------------------
@@ -8013,7 +8014,6 @@ register_message_stats(memory_data, source, player_record)
         except Exception as save_err:
             log(f"Memory save failed: {save_err}", level="ERROR")
             memory_data["stats"]["memory_save_failures"] += 1
-
     # -----------------------------------------
     # Return response
     # -----------------------------------------
