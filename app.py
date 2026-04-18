@@ -5094,28 +5094,51 @@ if is_triggered:
         1.0
     )
 
-    # -----------------------------
-    # Higher Threat Escalation
-    # -----------------------------
-    if threat >= THREAT_THRESHOLD_HUNT:
-        fragments["war_engine"]["status"] = "aggressive"
+# -----------------------------
+# Higher Threat Escalation (Safe)
+# -----------------------------
 
-        fragments["war_engine"]["influence"] = clamp(
-            fragments["war_engine"]["influence"] + 0.05,
-            0.0,
-            1.0
-        )
+# Ensure variables exist
+threat = locals().get("threat", 0)
+THREAT_THRESHOLD_HUNT = globals().get("THREAT_THRESHOLD_HUNT", 5)
+THREAT_THRESHOLD_MAXIMUM = globals().get("THREAT_THRESHOLD_MAXIMUM", 10)
 
-    if threat >= THREAT_THRESHOLD_MAXIMUM:
-        fragments["war_engine"]["status"] = "overdrive"
+# Ensure fragments structure exists
+fragments = globals().get("fragments")
+if not isinstance(fragments, dict):
+    fragments = {}
 
-        fragments["war_engine"]["influence"] = clamp(
-            fragments["war_engine"]["influence"] + 0.1,
-            0.0,
-            1.0
-        )
+war_engine = fragments.setdefault("war_engine", {})
+war_engine.setdefault("influence", 0.0)
+war_engine.setdefault("status", "active")
+
+# Safe clamp
+def _safe_clamp(val, min_v, max_v):
+    try:
+        return clamp(val, min_v, max_v)
+    except Exception:
+        return max(min_v, min(max_v, val))
+
+# Escalation logic (proper structure)
+if threat >= THREAT_THRESHOLD_MAXIMUM:
+    war_engine["status"] = "overdrive"
+    war_engine["influence"] = _safe_clamp(
+        war_engine["influence"] + 0.1,
+        0.0,
+        1.0
+    )
+
+elif threat >= THREAT_THRESHOLD_HUNT:
+    war_engine["status"] = "aggressive"
+    war_engine["influence"] = _safe_clamp(
+        war_engine["influence"] + 0.05,
+        0.0,
+        1.0
+    )
 
 else:
+    # Optional: no escalation, keep current state
+    pass
 # -----------------------------
 # Decay instead of hard off (Safe)
 # -----------------------------
