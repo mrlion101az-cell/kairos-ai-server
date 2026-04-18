@@ -5881,19 +5881,62 @@ system_prompt = (
     "- Trusted operatives receive clarity, not equality.\n"
 )
 
-   # --------------------------------------------------------
-# BEHAVIOR PROMPT (FINAL - FULL WAR CONTEXT)
+# --------------------------------------------------------
+# Behavior Prompt (Safe + Fully Stabilized)
 # --------------------------------------------------------
 
-profile = threat_scores.get(player_id, {})
-threat = profile.get("score", 0)
+# Ensure base variables exist
+source = locals().get("source", "unknown")
+intent = locals().get("intent", "neutral")
+mode = locals().get("mode", state.get("mode", "idle") if isinstance(state, dict) else "idle")
+label = locals().get("label", player_record.get("relationship_label", "unknown") if isinstance(player_record, dict) else "unknown")
+threat = locals().get("threat", 0)
 
-kairos_state = memory_data.get("kairos_state", {})
-fragments = memory_data.get("system_fragments", {})
+# Targeting priority safe
+targeting_priority = locals().get("targeting_priority", 0.0)
+try:
+    targeting_priority = float(targeting_priority)
+except Exception:
+    targeting_priority = 0.0
 
-fragment_summary = ", ".join([
-    f"{k}:{v.get('status')}" for k, v in fragments.items()
-])
+# Trusted safe
+trusted = locals().get("trusted", False)
+
+# Kairos state safe
+kairos_state = globals().get("kairos_state")
+if not isinstance(kairos_state, dict):
+    kairos_state = {}
+
+kairos_state.setdefault("mood", "observing")
+kairos_state.setdefault("threat_level", 1)
+kairos_state.setdefault("current_goal", "monitor")
+
+# Fragment summary safe
+fragment_summary = locals().get("fragment_summary", "none")
+
+# Personality directives safe
+PERSONALITY_DIRECTIVES = globals().get("PERSONALITY_DIRECTIVES", {
+    "base_tone": "controlled",
+    "trusted_tone": "precise and direct",
+    "untrusted_tone": "cold and dominant"
+})
+
+# Safe helper calls
+def _safe_relationship_style(lbl):
+    try:
+        return relationship_style(lbl)
+    except Exception:
+        return "neutral"
+
+def _safe_mode_style(md):
+    try:
+        return mode_style_guide(md)
+    except Exception:
+        return "standard"
+
+# --------------------------------------------------------
+# Prompt Build
+# --------------------------------------------------------
 
 behavior_prompt = (
     f"Platform: {source}\n"
@@ -5910,10 +5953,10 @@ behavior_prompt = (
 
     f"Fragments: {fragment_summary}\n\n"
 
-    f"Base tone: {PERSONALITY_DIRECTIVES['base_tone']}\n"
-    f"{PERSONALITY_DIRECTIVES['trusted_tone'] if trusted else PERSONALITY_DIRECTIVES['untrusted_tone']}\n"
-    f"Relationship style: {relationship_style(label)}\n"
-    f"Mode style: {mode_style_guide(mode)}\n\n"
+    f"Base tone: {PERSONALITY_DIRECTIVES.get('base_tone')}\n"
+    f"{PERSONALITY_DIRECTIVES.get('trusted_tone') if trusted else PERSONALITY_DIRECTIVES.get('untrusted_tone')}\n"
+    f"Relationship style: {_safe_relationship_style(label)}\n"
+    f"Mode style: {_safe_mode_style(mode)}\n\n"
 
     "Behavior Rules:\n"
     "- High threat players should be pressured or attacked.\n"
