@@ -4392,42 +4392,95 @@ if any(word in lowered for word in ["you can't stop me", "i'm unstoppable", "too
     )
 
 # --------------------------------------------------------
-# Base Detection (Language + Position Aware)
+# Base Detection (Safe + Language + Position Aware)
+# --------------------------------------------------------
+
+# Ensure required variables exist
+lowered = locals().get("lowered", "")
+player_id = locals().get("player_id", "unknown")
+player_record = locals().get("player_record", {})
+memory_data = locals().get("memory_data", {})
+source = locals().get("source", "unknown")
+
+# Ensure structures exist
+memory_data.setdefault("known_bases", {})
+
+# Ensure keywords exist
+base_keywords = globals().get("base_keywords", [
+    "base", "home", "house", "hq", "hideout",
+    "coords", "location", "build"
+])
+
+# Safe helpers
+def _safe_generate_base_id(pid, world, x, z):
+    try:
+        return generate_base_id(pid, world, x, z)
+    except Exception:
+        return f"{pid}_{world}_{int(x)}_{int(z)}"
+
+def _safe_clamp(val, min_v, max_v):
+    try:
+        return clamp(val, min_v, max_v)
+    except Exception:
+        return max(min_v, min(max_v, val))
+
+def _safe_now_iso():
+    try:
+        return now_iso()
+    except Exception:
+        from datetime import datetime
+        return datetime.utcnow().isoformat()
+
+def _safe_record_fact(record, text):
+    try:
+        record_player_fact(record, text)
+    except Exception:
+        record.setdefault("facts", []).append(text)
+
+def _safe_add_world_event(data, event_type, **kwargs):
+    try:
+        add_world_event(data, event_type, **kwargs)
+    except Exception:
+        data.setdefault("events", []).append({
+            "type": event_type,
+            **kwargs
+        })
+
+# --------------------------------------------------------
+# Detection Logic
 # --------------------------------------------------------
 
 if any(keyword in lowered for keyword in base_keywords):
     position = player_record.get("last_position")
 
     if position:
-        base_id = generate_base_id(
-            player_id,
-            position.get("world", "world"),
-            position.get("x", 0),
-            position.get("z", 0)
-        )
+        world = position.get("world", "world")
+        x = position.get("x", 0)
+        y = position.get("y", 0)
+        z = position.get("z", 0)
+
+        base_id = _safe_generate_base_id(player_id, world, x, z)
+
+        existing_conf = memory_data["known_bases"].get(base_id, {}).get("confidence", 0.5)
 
         memory_data["known_bases"][base_id] = {
-            "owner": player_id,  # ✅ FIXED (important)
-            "world": position.get("world", "world"),
-            "x": position.get("x", 0),
-            "y": position.get("y", 0),
-            "z": position.get("z", 0),
-            "confidence": clamp(
-                memory_data["known_bases"].get(base_id, {}).get("confidence", 0.5) + 0.1,
-                0.0,
-                1.0
-            ),
-            "last_seen": now_iso()
+            "owner": player_id,
+            "world": world,
+            "x": x,
+            "y": y,
+            "z": z,
+            "confidence": _safe_clamp(existing_conf + 0.1, 0.0, 1.0),
+            "last_seen": _safe_now_iso()
         }
 
-        record_player_fact(player_record, "Revealed possible base location.")
+        _safe_record_fact(player_record, "Revealed possible base location.")
 
-        add_world_event(
+        _safe_add_world_event(
             memory_data,
             "base_detected",
             actor=player_id,
             source=source,
-            details=f"Base detected at {position.get('x')}, {position.get('z')}"
+            details=f"Base detected at {x}, {z}"
         )
 
    # --------------------------------------------------------
