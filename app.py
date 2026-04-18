@@ -5321,20 +5321,44 @@ elif influence <= 0.2:
     fragments["purity_thread"]["status"] = "dormant"
 else:
     fragments["purity_thread"]["status"] = "latent"
-   # --------------------------------------------------------
-# Redstone Ghost (Instability / Chaos Engine)
+# --------------------------------------------------------
+# Redstone Ghost (Instability / Chaos Engine - Safe)
 # --------------------------------------------------------
 
-chaos = player_record["traits"]["chaos"]
+# Ensure player_record and traits exist
+player_record = locals().get("player_record", {})
+if not isinstance(player_record, dict):
+    player_record = {}
+
+traits = player_record.setdefault("traits", {})
+
+# Ensure chaos exists
+chaos = traits.get("chaos", 0)
+
+# Ensure fragments structure exists
+fragments = globals().get("fragments")
+if not isinstance(fragments, dict):
+    fragments = {}
+
+redstone_ghost = fragments.setdefault("redstone_ghost", {})
+redstone_ghost.setdefault("influence", 0.0)
+redstone_ghost.setdefault("status", "dormant")
+
+# Safe clamp
+def _safe_clamp(val, min_v, max_v):
+    try:
+        return clamp(val, min_v, max_v)
+    except Exception:
+        return max(min_v, min(max_v, val))
 
 # -----------------------------
 # Activation (Chaos Driven)
 # -----------------------------
 if chaos >= 6:
-    fragments["redstone_ghost"]["status"] = "active"
+    redstone_ghost["status"] = "active"
 
-    fragments["redstone_ghost"]["influence"] = clamp(
-        fragments["redstone_ghost"]["influence"] + 0.05,
+    redstone_ghost["influence"] = _safe_clamp(
+        redstone_ghost["influence"] + 0.05,
         0.0,
         1.0
     )
