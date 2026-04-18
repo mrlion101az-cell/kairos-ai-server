@@ -8553,14 +8553,13 @@ def chat():
 
         register_message_stats(memory_data, source, player_record)
 
-        # -----------------------------------------
+               # -----------------------------------------
         # Save memory (safe + synced)
         # -----------------------------------------
         try:
             with memory_lock:
                 save_memory(memory_data)
 
-                global memory_cache, memory_cache_last_load
                 memory_cache = memory_data
                 memory_cache_last_load = unix_ts()
 
@@ -8569,7 +8568,6 @@ def chat():
         except Exception as save_err:
             log(f"Memory save failed: {save_err}", level="ERROR")
             memory_data["stats"]["memory_save_failures"] += 1
-
         # -----------------------------------------
         # Timing stats
         # -----------------------------------------
