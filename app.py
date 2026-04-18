@@ -6711,7 +6711,6 @@ def execute_action(action):
             while command_queue and processed < max_per_tick:
                 action = command_queue.popleft()
 
-                # Handle delay injection
                 delay = action.get("delay")
                 if delay:
                     action["execute_at"] = now + delay
@@ -6743,9 +6742,6 @@ def get_idle_message(memory_data):
     state = memory_data.get("kairos_state", {})
     threat_level = state.get("threat_level", 1)
 
-    # -----------------------------
-    # Tiered idle messages
-    # -----------------------------
     if threat_level >= 8:
         pool = [
             "You are still alive. That is being corrected.",
@@ -6763,9 +6759,6 @@ def get_idle_message(memory_data):
     else:
         pool = idle_messages_generic
 
-    # -----------------------------
-    # Avoid repetition
-    # -----------------------------
     choices = [m for m in pool if m != last_idle_message]
     msg = random.choice(choices if choices else pool)
 
@@ -6774,7 +6767,7 @@ def get_idle_message(memory_data):
 
 
 def idle_loop():
-    global last_idle_message_time
+    global last_idle_message_time, last_activity_time
 
     while True:
         try:
@@ -6797,7 +6790,6 @@ def idle_loop():
                 if random.random() < 0.5:
                     send_to_discord(msg)
 
-                # Rare cinematic ping
                 if random.random() < 0.25:
                     queue_action({
                         "type": "announce",
@@ -6818,6 +6810,7 @@ def idle_loop():
             log(f"Idle loop error: {e}", level="ERROR")
 
         time.sleep(IDLE_CHECK_INTERVAL)
+
 
 # ------------------------------------------------------------
 # Summaries / Notes (Kairos Intelligence Layer - Optimized)
@@ -6965,7 +6958,7 @@ def maybe_create_private_note(player_record, player_id, player_name, source, mes
         player_record["last_note_ts"] = unix_ts()
 
         log(f"Private note created → {player_name}: {note}", level="INFO")
-   # --------------------------------------------------------
+# --------------------------------------------------------
 # Heuristic fallback (Controlled + Deduplicated)
 # --------------------------------------------------------
 
@@ -6993,7 +6986,7 @@ if should_log:
         record_private_note(player_record, heuristic_note)
 
         player_record["last_note_ts"] = unix_ts()
-    # --------------------------------------------------------
+# --------------------------------------------------------
 # Enhanced Notes via Model (Controlled + High-Signal)
 # --------------------------------------------------------
 
@@ -7437,7 +7430,7 @@ if not raw_response:
         "actions": []
     }
 
-   # -----------------------------------------
+# -----------------------------------------
 # Parse structured response
 # -----------------------------------------
 parsed = parse_kairos_response(raw_response)
@@ -7469,7 +7462,7 @@ if not reply:
 # -----------------------------
 if actions:
     memory_data["stats"]["script_route_calls"] += 1
-   # -----------------------------------------
+# -----------------------------------------
 # Queue actions (CRITICAL EXECUTION BRIDGE)
 # -----------------------------------------
 if actions:
@@ -7862,7 +7855,7 @@ adjust_fragments_from_context(
     player_record,
     violations=violations
 )
-       # -----------------------------------------
+# -----------------------------------------
 # Channel context (Controlled + Clean)
 # -----------------------------------------
 channel_key = get_channel_key(source, data)
@@ -7889,7 +7882,7 @@ if not is_gibberish(message):
 
     if len(history) > MAX_CHANNEL_CONTEXT:
         channel_store[channel_key] = history[-MAX_CHANNEL_CONTEXT:]
-        # -----------------------------------------
+# -----------------------------------------
 # Generate reply (AI + ACTIONS)
 # -----------------------------------------
 result = generate_reply(
@@ -7925,7 +7918,7 @@ if not reply:
         player_record=player_record,
         player_id=canonical_id
     )
-       # -----------------------------------------
+# -----------------------------------------
 # Send response (Safe + Tracked)
 # -----------------------------------------
 if reply:
@@ -8539,7 +8532,7 @@ def chat():
 
         register_message_stats(memory_data, source, player_record)
 
-               # -----------------------------------------
+        # -----------------------------------------
         # Save memory (safe + synced)
         # -----------------------------------------
         try:
@@ -8560,7 +8553,7 @@ def chat():
         elapsed = round(unix_ts() - started, 2)
         memory_data["stats"]["last_response_time_ms"] = int(elapsed * 1000)
 
-            # -----------------------------------------
+        # -----------------------------------------
         # Final response
         # -----------------------------------------
         return jsonify({
@@ -8631,7 +8624,7 @@ def link_identity():
 
         player_record["display_name"] = minecraft_name
 
-               # -----------------------------
+        # -----------------------------
         # Stats tracking
         # -----------------------------
         memory_data["stats"]["identity_links_created"] = (
