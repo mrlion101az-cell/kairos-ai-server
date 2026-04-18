@@ -7336,23 +7336,37 @@ def generate_reply(
     script_type=None,
     script_action=None
 ):
-   # -----------------------------------------
+# -----------------------------------------
 # Build prompt
 # -----------------------------------------
-messages = build_messages(
-    memory_data=memory_data,
-    player_record=player_record,
-    player_name=player_name,
-    user_message=message,
-    source=source,
-    intent=intent,
-    mode=mode,
-    violations=violations,
-    channel_key=channel_key,
-    script_type=script_type,
-    script_action=script_action
-)
+def build_prompt(
+    memory_data,
+    player_record,
+    player_name,
+    message,
+    source,
+    intent,
+    mode,
+    violations,
+    channel_key,
+    script_type,
+    script_action
+):
+    messages = build_messages(
+        memory_data=memory_data,
+        player_record=player_record,
+        player_name=player_name,
+        user_message=message,
+        source=source,
+        intent=intent,
+        mode=mode,
+        violations=violations,
+        channel_key=channel_key,
+        script_type=script_type,
+        script_action=script_action
+    )
 
+    return messages
 # -----------------------------------------
 # Dynamic Temperature Control (CRITICAL)
 # -----------------------------------------
