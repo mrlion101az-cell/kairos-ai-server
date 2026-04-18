@@ -7689,7 +7689,16 @@ def debug_queue():
 @app.route("/debug/threats")
 def debug_threats():
     return jsonify(threat_scores)
-    # ------------------------------------------------------------
+# ------------------------------------------------------------
+# MEMORY CACHE (GLOBAL)
+# ------------------------------------------------------------
+memory_cache = None
+memory_cache_last_load = 0
+MEMORY_CACHE_TTL = 2.0  # seconds
+memory_lock = threading.Lock()
+
+
+# ------------------------------------------------------------
 # MAIN CHAT ROUTE (FINAL CORE)
 # ------------------------------------------------------------
 
@@ -7702,10 +7711,10 @@ def chat():
         player_name = normalize_name(data.get("player_name") or "unknown")
         message = data.get("message") or ""
 
-       memory_cache = None
-memory_cache_last_load = 0
-MEMORY_CACHE_TTL = 2.0  # seconds
-memory_lock = threading.Lock()
+        # If you modify cache later, uncomment this:
+        # global memory_cache, memory_cache_last_load
+
+        # --- continue your logic below ---
         # -----------------------------------------
 # Resolve player (Robust Identity Layer)
 # -----------------------------------------
