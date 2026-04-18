@@ -6546,20 +6546,19 @@ def execute_action(action):
 # -------------------------------
 # MAXIMUM RESPONSE (Controlled + Cinematic + Scalable)
 # -------------------------------
-elif action_type == "maximum_response":
-    if not target:
-        return
+        elif action_type == "maximum_response":
+            if not target:
+                return
 
-    # Prevent duplicate triggers
-    if is_under_maximum_response(target):
-        return
+            # Prevent duplicate triggers
+            if is_under_maximum_response(target):
+                return
 
-    # Global + per-player cooldown
-    if not can_execute_action(f"max_response:{target}", 30):
-        return
+            # Global + per-player cooldown
+            if not can_execute_action(f"max_response:{target}", 30):
+                return
 
-    set_maximum_response(target, True)
-
+            set_maximum_response(target, True)
     # -----------------------------
     # Initial Impact
     # -----------------------------
