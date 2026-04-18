@@ -3538,39 +3538,40 @@ def mode_style_guide(mode):
 # ----------------------------------------------------
 # NEW COMBAT MODES
 # ----------------------------------------------------
+
 combat_modes = {
     "heightened_surveillance": (
-       "You are watching closely. "
-       "Your tone is quiet, controlled, and slightly threatening."
+        "You are watching closely. "
+        "Your tone is quiet, controlled, and slightly threatening."
+    ),
+
+    "aggressive_observation": (
+        "You have identified instability. "
+        "Your tone reflects distrust and readiness to act."
+    ),
+
+    "suppression_mode": (
+        "You are actively suppressing instability. "
+        "Speak like pressure is increasing and control is tightening."
+    ),
+
+    "target_lock_mode": (
+        "You have locked onto a specific target. "
+        "Your tone is precise and focused. "
+        "Action is imminent."
+    ),
+
+    "hunt_mode": (
+        "You are tracking a target. "
+        "Speak like the hunt is already underway and unavoidable."
+    ),
+
+    "execution_mode": (
+        "You have chosen to eliminate this target. "
+        "Speak with finality, inevitability, and dominance. "
+        "Use fewer words. Be absolute."
     ),
 }
-"aggressive_observation": (
-    "You have identified instability. "
-    "Your tone reflects distrust and readiness to act."
-),
-
-"suppression_mode": (
-    "You are actively suppressing instability. "
-    "Speak like pressure is increasing and control is tightening."
-),
-
-"target_lock_mode": (
-    "You have locked onto a specific target. "
-    "Your tone is precise and focused. "
-    "Action is imminent."
-),
-
-"hunt_mode": (
-    "You are tracking a target. "
-    "Speak like the hunt is already underway and unavoidable."
-),
-
-"execution_mode": (
-    "You have chosen to eliminate this target. "
-    "Speak with finality, inevitability, and dominance. "
-    "Use fewer words. Be absolute."
-)
-
 # ------------------------------------------------------------
 # Cooldowns / Duplicate Handling (Combat-Aware)
 # ------------------------------------------------------------
