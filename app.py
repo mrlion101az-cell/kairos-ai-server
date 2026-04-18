@@ -5205,22 +5205,47 @@ elif chaos >= 6:
     )
 
 # -----------------------------
-# Neutral Drift
+# Neutral Drift (Safe + Isolated)
 # -----------------------------
-else:
-    fragments["archive_node"]["influence"] = clamp(
-        fragments["archive_node"]["influence"] - 0.01,
+
+try:
+    # Ensure fragments exists
+    fragments = globals().get("fragments")
+    if not isinstance(fragments, dict):
+        fragments = {}
+
+    # Ensure archive_node exists
+    archive_node = fragments.setdefault("archive_node", {})
+    archive_node.setdefault("influence", 0.0)
+    archive_node.setdefault("status", "unstable")
+
+    # Safe clamp
+    try:
+        def _safe_clamp(val, min_v, max_v):
+            return clamp(val, min_v, max_v)
+    except Exception:
+        def _safe_clamp(val, min_v, max_v):
+            return max(min_v, min(max_v, val))
+
+    # Apply drift (decay)
+    influence = _safe_clamp(
+        archive_node["influence"] - 0.01,
         0.0,
         1.0
     )
 
+    archive_node["influence"] = influence
+
     # Soft state transitions
-    if fragments["archive_node"]["influence"] >= 0.6:
-        fragments["archive_node"]["status"] = "stable"
-    elif fragments["archive_node"]["influence"] <= 0.3:
-        fragments["archive_node"]["status"] = "degraded"
+    if influence >= 0.6:
+        archive_node["status"] = "stable"
+    elif influence <= 0.3:
+        archive_node["status"] = "degraded"
     else:
-        fragments["archive_node"]["status"] = "unstable"
+        archive_node["status"] = "unstable"
+
+except Exception:
+    pass
    # --------------------------------------------------------
 # Purity Thread (Control Expansion System)
 # --------------------------------------------------------
