@@ -6683,50 +6683,56 @@ def execute_action(action):
             if commands:
                 send_http_commands(commands)
                 log(f"Cleanup executed → {'targeted ' + target if target else 'global'}", level="INFO")
-            # -----------------------------
-            # Handle delayed actions first
-            # -----------------------------
-            ready = []
-            remaining = []
+           # -----------------------------
+# Action Loop Tick
+# -----------------------------
+try:
+    processed = 0
 
-            for action in delayed_actions:
-                if action.get("execute_at", 0) <= now:
-                    ready.append(action)
-                else:
-                    remaining.append(action)
+    # -----------------------------
+    # Handle delayed actions first
+    # -----------------------------
+    ready = []
+    remaining = []
 
-            delayed_actions.clear()
-            delayed_actions.extend(remaining)
+    for action in delayed_actions:
+        if action.get("execute_at", 0) <= now:
+            ready.append(action)
+        else:
+            remaining.append(action)
 
-            # Execute ready delayed actions
-            for action in ready:
-                execute_action(action)
-                processed += 1
-                if processed >= max_per_tick:
-                    break
+    delayed_actions.clear()
+    delayed_actions.extend(remaining)
 
-            # -----------------------------
-            # Process main queue
-            # -----------------------------
-            while command_queue and processed < max_per_tick:
-                action = command_queue.popleft()
+    # Execute ready delayed actions
+    for action in ready:
+        execute_action(action)
+        processed += 1
+        if processed >= max_per_tick:
+            break
 
-                delay = action.get("delay")
-                if delay:
-                    action["execute_at"] = now + delay
-                    delayed_actions.append(action)
-                    continue
+    # -----------------------------
+    # Process main queue
+    # -----------------------------
+    while command_queue and processed < max_per_tick:
+        action = command_queue.popleft()
 
-                execute_action(action)
-                processed += 1
+        delay = action.get("delay")
+        if delay:
+            action["execute_at"] = now + delay
+            delayed_actions.append(action)
+            continue
 
-        except Exception as e:
-            log(f"Action loop error: {e}", level="ERROR")
+        execute_action(action)
+        processed += 1
 
-        # -----------------------------
-        # Tick speed (VERY IMPORTANT)
-        # -----------------------------
-        time.sleep(0.1)
+except Exception as e:
+    log(f"Action loop error: {e}", level="ERROR")
+
+# -----------------------------
+# Tick speed (VERY IMPORTANT)
+# -----------------------------
+time.sleep(0.1)
 
 
 # ------------------------------------------------------------
