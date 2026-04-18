@@ -2560,12 +2560,22 @@ def get_player_record(memory_data, canonical_id, display_name):
 
 
 # ------------------------------------------------------------
-# Canonical Identity
+# Canonical Identity (Safe + Stable)
 # ------------------------------------------------------------
+
 def get_canonical_player_id(memory_data, source, player_name):
+    if not isinstance(memory_data, dict):
+        memory_data = {}
+
+    # Ensure identity_links exists
+    identity_links = memory_data.setdefault("identity_links", {})
+
+    source = str(source or "unknown")
+    player_name = str(player_name or "unknown")
+
     source_key = f"{source}:{player_name}".lower()
 
-    linked = memory_data["identity_links"].get(source_key)
+    linked = identity_links.get(source_key)
     if linked:
         return linked
 
@@ -2573,9 +2583,23 @@ def get_canonical_player_id(memory_data, source, player_name):
 
 
 def add_alias(player_record, alias):
-    if alias and alias not in player_record["aliases"]:
-        player_record["aliases"].append(alias)
+    if not isinstance(player_record, dict):
+        return
 
+    if not alias:
+        return
+
+    # Ensure aliases list exists
+    aliases = player_record.setdefault("aliases", [])
+
+    # Recover if corrupted
+    if not isinstance(aliases, list):
+        aliases = []
+        player_record["aliases"] = aliases
+
+    # Safe add
+    if alias not in aliases:
+        aliases.append(alias)
 
 # ------------------------------------------------------------
 # Player History
@@ -8198,14 +8222,31 @@ def chat():
         print(f"[ERROR] /chat failed: {e}")
         return {"error": str(e)}, 500
 # -----------------------------
-# Alias tracking (CRITICAL)
+# Alias tracking (Safe + Stable)
 # -----------------------------
+
+# Ensure variables exist
+player_record = locals().get("player_record", {})
+if not isinstance(player_record, dict):
+    player_record = {}
+
+player_name = locals().get("player_name", "Unknown")
+
+# Safe alias function
+def _safe_add_alias(record, name):
+    try:
+        add_alias(record, name)
+    except Exception:
+        aliases = record.setdefault("aliases", [])
+        if name and name not in aliases:
+            aliases.append(name)
+
+# Alias tracking
 if player_name != player_record.get("display_name"):
-    add_alias(player_record, player_name)
+    _safe_add_alias(player_record, player_name)
 
 # Always keep latest display name fresh
 player_record["display_name"] = player_name
-
 # -----------------------------
 # Platform tracking
 # -----------------------------
