@@ -26,6 +26,71 @@ from openai import OpenAI
 app = Flask(__name__)
 
 # ------------------------------------------------------------
+# GLOBAL SAFETY + CORE RUNTIME SAFETY
+# ------------------------------------------------------------
+
+def _safe_dict(x):
+    return x if isinstance(x, dict) else {}
+
+def _safe_list(x):
+    return x if isinstance(x, list) else []
+
+def _safe_clamp(val, low, high):
+    try:
+        return clamp(val, low, high)
+    except Exception:
+        return max(low, min(high, val))
+
+# Core globals
+state = globals().get("state") or {
+    "mode": "idle",
+    "mood": "observing",
+    "active_concerns": []
+}
+
+fragments = globals().get("fragments") or {}
+kairos_state = globals().get("kairos_state") or {}
+
+# Ensure fragment structure exists
+for key in ["war_engine", "archive_node", "purity_thread", "redstone_ghost"]:
+    frag = fragments.setdefault(key, {})
+    frag.setdefault("influence", 0.0)
+    frag.setdefault("status", "dormant")
+
+# Safe player record
+player_record = globals().get("player_record") or {}
+if not isinstance(player_record, dict):
+    player_record = {}
+
+# Ensure traits always exist
+traits = player_record.setdefault("traits", {})
+traits.setdefault("trust", 0)
+traits.setdefault("chaos", 0)
+traits.setdefault("curiosity", 0)
+traits.setdefault("hostility", 0)
+traits.setdefault("loyalty", 0)
+
+# Safe state defaults
+state.setdefault("mode", "idle")
+state.setdefault("mood", "observing")
+state.setdefault("active_concerns", [])
+
+# Safe identity memory
+memory_data = globals().get("memory_data") or {}
+if not isinstance(memory_data, dict):
+    memory_data = {}
+memory_data.setdefault("identity_links", {})
+
+# Safe targeting
+targeting_priority = globals().get("targeting_priority", 0.0)
+try:
+    targeting_priority = float(targeting_priority)
+except Exception:
+    targeting_priority = 0.0
+
+# Safe mode fallback
+mode = state.get("mode", "idle")
+# ------------------------------------------------------------
 # Environment / Config (Kairos Command Core - Expanded)
 # ------------------------------------------------------------
 
