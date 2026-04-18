@@ -8652,7 +8652,7 @@ def link_identity():
             memory_data["stats"].get("identity_links_created", 0) + 1
         )
 
-               # -----------------------------
+        # -----------------------------
         # Save memory (thread-safe)
         # -----------------------------
         try:
