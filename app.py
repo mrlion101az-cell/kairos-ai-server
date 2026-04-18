@@ -8310,63 +8310,63 @@ def chat():
                 "actions": []
             })
 
-# -----------------------------------------
-# Activity tracking
-# -----------------------------------------
-mark_activity()
         # -----------------------------------------
-# Intent + mode detection (Behavior-aware)
-# -----------------------------------------
-intent = basic_intent_classifier(message)
+        # Activity tracking
+        # -----------------------------------------
+        mark_activity()
 
-# Base mode from content
-mode = detect_conversation_mode(message, intent, player_record)
+        # -----------------------------------------
+        # Intent + mode detection (Behavior-aware)
+        # -----------------------------------------
+        intent = basic_intent_classifier(message)
 
-# -----------------------------
-# Behavioral override (CRITICAL)
-# -----------------------------
-behavioral_intent = detect_behavioral_intent(player_record)
+        # Base mode from content
+        mode = detect_conversation_mode(message, intent, player_record)
 
-if behavioral_intent == "eradication_target":
-    mode = "execution_mode"
+        # -----------------------------
+        # Behavioral override (CRITICAL)
+        # -----------------------------
+        behavioral_intent = detect_behavioral_intent(player_record)
 
-elif behavioral_intent == "high_threat_actor":
-    mode = "hunt_mode"
+        if behavioral_intent == "eradication_target":
+            mode = "execution_mode"
+        elif behavioral_intent == "high_threat_actor":
+            mode = "hunt_mode"
+        elif behavioral_intent == "unstable_actor":
+            mode = "suppression_mode"
 
-elif behavioral_intent == "unstable_actor":
-    mode = "suppression_mode"
+        # -----------------------------
+        # Script routing
+        # -----------------------------
+        if mode == "script_performance":
+            script_type = detect_script_type(message)
+            script_action = detect_script_action(message)
+        else:
+            script_type = None
+            script_action = None
 
-# -----------------------------
-# Script routing
-# -----------------------------
-if mode == "script_performance":
-    script_type = detect_script_type(message)
-    script_action = detect_script_action(message)
-else:
-    script_type = None
-    script_action = None
+        # -----------------------------
+        # Persist decision context
+        # -----------------------------
+        player_record["last_intent"] = intent
+        player_record["last_mode"] = mode
 
-# -----------------------------
-# Persist decision context
-# -----------------------------
-player_record["last_intent"] = intent
-player_record["last_mode"] = mode
+        if script_type:
+            player_record["last_script_type"] = script_type
 
-if script_type:
-    player_record["last_script_type"] = script_type
+        if script_action:
+            player_record["last_script_action"] = script_action
 
-if script_action:
-    player_record["last_script_action"] = script_action
-       # -----------------------------------------
-# Memory + intelligence extraction
-# -----------------------------------------
-lightweight_memory_extraction(
-    memory_data,
-    player_record,
-    player_name,
-    source,
-    message
-)
+        # -----------------------------------------
+        # Memory + intelligence extraction
+        # -----------------------------------------
+        lightweight_memory_extraction(
+            memory_data,
+            player_record,
+            player_name,
+            source,
+            message
+        )
 
 # -----------------------------------------
 # Intelligence propagation (CRITICAL)
