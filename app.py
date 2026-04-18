@@ -7993,11 +7993,11 @@ maybe_create_private_note(
     intent
 )
 
+    try: 
         # -----------------------------
         # Stats (final update)
         # -----------------------------
         register_message_stats(memory_data, source, player_record)
-
         # -----------------------------------------
         # Save memory (Atomic + Cache-synced)
         # -----------------------------------------
