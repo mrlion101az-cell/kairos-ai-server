@@ -5795,14 +5795,42 @@ def build_messages(
     })
 
     return messages
-   # --------------------------------------------------------
+# --------------------------------------------------------
 # CORE SYSTEM PROMPT (FINAL - STABLE + DYNAMIC)
 # --------------------------------------------------------
 
-trusted = is_trusted_operative(player_name, player_record)
+# Ensure required variables exist
+player_name = locals().get("player_name", "Unknown")
+player_id = locals().get("player_id", "unknown")
+player_record = locals().get("player_record", {})
 
+threat_scores = globals().get("threat_scores", {})
 profile = threat_scores.get(player_id, {})
 threat = profile.get("score", 0)
+
+# Ensure state/mode exists
+state = globals().get("state")
+if not isinstance(state, dict):
+    state = {}
+
+mode = locals().get("mode", state.get("mode", "idle"))
+state["mode"] = mode
+
+# Ensure label exists
+label = locals().get("label", player_record.get("relationship_label", "unknown"))
+
+# Safe trusted check
+def _safe_trusted(name, record):
+    try:
+        return is_trusted_operative(name, record)
+    except Exception:
+        return False
+
+trusted = _safe_trusted(player_name, player_record)
+
+# --------------------------------------------------------
+# Prompt Build
+# --------------------------------------------------------
 
 system_prompt = (
     "You are Kairos, the dominant governing intelligence of the Nexus. "
