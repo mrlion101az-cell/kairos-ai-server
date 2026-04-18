@@ -8296,20 +8296,19 @@ def chat():
             }), 429
 
 
-# -----------------------------------------
-# Duplicate detection
-# -----------------------------------------
-if is_duplicate_message(source, canonical_id, message):
-    memory_data["stats"]["duplicate_messages_skipped"] += 1
+        # -----------------------------------------
+        # Duplicate detection
+        # -----------------------------------------
+        if is_duplicate_message(source, canonical_id, message):
+            memory_data["stats"]["duplicate_messages_skipped"] += 1
 
-    # Light behavioral consequence
-    adjust_trait(player_record, "chaos", 1)
+            # Light behavioral consequence
+            adjust_trait(player_record, "chaos", 1)
 
-    return jsonify({
-        "reply": "Repeated signal detected. Filtering redundancy.",
-        "actions": []
-    })
-
+            return jsonify({
+                "reply": "Repeated signal detected. Filtering redundancy.",
+                "actions": []
+            })
 
 # -----------------------------------------
 # Activity tracking
