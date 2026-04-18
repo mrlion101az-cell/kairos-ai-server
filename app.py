@@ -7997,24 +7997,22 @@ maybe_create_private_note(
 # Stats (final update)
 # -----------------------------
 register_message_stats(memory_data, source, player_record)
-       # -----------------------------------------
-# Save memory (Atomic + Cache-synced)
-# -----------------------------------------
-try:
-    with memory_lock:
-        save_memory(memory_data)
+        # -----------------------------------------
+        # Save memory (Atomic + Cache-synced)
+        # -----------------------------------------
+        try:
+            with memory_lock:
+                save_memory(memory_data)
 
-        # Keep cache in sync
-        global memory_cache, memory_cache_last_load
-        memory_cache = memory_data
-        memory_cache_last_load = unix_ts()
+                # Keep cache in sync
+                memory_cache = memory_data
+                memory_cache_last_load = unix_ts()
 
-    memory_data["stats"]["memory_saves"] += 1
+            memory_data["stats"]["memory_saves"] += 1
 
-except Exception as save_err:
-    log(f"Memory save failed: {save_err}", level="ERROR")
-    memory_data["stats"]["memory_save_failures"] += 1
-
+        except Exception as save_err:
+            log(f"Memory save failed: {save_err}", level="ERROR")
+            memory_data["stats"]["memory_save_failures"] += 1
 
     # -----------------------------------------
     # Return response
