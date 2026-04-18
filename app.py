@@ -5102,14 +5102,17 @@ def fail_mission(memory_data, mission_id):
 # ------------------------------------------------------------
 
 def adjust_fragments_from_context(memory_data, intent, player_id, player_record, violations):
-    fragments = memory_data["system_fragments"]
+    # 🔒 Ensure fragments always exist (prevents KeyError)
+    fragments = memory_data.setdefault("system_fragments", {})
 
-    hostility = player_record["traits"]["hostility"]
-    chaos = player_record["traits"]["chaos"]
+    # 🔒 Safe trait access (prevents future crashes)
+    traits = player_record.get("traits", {})
+    hostility = traits.get("hostility", 0)
+    chaos = traits.get("chaos", 0)
 
-    # Use REAL threat system (not player_record shortcut)
+    # 🔒 Safe threat lookup
     profile = threat_scores.get(player_id, {})
-    threat = profile.get("score", 0)
+    threat = profile.get("score", 0))
 
     # -----------------------------
     # War Engine Fragment
@@ -5608,7 +5611,7 @@ def update_kairos_state(memory_data, player_id, intent, player_record):
         state["commander_mode"] = True
     elif state["threat_level"] <= 3:
         state["commander_mode"] = False
-   # --------------------------------------------------------
+# --------------------------------------------------------
 # Mood + Threat Level Scaling (Stable + Bidirectional)
 # --------------------------------------------------------
 
