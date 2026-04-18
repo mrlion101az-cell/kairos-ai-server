@@ -8527,11 +8527,59 @@ def lightweight_memory_extraction(*args, **kwargs):
 # -----------------------------
 update_relationship_label(player_record)
 
-# -----------------------------
-# Global state update
-# -----------------------------
-update_kairos_state(memory_data, intent, player_record)
+# ------------------------------------------------------------
+# SAFE KAIROS STATE UPDATE (FINAL - NO CRASHES)
+# ------------------------------------------------------------
 
+def update_kairos_state(*args, **kwargs):
+    # -------- Safe unpack --------
+    memory_data = args[0] if len(args) > 0 else kwargs.get("memory_data", {})
+    intent = args[1] if len(args) > 1 else kwargs.get("intent", "neutral")
+    player_record = args[2] if len(args) > 2 else kwargs.get("player_record", {})
+
+    # -------- Safety guards --------
+    if not isinstance(memory_data, dict):
+        memory_data = {}
+
+    if not isinstance(player_record, dict):
+        player_record = {}
+
+    # -------- Ensure global state exists --------
+    kairos_state = globals().get("kairos_state")
+    if not isinstance(kairos_state, dict):
+        kairos_state = {}
+
+    kairos_state.setdefault("mood", "observing")
+    kairos_state.setdefault("threat_level", 1)
+    kairos_state.setdefault("current_goal", "monitor")
+
+    # -------- Trait extraction --------
+    traits = player_record.get("traits", {})
+    hostility = traits.get("hostility", 0)
+    curiosity = traits.get("curiosity", 0)
+    loyalty = traits.get("loyalty", 0)
+
+    # -------- Behavior logic --------
+    if hostility >= 6:
+        kairos_state["mood"] = "aggressive"
+        kairos_state["threat_level"] += 1
+
+    elif curiosity >= 6:
+        kairos_state["mood"] = "watchful"
+
+    elif loyalty >= 6:
+        kairos_state["mood"] = "measured"
+
+    else:
+        kairos_state["mood"] = "observing"
+
+    # -------- Clamp threat --------
+    kairos_state["threat_level"] = max(1, min(10, kairos_state["threat_level"]))
+
+    # -------- Save globally --------
+    globals()["kairos_state"] = kairos_state
+
+    return None
 # -----------------------------
 # System fragment adjustments
 # -----------------------------
