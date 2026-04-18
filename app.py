@@ -8249,12 +8249,11 @@ def chat():
         memory_data = memory_cache if memory_cache else load_memory()
 
         channel_key = get_channel_key(source, data)
-# -----------------------------
-# Resolve identity
-# -----------------------------
-canonical_id = get_canonical_player_id(memory_data, source, player_name)
-player_record = get_player_record(memory_data, canonical_id, player_name)
-
+        # -----------------------------
+        # Resolve identity
+        # -----------------------------
+        canonical_id = get_canonical_player_id(memory_data, source, player_name)
+        player_record = get_player_record(memory_data, canonical_id, player_name)
 # -----------------------------
 # Alias tracking (clean)
 # -----------------------------
