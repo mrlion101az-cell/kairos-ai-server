@@ -8458,16 +8458,70 @@ elif behavioral_intent == "high_threat_actor":
 
 elif behavioral_intent == "unstable_actor":
     mode = "suppression_mode"
-# -----------------------------------------
-# Memory + Traits + Intelligence (FIXED)
-# -----------------------------------------
-lightweight_memory_extraction(
-    memory_data,
-    player_record,
-    locals().get("player_id", player_name),  # ✅ correct fallback
-    source,
-    locals().get("message", "")
-)
+# ------------------------------------------------------------
+# SAFE MEMORY EXTRACTION (FULL REWRITE - NEVER CRASHES)
+# ------------------------------------------------------------
+
+def lightweight_memory_extraction(*args, **kwargs):
+    """
+    Accepts any call signature and safely unpacks:
+    (memory_data, player_record, player_id, source, message)
+    """
+
+    # -------- Safe unpack --------
+    memory_data = args[0] if len(args) > 0 else kwargs.get("memory_data", {})
+    player_record = args[1] if len(args) > 1 else kwargs.get("player_record", {})
+    player_id = args[2] if len(args) > 2 else kwargs.get("player_id", None)
+    source = args[3] if len(args) > 3 else kwargs.get("source", None)
+    message = args[4] if len(args) > 4 else kwargs.get("message", "")
+
+    # -------- Safety guards --------
+    if not isinstance(memory_data, dict):
+        memory_data = {}
+
+    if not isinstance(player_record, dict):
+        player_record = {}
+
+    if not isinstance(message, str):
+        message = str(message)
+
+    # -------- Ensure structures exist --------
+    memory_data.setdefault("world_memory", [])
+    memory_data.setdefault("identity_links", {})
+
+    player_record.setdefault("memories", [])
+    player_record.setdefault("traits", {})
+
+    traits = player_record["traits"]
+    traits.setdefault("trust", 0)
+    traits.setdefault("chaos", 0)
+    traits.setdefault("curiosity", 0)
+    traits.setdefault("hostility", 0)
+    traits.setdefault("loyalty", 0)
+
+    # -------- Basic extraction logic (safe) --------
+    lowered = message.lower()
+
+    if any(word in lowered for word in ["help", "assist", "ally"]):
+        traits["trust"] += 1
+
+    if any(word in lowered for word in ["attack", "kill", "destroy"]):
+        traits["hostility"] += 1
+
+    if any(word in lowered for word in ["why", "how", "what"]):
+        traits["curiosity"] += 1
+
+    # -------- Store memory safely --------
+    entry = f"{player_id or 'unknown'}: {message[:200]}"
+
+    if entry not in player_record["memories"]:
+        player_record["memories"].append(entry)
+
+    if len(player_record["memories"]) > 50:
+        player_record["memories"].pop(0)
+
+    # -------- Done (no return needed) --------
+    return None
 # -----------------------------
 # Relationship update (CRITICAL)
 # -----------------------------
