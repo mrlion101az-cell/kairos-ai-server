@@ -8040,13 +8040,14 @@ except Exception as save_err:
     log(f"Memory save failed: {save_err}", level="ERROR")
     memory_data["stats"]["memory_save_failures"] += 1
 
-# -----------------------------------------
-# Build response (no return here)
-# -----------------------------------------
-response = jsonify({
-    "reply": reply,
-    "actions": actions
-})
+try:
+    # -----------------------------------------
+    # Build response (no return here)
+    # -----------------------------------------
+    response = jsonify({
+        "reply": reply,
+        "actions": actions
+    })
 
 except Exception as e:
     log_exception("Chat route failure", e)
