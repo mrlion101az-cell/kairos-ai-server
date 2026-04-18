@@ -7784,7 +7784,7 @@ if source_key not in memory_data["identity_links"]:
 # -----------------------------
 player_record["last_seen"] = now_iso()
 player_record["last_source"] = source
-      # -----------------------------------------
+# -----------------------------------------
 # Rate limit / duplicate check (Enhanced)
 # -----------------------------------------
 allowed, wait_time = check_rate_limit(source, canonical_id)
@@ -7800,10 +7800,10 @@ if not allowed:
         player_id=canonical_id
     )
 
-    return = jsonify({
+    response = jsonify({
         "reply": f"{reply} ({round(wait_time, 1)}s)"
-    }), 429
-
+    })
+    status_code = 429
 
 # -----------------------------------------
 # Duplicate detection
