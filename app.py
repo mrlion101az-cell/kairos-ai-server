@@ -8670,12 +8670,10 @@ def link_identity():
             "linked_as": canonical_id
         })
 
-# ------------------------------------------------------------
-# MISSION CREATION
-# ------------------------------------------------------------
-
 @app.route("/mission", methods=["POST"])
 def mission():
+    global memory_cache, memory_cache_last_load  # ✅ MOVE HERE
+
     try:
         data = request.json or {}
 
@@ -8754,7 +8752,6 @@ def mission():
             with memory_lock:
                 save_memory(memory_data)
 
-                global memory_cache, memory_cache_last_load
                 memory_cache = memory_data
                 memory_cache_last_load = unix_ts()
 
@@ -8773,7 +8770,6 @@ def mission():
             "reply": "Directive generation failed.",
             "actions": []
         }), 500
-
 
 # ------------------------------------------------------------
 # SYSTEM STATE
