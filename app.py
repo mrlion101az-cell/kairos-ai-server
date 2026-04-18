@@ -8652,33 +8652,28 @@ def link_identity():
             memory_data["stats"].get("identity_links_created", 0) + 1
         )
 
-        # -----------------------------
-        # Save memory (thread-safe)
-        # -----------------------------
-        try:
-            with memory_lock:
-                save_memory(memory_data)
-
-                memory_cache = memory_data
-                memory_cache_last_load = unix_ts()
-
-        except Exception as save_err:
-            log(f"Identity link save failed: {save_err}", level="ERROR")
-
-        return jsonify({
+               return jsonify({
             "reply": "Identity linkage confirmed.",
             "linked_as": canonical_id
         })
 
+    except Exception as e:
+        log_exception("IDENTITY LINK ERROR", e)
+
+        return jsonify({
+            "reply": "Linking process failed.",
+            "actions": []
+        }), 500
+
+
 @app.route("/mission", methods=["POST"])
 def mission():
-    global memory_cache, memory_cache_last_load  # ✅ MOVE HERE
+    global memory_cache, memory_cache_last_load
 
     try:
         data = request.json or {}
 
         target_name = normalize_name(data.get("name", "Unknown"))
-
         # -----------------------------
         # Load memory (safe)
         # -----------------------------
