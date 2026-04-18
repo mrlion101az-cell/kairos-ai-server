@@ -6543,7 +6543,7 @@ def execute_action(action):
         send_http_commands(commands)
 
         log(f"Wave spawned: {template} x{count} → {target}", level="INFO")
-   # -------------------------------
+# -------------------------------
 # MAXIMUM RESPONSE (Controlled + Cinematic + Scalable)
 # -------------------------------
 elif action_type == "maximum_response":
