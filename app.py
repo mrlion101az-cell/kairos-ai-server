@@ -7965,7 +7965,7 @@ if reply:
             send_to_discord(f"[Fallback] {reply}")
 else:
     log("Skipped send: empty reply", level="WARN")
-       # -----------------------------------------
+# -----------------------------------------
 # Post-processing (INTELLIGENCE)
 # -----------------------------------------
 
@@ -7993,34 +7993,35 @@ maybe_create_private_note(
     intent
 )
 
-    try: 
-        # -----------------------------
-        # Stats (final update)
-        # -----------------------------
-        register_message_stats(memory_data, source, player_record)
-        # -----------------------------------------
-        # Save memory (Atomic + Cache-synced)
-        # -----------------------------------------
-        try:
-            with memory_lock:
-                save_memory(memory_data)
+# -----------------------------
+# Stats (final update)
+# -----------------------------
+register_message_stats(memory_data, source, player_record)
 
-                # Keep cache in sync
-                memory_cache = memory_data
-                memory_cache_last_load = unix_ts()
+# -----------------------------------------
+# Save memory (Atomic + Cache-synced)
+# -----------------------------------------
+try:
+    with memory_lock:
+        save_memory(memory_data)
 
-            memory_data["stats"]["memory_saves"] += 1
+        # Keep cache in sync
+        memory_cache = memory_data
+        memory_cache_last_load = unix_ts()
 
-        except Exception as save_err:
-            log(f"Memory save failed: {save_err}", level="ERROR")
-            memory_data["stats"]["memory_save_failures"] += 1
-    # -----------------------------------------
-    # Return response
-    # -----------------------------------------
-    return jsonify({
-        "reply": reply,
-        "actions": actions
-    })
+    memory_data["stats"]["memory_saves"] += 1
+
+except Exception as save_err:
+    log(f"Memory save failed: {save_err}", level="ERROR")
+    memory_data["stats"]["memory_save_failures"] += 1
+
+# -----------------------------------------
+# Return response
+# -----------------------------------------
+return jsonify({
+    "reply": reply,
+    "actions": actions
+})
 
 except Exception as e:
     log_exception("Chat route failure", e)
