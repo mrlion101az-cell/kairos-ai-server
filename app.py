@@ -8458,17 +8458,16 @@ elif behavioral_intent == "high_threat_actor":
 
 elif behavioral_intent == "unstable_actor":
     mode = "suppression_mode"
-       # -----------------------------------------
-# Memory + Traits + Intelligence
+# -----------------------------------------
+# Memory + Traits + Intelligence (FIXED)
 # -----------------------------------------
 lightweight_memory_extraction(
     memory_data,
     player_record,
-    player_name,
+    locals().get("player_id", player_name),  # ✅ correct fallback
     source,
-    message
+    locals().get("message", "")
 )
-
 # -----------------------------
 # Relationship update (CRITICAL)
 # -----------------------------
