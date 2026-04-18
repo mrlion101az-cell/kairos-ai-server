@@ -8427,13 +8427,25 @@ response = jsonify({
 # -----------------------------------------
 # Intent + Mode (Behavior-Aware)
 # -----------------------------------------
-intent = basic_intent_classifier(message)
-# -----------------------------
-# Behavioral override (CRITICAL)
-# -----------------------------
-behavioral_intent = detect_behavioral_intent(player_record)
 
-mode = detect_conversation_mode(message, intent, player_record)
+# Safe message fallback
+message = locals().get("message", "")
+
+intent = basic_intent_classifier(message)
+
+# -----------------------------
+# Behavioral override (FIXED)
+# -----------------------------
+behavioral_intent = detect_behavioral_intent(
+    message,
+    player_record
+)
+
+mode = detect_conversation_mode(
+    message,
+    intent,
+    player_record
+)
 
 # -----------------------------
 # Hard overrides (priority)
