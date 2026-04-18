@@ -8444,9 +8444,9 @@ behavioral_intent = detect_behavioral_intent(
 mode = detect_conversation_mode(
     message,
     intent,
+    behavioral_intent,
     player_record
 )
-
 # -----------------------------
 # Hard overrides (priority)
 # -----------------------------
