@@ -6476,7 +6476,25 @@ def execute_action(action):
         # ROUTING
         # -----------------------------
         if action_type == "spawn_wave":
-            handle_spawn_wave(action)
+            if not target:
+                return
+
+            if not can_spawn_wave(target):
+                return
+
+            # -----------------------------
+            # Safe values
+            # -----------------------------
+            count = clamp(safe_int(action.get("count", 2)), 1, 8)
+            template = sanitize_text(action.get("template", "scout"), 20)
+
+            commands = []
+
+            for i in range(count):
+                dx = random.randint(SPAWN_RADIUS_MIN, SPAWN_RADIUS_MAX) * random.choice([-1, 1])
+                dz = random.randint(SPAWN_RADIUS_MIN, SPAWN_RADIUS_MAX) * random.choice([-1, 1])
+
+                # (keep whatever command-building logic you had below here)
 
         elif action_type == "maximum_response":
             handle_maximum_response(action)
@@ -6495,29 +6513,6 @@ def execute_action(action):
 
     except Exception as e:
         log(f"Action failed: {action_type} -> {e}", level="ERROR")
-   # -------------------------------
-# SPAWN WAVE (Safe + Scalable + Dynamic)
-# -------------------------------
-if action_type == "spawn_wave":
-    if not target:
-        return
-
-    if not can_spawn_wave(target):
-        return
-
-    # -----------------------------
-    # Safe values
-    # -----------------------------
-    count = clamp(safe_int(action.get("count", 2)), 1, 8)
-    template = sanitize_text(action.get("template", "scout"), 20)
-
-    commands = []
-
-    for i in range(count):
-        # Ensure spacing away from player
-        dx = random.randint(SPAWN_RADIUS_MIN, SPAWN_RADIUS_MAX) * random.choice([-1, 1])
-        dz = random.randint(SPAWN_RADIUS_MIN, SPAWN_RADIUS_MAX) * random.choice([-1, 1])
-
         # -----------------------------
         # Template → Mob Type Mapping
         # -----------------------------
