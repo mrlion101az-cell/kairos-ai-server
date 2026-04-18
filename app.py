@@ -8581,12 +8581,12 @@ def update_kairos_state(*args, **kwargs):
 
     return None
 # -----------------------------
-# System fragment adjustments
+# System fragment adjustments (FIXED)
 # -----------------------------
 adjust_fragments_from_context(
     memory_data,
-    intent,
     player_record,
+    intent,
     violations
 )
 
