@@ -8260,37 +8260,40 @@ def chat():
         if player_name != player_record.get("display_name"):
             add_alias(player_record, player_name)
 
-# Keep display name updated
-player_record["display_name"] = player_name
+        # -----------------------------------------
+        # Keep display name updated
+        # -----------------------------------------
+        player_record["display_name"] = player_name
 
-# -----------------------------
-# Identity linking (CRITICAL)
-# -----------------------------
-memory_data.setdefault("identity_links", {})
+        # -----------------------------
+        # Identity linking (CRITICAL)
+        # -----------------------------
+        memory_data.setdefault("identity_links", {})
 
-source_key = f"{source}:{player_name}".lower()
+        source_key = f"{source}:{player_name}".lower()
 
-if source_key not in memory_data["identity_links"]:
-    memory_data["identity_links"][source_key] = canonical_id
+        if source_key not in memory_data["identity_links"]:
+            memory_data["identity_links"][source_key] = canonical_id
 
-# -----------------------------
-# Presence tracking
-# -----------------------------
-player_record["last_seen"] = now_iso()
-player_record["last_source"] = source
-       # -----------------------------------------
-# Anti-spam / cooldown
-# -----------------------------------------
-allowed, wait_left = check_rate_limit(source, canonical_id)
+        # -----------------------------
+        # Presence tracking
+        # -----------------------------
+        player_record["last_seen"] = now_iso()
+        player_record["last_source"] = source
 
-if not allowed:
-    memory_data["stats"]["rate_limited"] += 1
+        # -----------------------------------------
+        # Anti-spam / cooldown
+        # -----------------------------------------
+        allowed, wait_left = check_rate_limit(source, canonical_id)
 
-    return jsonify({
-        "reply": f"Signal frequency exceeded. Stabilize input. ({round(wait_left, 1)}s)",
-        "cooldown": wait_left,
-        "actions": []
-    }), 429
+        if not allowed:
+            memory_data["stats"]["rate_limited"] += 1
+
+            return jsonify({
+                "reply": f"Signal frequency exceeded. Stabilize input. ({round(wait_left, 1)}s)",
+                "cooldown": wait_left,
+                "actions": []
+            }), 429
 
 
 # -----------------------------------------
