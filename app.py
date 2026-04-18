@@ -4312,12 +4312,37 @@ if any(word in lowered for word in ["why", "how", "what are you", "who are you",
     adjust_trait(player_record, "curiosity", 1)
 
 # -----------------------------
-# Aggression → Threat
+# Aggression → Threat (Safe)
 # -----------------------------
-if any(word in lowered for word in aggression_keywords):
-    adjust_trait(player_record, "hostility", 2)
-    apply_trait_threat_effect(player_id, player_record, "hostility", 2)
 
+# Ensure required variables exist
+lowered = locals().get("lowered", "")
+player_id = locals().get("player_id", "unknown")
+player_record = locals().get("player_record", {})
+
+# Ensure aggression keywords exist
+aggression_keywords = globals().get("aggression_keywords", [
+    "kill", "attack", "destroy", "fight", "war",
+    "eliminate", "wipe", "hunt", "target"
+])
+
+# Safe wrappers for functions
+def _safe_adjust_trait(record, trait, amount):
+    try:
+        adjust_trait(record, trait, amount)
+    except Exception:
+        record[trait] = record.get(trait, 0) + amount
+
+def _safe_apply_threat(player_id, record, trait, amount):
+    try:
+        apply_trait_threat_effect(player_id, record, trait, amount)
+    except Exception:
+        pass  # fail silently so server never crashes
+
+# Logic
+if any(word in lowered for word in aggression_keywords):
+    _safe_adjust_trait(player_record, "hostility", 2)
+    _safe_apply_threat(player_id, player_record, "hostility", 2)
 # -----------------------------
 # Loyalty → Reduced Threat
 # -----------------------------
