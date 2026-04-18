@@ -5116,19 +5116,37 @@ if is_triggered:
         )
 
 else:
-    # -----------------------------
-    # Decay instead of hard off
-    # -----------------------------
-    fragments["war_engine"]["influence"] = clamp(
-        fragments["war_engine"]["influence"] - 0.02,
-        0.0,
-        1.0
-    )
+# -----------------------------
+# Decay instead of hard off (Safe)
+# -----------------------------
 
-    # Only go dormant if influence is low
-    if fragments["war_engine"]["influence"] <= 0.1:
-        fragments["war_engine"]["status"] = "dormant"
-  # --------------------------------------------------------
+# Ensure fragments structure exists
+fragments = globals().get("fragments")
+if not isinstance(fragments, dict):
+    fragments = {}
+
+fragments.setdefault("war_engine", {})
+fragments["war_engine"].setdefault("influence", 0.0)
+fragments["war_engine"].setdefault("status", "active")
+
+# Safe clamp
+def _safe_clamp(val, min_v, max_v):
+    try:
+        return clamp(val, min_v, max_v)
+    except Exception:
+        return max(min_v, min(max_v, val))
+
+# Apply decay
+fragments["war_engine"]["influence"] = _safe_clamp(
+    fragments["war_engine"]["influence"] - 0.02,
+    0.0,
+    1.0
+)
+
+# Dormancy check
+if fragments["war_engine"]["influence"] <= 0.1:
+    fragments["war_engine"]["status"] = "dormant"
+# --------------------------------------------------------
 # Archive Node (Knowledge Stability System)
 # --------------------------------------------------------
 
