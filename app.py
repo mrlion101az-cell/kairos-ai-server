@@ -6595,32 +6595,31 @@ def execute_action(action):
         "delay": 2.0
     })
 
-    # -----------------------------
-    # Auto-release after duration
-    # -----------------------------
-    def release():
-        set_maximum_response(target, False)
-        log(f"Maximum response ended → {target}", level="INFO")
+               # -----------------------------
+            # Auto-release after duration
+            # -----------------------------
+            def release():
+                set_maximum_response(target, False)
+                log(f"Maximum response ended → {target}", level="INFO")
 
-    delayed_actions.append({
-        "type": "internal_release",
-        "execute_at": unix_ts() + 25,
-        "callback": release
-    })
+            delayed_actions.append({
+                "type": "internal_release",
+                "execute_at": unix_ts() + 25,
+                "callback": release
+            })
 
-    log(f"MAX RESPONSE initiated → {target}", level="WARN")
+            log(f"MAX RESPONSE initiated → {target}", level="WARN")
 
-    # -------------------------------
-# ANNOUNCE (Flexible + Safe + Cinematic)
-# -------------------------------
-elif action_type == "announce":
-    text = sanitize_text(action.get("text", ""), 200)
+        # -------------------------------
+        # ANNOUNCE (Flexible + Safe + Cinematic)
+        # -------------------------------
+        elif action_type == "announce":
+            text = sanitize_text(action.get("text", ""), 200)
 
-    if not text:
-        return
+            if not text:
+                return
 
-    channel = action.get("channel", "chat")
-
+            channel = action.get("channel", "chat")
     # -----------------------------
     # Actionbar
     # -----------------------------
