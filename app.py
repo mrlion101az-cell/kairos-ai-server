@@ -6968,78 +6968,109 @@ def maybe_create_private_note(player_record, player_id, player_name, source, mes
 # Heuristic fallback (Controlled + Deduplicated)
 # --------------------------------------------------------
 
-# Only trigger on meaningful changes
-should_log = (
-    intent in {"threat", "report", "mission_request"} or
-    threat >= THREAT_THRESHOLD_TARGET or
-    label in {"hostile", "chaotic", "suspicious"}
-)
+def handle_heuristic_and_model_notes(player_name, player_record, intent, threat, label):
+    # -----------------------------
+    # Heuristic fallback (Controlled + Deduplicated)
+    # -----------------------------
 
-if should_log:
-    heuristic_note = (
-        f"{player_name} | intent={intent} | threat={int(threat)} | label={label}"
+    # Only trigger on meaningful changes
+    should_log = (
+        intent in {"threat", "report", "mission_request"} or
+        threat >= THREAT_THRESHOLD_TARGET or
+        label in {"hostile", "chaotic", "suspicious"}
     )
 
-    # -----------------------------
-    # Deduplicate (avoid spam)
-    # -----------------------------
-    existing_notes = player_record.get("notes", [])
+    if should_log:
+        heuristic_note = (
+            f"{player_name} | intent={intent} | threat={int(threat)} | label={label}"
+        )
 
-    if not any(
-        similarity_score(heuristic_note, n.get("note", "")) > 0.9
-        for n in existing_notes
-    ):
-        record_private_note(player_record, heuristic_note)
+        # -----------------------------
+        # Deduplicate (avoid spam)
+        # -----------------------------
+        existing_notes = player_record.get("notes", [])
 
-        player_record["last_note_ts"] = unix_ts()
+        if not any(
+            similarity_score(heuristic_note, n.get("note", "")) > 0.9
+            for n in existing_notes
+        ):
+            record_private_note(player_record, heuristic_note)
+            player_record["last_note_ts"] = unix_ts()
 # --------------------------------------------------------
 # Enhanced Notes via Model (Controlled + High-Signal)
 # --------------------------------------------------------
 
-if not ENABLE_MODEL_PRIVATE_NOTES:
-    return
+def handle_model_notes(
+    player_name,
+    player_record,
+    source,
+    intent,
+    threat,
+    label,
+    message,
+    reply
+):
+    # -----------------------------
+    # Feature toggle
+    # -----------------------------
+    if not ENABLE_MODEL_PRIVATE_NOTES:
+        return
 
-# -----------------------------
-# Cooldown (prevents spam)
-# -----------------------------
-last_note_ts = player_record.get("last_model_note_ts", 0)
-if unix_ts() - last_note_ts < 180:
-    return
+    # -----------------------------
+    # Cooldown (prevents spam)
+    # -----------------------------
+    last_note_ts = player_record.get("last_model_note_ts", 0)
+    if unix_ts() - last_note_ts < 180:
+        return
 
-try:
-    response = openai_chat_with_retry(
-        messages=[
-            {
-                "role": "system",
-                "content": (
-                    "Generate a short intelligence note about this player.\n\n"
-                    "Focus on:\n"
-                    "- Behavior patterns\n"
-                    "- Threat tendencies\n"
-                    "- Risk level\n"
-                    "- Any strategic insight\n\n"
-                    "Keep it concise (1-2 sentences max)."
-                )
-            },
-            {
-                "role": "user",
-                "content": json.dumps({
-                    "player": player_name,
-                    "source": source,
-                    "intent": intent,
-                    "threat": int(threat),
-                    "relationship": label,
-                    "message": trim_text(message, 300),
-                    "reply": trim_text(reply, 300)
-                }, ensure_ascii=False)
-            }
-        ],
-        temperature=0.3
-    )
+    try:
+        response = openai_chat_with_retry(
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "Generate a short intelligence note about this player.\n\n"
+                        "Focus on:\n"
+                        "- Behavior patterns\n"
+                        "- Threat tendencies\n"
+                        "- Risk level\n"
+                        "- Any strategic insight\n\n"
+                        "Keep it concise (1-2 sentences max)."
+                    )
+                },
+                {
+                    "role": "user",
+                    "content": json.dumps({
+                        "player": player_name,
+                        "source": source,
+                        "intent": intent,
+                        "threat": int(threat),
+                        "relationship": label,
+                        "message": trim_text(message, 300),
+                        "reply": trim_text(reply, 300)
+                    }, ensure_ascii=False)
+                }
+            ],
+            temperature=0.3
+        )
 
-    if response:
-        note_text = trim_text(response, 240)
+        if response:
+            note_text = trim_text(response, 240)
 
+            # -----------------------------
+            # Deduplicate (avoid spam)
+            # -----------------------------
+            existing_notes = player_record.get("notes", [])
+
+            if not any(
+                similarity_score(note_text, n.get("note", "")) > 0.9
+                for n in existing_notes
+            ):
+                record_private_note(player_record, note_text)
+                player_record["last_model_note_ts"] = unix_ts()
+
+    except Exception as e:
+        log(f"Model note generation failed: {e}", level="ERROR")
         # -----------------------------
         # Quality filter (skip weak notes)
         # -----------------------------
