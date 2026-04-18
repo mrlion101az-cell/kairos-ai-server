@@ -7814,27 +7814,26 @@ if is_duplicate_message(source, canonical_id, message):
     # Slight behavioral consequence
     adjust_trait(player_record, "chaos", 1)
 
-    # -----------------------------------------
-    # Activity tracking (MUST BE BEFORE RETURN)
-    # -----------------------------------------
-    mark_activity()
+# -----------------------------------------
+# Activity tracking (MUST BE BEFORE RESPONSE)
+# -----------------------------------------
+mark_activity()
 
-    return jsonify({
-        "reply": fallback_reply_for_context(
-            intent,
-            "chaos_containment",
-            violations,
-            player_record=player_record,
-            player_id=canonical_id
-        )
-    })
+response = jsonify({
+    "reply": fallback_reply_for_context(
+        intent,
+        "chaos_containment",
+        violations,
+        player_record=player_record,
+        player_id=canonical_id
+    )
+})
 
 
 # -----------------------------------------
 # Intent + Mode (Behavior-Aware)
 # -----------------------------------------
 intent = basic_intent_classifier(message)
-
 # -----------------------------
 # Behavioral override (CRITICAL)
 # -----------------------------
