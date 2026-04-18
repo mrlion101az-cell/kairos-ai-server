@@ -7714,15 +7714,20 @@ def chat():
         # If you modify cache later, uncomment this:
         # global memory_cache, memory_cache_last_load
 
-        # --- continue your logic below ---
         # -----------------------------------------
-# Resolve player (Robust Identity Layer)
-# -----------------------------------------
-canonical_id = get_canonical_player_id(memory_data, source, player_name)
+        # Resolve player (Robust Identity Layer)
+        # -----------------------------------------
+        canonical_id = get_canonical_player_id(memory_data, source, player_name)
 
-# Ensure player record exists
-player_record = get_player_record(memory_data, canonical_id, player_name)
+        # Ensure player record exists
+        player_record = get_player_record(memory_data, canonical_id, player_name)
 
+        # --- continue your logic below ---
+        return {"status": "ok"}  # replace with your real response
+
+    except Exception as e:
+        print(f"[ERROR] /chat failed: {e}")
+        return {"error": str(e)}, 500
 # -----------------------------
 # Alias tracking (CRITICAL)
 # -----------------------------
