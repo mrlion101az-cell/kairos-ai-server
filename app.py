@@ -2951,10 +2951,25 @@ def update_relationship_label(player_record):
 
     else:
         player_record["relationship_label"] = DISTRUST_DEFAULT_LABEL
-    # --------------------------------------------------------
-# Relationship Classification (Unified + System-Aligned)
+# --------------------------------------------------------
+# Relationship Classification (Safe + System-Aligned)
 # --------------------------------------------------------
 
+# Ensure all variables exist (prevents NameError)
+hostility = locals().get("hostility", 0)
+chaos = locals().get("chaos", 0)
+trust = locals().get("trust", 0)
+loyalty = locals().get("loyalty", 0)
+curiosity = locals().get("curiosity", 0)
+
+# Ensure player_record exists
+if "player_record" not in locals() or player_record is None:
+    player_record = {}
+
+# Ensure default label exists
+DISTRUST_DEFAULT_LABEL = globals().get("DISTRUST_DEFAULT_LABEL", "neutral")
+
+# Classification logic
 if hostility >= 6:
     player_record["relationship_label"] = "hostile"
 
@@ -2972,7 +2987,6 @@ elif curiosity >= 5:
 
 else:
     player_record["relationship_label"] = DISTRUST_DEFAULT_LABEL
-
    # --------------------------------------------------------
 # Relationship → Threat Influence (Synced + Correct)
 # --------------------------------------------------------
