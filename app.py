@@ -8638,15 +8638,23 @@ flag_high_threat_players(memory_data)
 # State updates (WAR ENGINE TRIGGERS HERE)
 # -----------------------------------------
 
+# 🔒 Safety guards
+memory_data = memory_data if isinstance(memory_data, dict) else {}
+player_record = player_record or {}
+violations = violations or []
+player_id = player_id if 'player_id' in locals() else "unknown"
+intent = intent if 'intent' in locals() else "neutral"
+
 # 1. Update Kairos state FIRST
 update_kairos_state(memory_data, intent, player_record)
 
-# 2. Then adjust system fragments
+# 2. Then adjust system fragments (FIXED)
 adjust_fragments_from_context(
     memory_data,
     intent,
+    player_id,
     player_record,
-    violations=violations
+    violations
 )
 # -----------------------------------------
 # Channel context (Controlled + Clean)
