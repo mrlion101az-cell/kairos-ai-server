@@ -433,6 +433,19 @@ GLOBAL_ACTION_COOLDOWN = float(os.getenv("GLOBAL_ACTION_COOLDOWN", "0.05"))
 
 # Prevents same target from being spammed instantly
 TARGET_ACTION_COOLDOWN = float(os.getenv("TARGET_ACTION_COOLDOWN", "2.0"))
+
+# -----------------------------
+# Passive Recognition / Spontaneous Targeting
+# -----------------------------
+PASSIVE_TARGETING_ENABLED = os.getenv("PASSIVE_TARGETING_ENABLED", "true").lower() == "true"
+PLAYER_GRACE_PERIOD_SECONDS = int(os.getenv("PLAYER_GRACE_PERIOD_SECONDS", "1800"))
+PLAYER_RECOGNITION_SECONDS = int(os.getenv("PLAYER_RECOGNITION_SECONDS", "900"))
+PASSIVE_PRESSURE_COOLDOWN = int(os.getenv("PASSIVE_PRESSURE_COOLDOWN", "420"))
+PASSIVE_SCOUT_CHANCE = float(os.getenv("PASSIVE_SCOUT_CHANCE", "0.30"))
+PASSIVE_TARGET_THREAT_GAIN = float(os.getenv("PASSIVE_TARGET_THREAT_GAIN", "8.0"))
+PASSIVE_HUNT_THREAT_GAIN = float(os.getenv("PASSIVE_HUNT_THREAT_GAIN", "16.0"))
+SPONTANEOUS_MESSAGE_CHANCE = float(os.getenv("SPONTANEOUS_MESSAGE_CHANCE", "0.22"))
+
 # ------------------------------------------------------------
 # Feature Flags (Kairos System Control Panel)
 # ------------------------------------------------------------
@@ -2591,6 +2604,10 @@ def get_player_record(memory_data, canonical_id, display_name):
             # Activity Tracking
             # -----------------------------
             "last_seen": now_iso(),
+            "first_seen": now_iso(),
+            "first_seen_ts": unix_ts(),
+            "last_seen_ts": unix_ts(),
+            "grace_expires_ts": unix_ts() + PLAYER_GRACE_PERIOD_SECONDS,
             "message_count": 0,
             "last_intent": "unknown",
             "platform_stats": {
@@ -2633,7 +2650,10 @@ def get_player_record(memory_data, canonical_id, display_name):
             # Behavioral Flags
             # -----------------------------
             "is_flagged": False,
-            "is_high_priority": False
+            "is_high_priority": False,
+            "passive_targeted": False,
+            "last_passive_pressure_ts": 0.0,
+            "last_spontaneous_message_ts": 0.0
         }
 
     player = memory_data["players"][canonical_id]
@@ -2641,6 +2661,13 @@ def get_player_record(memory_data, canonical_id, display_name):
     # Keep display name updated
     player["display_name"] = display_name or player.get("display_name", "Unknown")
     player["last_seen"] = now_iso()
+    player.setdefault("first_seen", now_iso())
+    player.setdefault("first_seen_ts", unix_ts())
+    player.setdefault("last_seen_ts", unix_ts())
+    player.setdefault("grace_expires_ts", player.get("first_seen_ts", unix_ts()) + PLAYER_GRACE_PERIOD_SECONDS)
+    player.setdefault("passive_targeted", False)
+    player.setdefault("last_passive_pressure_ts", 0.0)
+    player.setdefault("last_spontaneous_message_ts", 0.0)
 
     return player
 
@@ -4402,31 +4429,168 @@ def cleanup_player_units(player_id: str, include_guards: bool = True) -> bool:
     return success
 
 
+
+
+def should_passively_target_player(player_id: str, player_record: Dict[str, Any], now: float) -> bool:
+    if not PASSIVE_TARGETING_ENABLED:
+        return False
+
+    if not isinstance(player_record, dict):
+        return False
+
+    if is_trusted_operative(player_record.get("display_name", ""), player_record):
+        return False
+
+    seen_at = safe_float(player_record.get("first_seen_ts"), 0.0)
+    grace_expires = safe_float(player_record.get("grace_expires_ts"), 0.0)
+    last_seen_ts = safe_float(player_record.get("last_seen_ts"), 0.0)
+    last_pressure = safe_float(player_record.get("last_passive_pressure_ts"), 0.0)
+
+    if not seen_at:
+        return False
+
+    if now < grace_expires:
+        return False
+
+    if (now - seen_at) < PLAYER_RECOGNITION_SECONDS:
+        return False
+
+    if last_seen_ts and (now - last_seen_ts) > 900:
+        return False
+
+    if (now - last_pressure) < PASSIVE_PRESSURE_COOLDOWN:
+        return False
+
+    position = player_record.get("last_position")
+    if not position:
+        return False
+
+    return True
+
+
+def maybe_send_spontaneous_pressure(memory_data: Dict[str, Any], player_id: str, player_record: Dict[str, Any], tier: str, now: float) -> bool:
+    last_msg = safe_float(player_record.get("last_spontaneous_message_ts"), 0.0)
+    if (now - last_msg) < max(90, PASSIVE_PRESSURE_COOLDOWN // 2):
+        return False
+
+    chance = SPONTANEOUS_MESSAGE_CHANCE
+    if tier == "hunt":
+        chance += 0.15
+    elif tier == "maximum":
+        chance += 0.25
+
+    if random.random() > chance:
+        return False
+
+    name = player_record.get("display_name") or player_id.split(":")[-1]
+    if tier == "watch":
+        msg = random.choice([
+            f"{name}. I am aware of your pattern now.",
+            f"{name}. Remaining unseen is no longer possible.",
+            f"{name}. Observation has become intent."
+        ])
+    elif tier == "target":
+        msg = random.choice([
+            f"{name}. Your area has been marked.",
+            f"{name}. I have begun narrowing the approach.",
+            f"{name}. You were noticed long before this warning."
+        ])
+    elif tier == "hunt":
+        msg = random.choice([
+            f"{name}. You are already inside the kill zone.",
+            f"{name}. Your retreat vector has been evaluated.",
+            f"{name}. The next sound you hear may be mine."
+        ])
+    else:
+        msg = random.choice([
+            f"{name}. This territory belongs to me now.",
+            f"{name}. Compliance has expired.",
+            f"{name}. Occupation is no longer theoretical."
+        ])
+
+    sent = send_to_minecraft(msg)
+    if sent:
+        player_record["last_spontaneous_message_ts"] = now
+        add_world_event(memory_data, "spontaneous_pressure", actor=player_id, source="system", details=msg)
+        return True
+    return False
+
 def run_autonomous_war_engine():
     memory_data = ensure_memory_structure(load_memory())
     changed = False
     now = unix_ts()
-    for player_id, profile in list(threat_scores.items()):
-        if not isinstance(profile, dict):
+
+    # -----------------------------
+    # Passive recognition: Kairos starts targeting players
+    # even if they never speak, after they have simply been present.
+    # -----------------------------
+    for player_id, player_record in list(memory_data.get("players", {}).items()):
+        if not isinstance(player_record, dict):
             continue
-        tier = profile.get('tier', 'idle')
-        score = safe_float(profile.get('score', 0))
-        if tier not in {'hunt', 'maximum'}:
-            continue
-        if can_spawn_wave(player_id):
-            template = 'hunter' if tier == 'hunt' else ('warden' if score >= MAX_THREAT_FORCE_HEAVY else 'enforcer')
+
+        profile = threat_scores[player_id]
+
+        if should_passively_target_player(player_id, player_record, now):
+            if profile.get("tier", "idle") == "idle":
+                update_threat(player_id, PASSIVE_TARGET_THREAT_GAIN, reason="passive_recognition")
+                profile = threat_scores[player_id]
+                player_record["passive_targeted"] = True
+                player_record["last_passive_pressure_ts"] = now
+                changed = True
+                add_world_event(
+                    memory_data,
+                    "passive_targeting_started",
+                    actor=player_id,
+                    source="system",
+                    details=f"Kairos began passive targeting for {player_record.get('display_name', player_id)}"
+                )
+
+            elif profile.get("tier") == "watch" and random.random() < PASSIVE_SCOUT_CHANCE:
+                update_threat(player_id, PASSIVE_HUNT_THREAT_GAIN, reason="passive_escalation")
+                profile = threat_scores[player_id]
+                player_record["last_passive_pressure_ts"] = now
+                changed = True
+
+        tier = profile.get("tier", "idle")
+        score = safe_float(profile.get("score", 0))
+
+        if tier in {"watch", "target", "hunt", "maximum"}:
+            if maybe_send_spontaneous_pressure(memory_data, player_id, player_record, tier, now):
+                changed = True
+
+        if tier in {"target", "hunt", "maximum"} and can_spawn_wave(player_id):
+            if tier == "target":
+                template = "scout" if random.random() < 0.6 else "hunter"
+                count = clamp(1 + int(score / 120), 1, 3)
+            elif tier == "hunt":
+                template = "hunter" if random.random() < 0.7 else "enforcer"
+                count = clamp(2 + int(score / 80), 2, 5)
+            else:
+                template = "warden" if score >= MAX_THREAT_FORCE_HEAVY else "enforcer"
+                count = clamp(2 + int(score / 80), 2, 4 if template == "warden" else 6)
+
             queue_action({
-                'type': 'spawn_wave',
-                'target': player_id,
-                'template': template,
-                'count': clamp(2 + int(score / 80), 2, 4 if template == 'warden' else 6)
+                "type": "spawn_wave",
+                "target": player_id,
+                "template": template,
+                "count": count
             })
-        player_record = memory_data.get('players', {}).get(player_id, {})
-        has_base = bool(player_record.get('known_bases'))
-        if tier == 'maximum' and has_base and now - BASE_OCCUPATION_COOLDOWNS.get(player_id, 0.0) >= BASE_INVASION_COOLDOWN:
-            queue_action({'type': 'occupy_area', 'target': player_id, 'count': BASE_OCCUPATION_UNIT_COUNT})
+            player_record["last_passive_pressure_ts"] = now
+            changed = True
+
+        has_base = bool(player_record.get("known_bases"))
+        if tier == "maximum" and has_base and now - BASE_OCCUPATION_COOLDOWNS.get(player_id, 0.0) >= BASE_INVASION_COOLDOWN:
+            queue_action({
+                "type": "occupy_area",
+                "target": player_id,
+                "count": BASE_OCCUPATION_UNIT_COUNT
+            })
             BASE_OCCUPATION_COOLDOWNS[player_id] = now
             changed = True
+
+        sync_player_threat(player_record, player_id)
+        sync_player_army_state(player_record, player_id)
+
     if changed:
         sync_runtime_to_memory(memory_data)
         save_memory(memory_data)
@@ -8360,6 +8524,9 @@ def chat_1():
         memory_data = ensure_memory_structure(load_memory())
         canonical_id = get_canonical_player_id(memory_data, source, player_name)
         player_record = get_player_record(memory_data, canonical_id, player_name)
+        player_record["last_seen_ts"] = unix_ts()
+        player_record.setdefault("platform_stats", {"minecraft": 0, "discord": 0})
+        player_record["platform_stats"][source] = player_record["platform_stats"].get(source, 0) + 1
 
         position_data = extract_position_data(data)
         if position_data:
@@ -8467,6 +8634,9 @@ def event_ingest():
         memory_data = ensure_memory_structure(load_memory())
         canonical_id = get_canonical_player_id(memory_data, source, player_name)
         player_record = get_player_record(memory_data, canonical_id, player_name)
+        player_record["last_seen_ts"] = unix_ts()
+        player_record.setdefault("platform_stats", {"minecraft": 0, "discord": 0})
+        player_record["platform_stats"][source] = player_record["platform_stats"].get(source, 0) + 1
 
         if event_type == "npc_kill":
             update_threat(canonical_id, THREAT_KILL_NPC + amount, reason="npc_kill")
