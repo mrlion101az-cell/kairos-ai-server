@@ -8582,9 +8582,16 @@ def update_kairos_state(*args, **kwargs):
     globals()["kairos_state"] = kairos_state
 
     return None
+
+
 # -----------------------------
 # System fragment adjustments (FIXED)
 # -----------------------------
+
+# 🔒 HARD SAFETY BEFORE CALL
+memory_data = memory_data if isinstance(memory_data, dict) else {}
+player_record = player_record or {}
+
 adjust_fragments_from_context(
     memory_data,
     intent,
