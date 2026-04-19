@@ -5117,9 +5117,19 @@ def adjust_fragments_from_context(memory_data, intent, player_id, player_record,
 # War Engine Fragment (FIXED)
 # -----------------------------
 
+# 🔒 Ensure required structures exist
+memory_data = memory_data if isinstance(memory_data, dict) else {}
+fragments = memory_data.setdefault("system_fragments", {})
+
 # 🔒 Ensure war_engine exists
 war_engine = fragments.setdefault("war_engine", {})
 war_engine.setdefault("influence", 0.0)
+
+# 🔒 Safe defaults (prevents NameError if outside function)
+intent = intent if 'intent' in locals() else "neutral"
+hostility = hostility if 'hostility' in locals() else 0
+violations = violations if 'violations' in locals() else []
+threat = threat if 'threat' in locals() else 0
 
 if intent == "threat" or hostility >= 6 or violations or threat >= THREAT_THRESHOLD_TARGET:
     war_engine["status"] = "active"
