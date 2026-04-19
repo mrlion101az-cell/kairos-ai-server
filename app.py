@@ -2467,12 +2467,20 @@ def sync_memory_to_runtime(memory_data):
 # ------------------------------------------------------------
 
 def get_channel_key(source, data):
+    data = data if isinstance(data, dict) else {}
     channel_id = str(data.get("channel_id") or "default")
     return f"{source}:{channel_id}"
 
 
 def update_channel_context(memory_data, channel_key, author_name, message, mode):
-    memory_data["channel_context"].setdefault(channel_key, {
+    # 🔒 Safety guards
+    memory_data = memory_data if isinstance(memory_data, dict) else {}
+
+    # 🔒 Ensure channel_context exists
+    channel_context = memory_data.setdefault("channel_context", {})
+
+    # 🔒 Ensure this channel exists
+    channel_context.setdefault(channel_key, {
         "recent_messages": [],
         "recent_topics": [],
         "activity_score": 0.0,
@@ -2480,7 +2488,7 @@ def update_channel_context(memory_data, channel_key, author_name, message, mode)
         "last_update": unix_ts()
     })
 
-    ctx = memory_data["channel_context"][channel_key]
+    ctx = channel_context[channel_key]
 
     msg_obj = {
         "timestamp": now_iso(),
@@ -8665,14 +8673,29 @@ data = data if 'data' in locals() else {}
 
 channel_key = get_channel_key(source, data)
 # -----------------------------
-# Prevent noise (skip junk)
+# Prevent noise (skip junk) - FIXED
 # -----------------------------
+
+# 🔒 HARD SAFETY
+memory_data = memory_data if isinstance(memory_data, dict) else {}
+channel_key = channel_key if 'channel_key' in locals() else "global"
+player_name = player_name if 'player_name' in locals() else "unknown"
+mode = mode if 'mode' in locals() else "default"
+message = message if 'message' in locals() else ""
+
+# 🔒 Ensure helpers don’t crash
+def _safe_trim(text, n):
+    try:
+        return trim_text(text, n)
+    except Exception:
+        return (text or "")[:n]
+
 if not is_gibberish(message):
     update_channel_context(
         memory_data,
         channel_key,
         player_name,
-        trim_text(message, 240),
+        _safe_trim(message, 240),
         mode
     )
 
