@@ -8659,8 +8659,11 @@ adjust_fragments_from_context(
 # -----------------------------------------
 # Channel context (Controlled + Clean)
 # -----------------------------------------
-channel_key = get_channel_key(source, data)
 
+# 🔒 Ensure data exists
+data = data if 'data' in locals() else {}
+
+channel_key = get_channel_key(source, data)
 # -----------------------------
 # Prevent noise (skip junk)
 # -----------------------------
