@@ -6297,12 +6297,11 @@ def build_messages(
 
         for item in reversed(channel_context):
             if isinstance(item, dict):
-        author = item.get("author", "unknown")
-        content = item.get("message") or item.get("content") or ""
-    else:
-        author = "unknown"
-        content = str(item)
-            msg = item.get("message", "")
+                author = item.get("author", "unknown")
+                msg = item.get("message") or item.get("content") or ""
+            else:
+                author = "unknown"
+                msg = str(item)
 
             key = f"{author}:{msg}".lower()
             if not msg or key in seen:
@@ -6317,7 +6316,9 @@ def build_messages(
         if channel_lines:
             messages.append({
                 "role": "system",
-                "content": "Recent context:\n- " + "\n- ".join(reversed(channel_lines))
+                "content": "Recent context:
+- " + "
+- ".join(reversed(channel_lines))
             })
 
     # ------------------------------------------------------------
