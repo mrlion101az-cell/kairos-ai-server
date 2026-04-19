@@ -134,12 +134,6 @@ if not isinstance(memory_data, dict):
     memory_data = {}
 memory_data.setdefault("identity_links", {})
 
-# 🔒 Ensure stats structure exists globally
-if isinstance(memory_data, dict):
-    memory_data.setdefault("stats", {})
-    memory_data["stats"].setdefault("send_failures", 0)
-
-
 # Safe targeting
 targeting_priority = globals().get("targeting_priority", 0.0)
 try:
@@ -2329,12 +2323,6 @@ def ensure_memory_structure(memory_data):
     # -----------------------------
     memory_data.setdefault("identity_links", {})
 
-# 🔒 Ensure stats structure exists globally
-if isinstance(memory_data, dict):
-    memory_data.setdefault("stats", {})
-    memory_data["stats"].setdefault("send_failures", 0)
-
-
     # -----------------------------
     # Missions
     # -----------------------------
@@ -2707,12 +2695,6 @@ def get_canonical_player_id(memory_data, source, player_name):
 
     # Ensure identity_links exists
     identity_links = memory_data.setdefault("identity_links", {})
-
-# 🔒 Ensure stats structure exists globally
-if isinstance(memory_data, dict):
-    memory_data.setdefault("stats", {})
-    memory_data["stats"].setdefault("send_failures", 0)
-
 
     source = str(source or "unknown")
     player_name = str(player_name or "unknown")
@@ -6334,9 +6316,7 @@ def build_messages(
         if channel_lines:
             messages.append({
                 "role": "system",
-                "content": "Recent context:
-- " + "
-- ".join(reversed(channel_lines))
+            "content": "Recent context:\n- " + "\n- ".join(reversed(channel_lines))
             })
 
     # ------------------------------------------------------------
@@ -8442,12 +8422,6 @@ if not isinstance(memory_data, dict):
 # Ensure identity_links exists
 identity_links = memory_data.setdefault("identity_links", {})
 
-# 🔒 Ensure stats structure exists globally
-if isinstance(memory_data, dict):
-    memory_data.setdefault("stats", {})
-    memory_data["stats"].setdefault("send_failures", 0)
-
-
 # Ensure required variables exist
 source = locals().get("source", "unknown")
 player_name = locals().get("player_name", "unknown")
@@ -8581,12 +8555,6 @@ def lightweight_memory_extraction(*args, **kwargs):
     # -------- Ensure structures exist --------
     memory_data.setdefault("world_memory", [])
     memory_data.setdefault("identity_links", {})
-
-# 🔒 Ensure stats structure exists globally
-if isinstance(memory_data, dict):
-    memory_data.setdefault("stats", {})
-    memory_data["stats"].setdefault("send_failures", 0)
-
 
     player_record.setdefault("memories", [])
     player_record.setdefault("traits", {})
@@ -8822,8 +8790,7 @@ if reply:
     if success:
         memory_data["stats"]["messages_sent"] += 1
     else:
-        memory_data.setdefault("stats", {}).setdefault("send_failures", 0)
-memory_data["stats"]["send_failures"] += 1
+        memory_data["stats"]["send_failures"] += 1
 
         log(
             f"Send failed → source={source}, player={player_name}",
@@ -9143,12 +9110,6 @@ def chat():
         # -----------------------------
         memory_data.setdefault("identity_links", {})
 
-# 🔒 Ensure stats structure exists globally
-if isinstance(memory_data, dict):
-    memory_data.setdefault("stats", {})
-    memory_data["stats"].setdefault("send_failures", 0)
-
-
         source_key = f"{source}:{player_name}".lower()
 
         if source_key not in memory_data["identity_links"]:
@@ -9403,8 +9364,7 @@ if isinstance(memory_data, dict):
             if success:
                 memory_data["stats"]["messages_sent"] += 1
             else:
-                memory_data.setdefault("stats", {}).setdefault("send_failures", 0)
-memory_data["stats"]["send_failures"] += 1
+                memory_data["stats"]["send_failures"] += 1
 
                 log(
                     f"Send failed → source={source}, player={player_name}",
@@ -9494,12 +9454,6 @@ def link_identity():
         # -----------------------------
         memory_data = memory_cache if memory_cache else load_memory()
         memory_data.setdefault("identity_links", {})
-
-# 🔒 Ensure stats structure exists globally
-if isinstance(memory_data, dict):
-    memory_data.setdefault("stats", {})
-    memory_data["stats"].setdefault("send_failures", 0)
-
         memory_data.setdefault("stats", {})
 
         mc_key = f"minecraft:{minecraft_name}".lower()
