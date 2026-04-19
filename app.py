@@ -7824,15 +7824,18 @@ def flag_high_threat_players(memory_data):
     # -----------------------------
     threat_list = threat_list[:MAX_HIGH_THREAT_TARGETS]
 
-    # -----------------------------
-    # Store both structured + simple
-    # -----------------------------
-    memory_data["kairos_state"]["high_threat_targets"] = [
-        t["name"] for t in threat_list
-    ]
+# -----------------------------
+# Store both structured + simple (FIXED)
+# -----------------------------
 
-    memory_data["kairos_state"]["high_threat_details"] = threat_list
+# 🔒 Ensure kairos_state exists
+kairos_state = memory_data.setdefault("kairos_state", {})
 
+kairos_state["high_threat_targets"] = [
+    t["name"] for t in threat_list
+]
+
+kairos_state["high_threat_details"] = threat_list
     # -----------------------------
     # Logging (only if meaningful)
     # -----------------------------
@@ -8621,10 +8624,14 @@ adjust_fragments_from_context(
 )
 
 # -----------------------------
-# High-threat tracking (lightweight)
+# High-threat tracking (lightweight) - FIXED
 # -----------------------------
+
+# 🔒 HARD SAFETY BEFORE CALL
+memory_data = memory_data if isinstance(memory_data, dict) else {}
+
 flag_high_threat_players(memory_data)
-       # -----------------------------------------
+# -----------------------------------------
 # State updates (WAR ENGINE TRIGGERS HERE)
 # -----------------------------------------
 
