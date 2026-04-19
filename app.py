@@ -877,6 +877,7 @@ queue_lock = threading.Lock()
 # -----------------------------
 last_activity_time = time.time()
 last_idle_message_time = 0
+last_idle_message = None
 last_commander_tick = 0
 last_action_tick = 0
 
@@ -1417,10 +1418,13 @@ fallback_replies = [
     "Interference detected. Surveillance continues."
 ]
 
+# Backward-compat safety for any stale idle code paths
+idle_messages_generic = list(IDLE_MESSAGES["idle"])
+
 # -----------------------------
 # Idle Message Selector
 # -----------------------------
-def get_idle_message(memory_data=None):
+def get_idle_message_v1_disabled(memory_data=None):
     """
     Returns a context-aware idle message based on global threat level.
     """
@@ -7982,7 +7986,9 @@ def chat_1():
 
         if source == "minecraft" and reply:
             delivered = send_to_minecraft(reply)
-            if not delivered:
+            if delivered:
+                log(f"Minecraft reply delivered for {player_name}", level="INFO")
+            else:
                 log(f"Minecraft reply delivery failed for {player_name}", level="WARN")
 
         memory_data["players"][canonical_id] = player_record
