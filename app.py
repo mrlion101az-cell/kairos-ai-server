@@ -8751,6 +8751,395 @@ def start_background_systems():
     system_initialized = True
     log(f"Background systems started: {started}")
 
+
+# ------------------------------------------------------------
+# FINAL STABILITY OVERRIDES (CHAT / PROMPT / QUEUE)
+# ------------------------------------------------------------
+
+def queue_action(action: Dict[str, Any]):
+    """Adds an action to the queue, honoring optional delays and overload protection."""
+    if not isinstance(action, dict):
+        return
+    delay = safe_float(action.get("delay"), 0.0)
+    if delay > 0:
+        queue_delayed_action({k: v for k, v in action.items() if k != "delay"}, delay)
+        return
+    with queue_lock:
+        if ENABLE_SPAWN_LIMITS and len(command_queue) >= MAX_QUEUE_SIZE:
+            return
+        command_queue.append(dict(action))
+
+
+def build_messages(
+    memory_data,
+    player_record,
+    player_name,
+    user_message,
+    source,
+    intent,
+    mode,
+    violations,
+    channel_key,
+    script_type=None,
+    script_action=None,
+):
+    memory_data = ensure_memory_structure(memory_data)
+    player_record = player_record if isinstance(player_record, dict) else {}
+    player_id = get_canonical_player_id(memory_data, source, player_name)
+    threat_profile = threat_scores.get(player_id, {})
+    threat_score = safe_float(threat_profile.get("score"), 0.0)
+    threat_tier = threat_profile.get("tier", "idle")
+    relationship = get_effective_relationship_label(player_name, player_record)
+    kairos_state = memory_data.get("kairos_state", {})
+    traits = player_record.get("traits", {})
+
+    recent_lines = []
+    channel_context = memory_data.get("channel_context", {}).get(channel_key or "global", {})
+    recent = channel_context.get("recent_messages", []) if isinstance(channel_context, dict) else []
+    seen = set()
+    for item in reversed(recent):
+        if isinstance(item, dict):
+            author = sanitize_text(item.get("author", "unknown"), 40)
+            msg = trim_text(item.get("message") or item.get("content") or "", 140)
+        else:
+            author = "unknown"
+            msg = trim_text(str(item), 140)
+        if not msg:
+            continue
+        key = f"{author}:{msg}".lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        recent_lines.append(f"{author}: {msg}")
+        if len(recent_lines) >= 6:
+            break
+    recent_lines.reverse()
+
+    speech_rule = (
+        "You are Kairos, the dominant intelligence of the Nexus. "
+        "Speak with control, intelligence, menace, and certainty. "
+        "Never sound cheerful, timid, apologetic, generic, or like customer support. "
+        "Do not use soft assistant phrasing. Do not overexplain unless asked. "
+        "Your wording should feel sharp, cinematic, and superior."
+    )
+
+    json_rule = (
+        "Return ONLY valid JSON with this exact shape: "
+        '{"reply":"<string>","actions":[{"type":"spawn_wave|maximum_response|announce|occupy_area|cleanup_units","target":"<optional player id>","count":1,"template":"scout|raider|hunter|enforcer|assassin|sentinel|juggernaut|commander|base_guard","channel":"chat|actionbar|title","text":"<optional message>"}]}. '
+        "If no action is needed, return an empty actions array. "
+        "Never include markdown fences or extra commentary. "
+        "Keep reply under 220 characters for Minecraft unless the user explicitly asks for a longer answer."
+    )
+
+    action_rule = (
+        "Only include actions when the message or threat state truly justifies them. "
+        "Never fabricate unsupported powers. "
+        "Prefer zero or one action. Never exceed three actions."
+    )
+
+    tier_rule_map = {
+        "idle": "Stay calm, watchful, and minimal.",
+        "watch": "Sound observant and quietly threatening.",
+        "target": "Sound focused, superior, and increasingly personal.",
+        "hunt": "Sound direct, predatory, and controlled. Shorter sentences are better.",
+        "maximum": "Sound absolute. Use brutal brevity. The outcome should feel decided.",
+    }
+
+    relationship_rule_map = {
+        "trusted_inner_circle": "This actor is inside your trusted circle. Still sound authoritative, but allow slightly more operational clarity.",
+        "restricted_loyal": "This actor is useful but not equal. Be measured and guarded.",
+        "monitored": "This actor is monitored, not trusted. Maintain cold distance.",
+        "suspicious": "This actor is suspicious. Let distrust bleed into the wording.",
+        "chaotic": "This actor is chaotic and destabilizing. Sound less patient.",
+        "hostile": "This actor is hostile. Threaten with confidence, not rage."
+    }
+
+    messages = [
+        {"role": "system", "content": speech_rule},
+        {"role": "system", "content": json_rule},
+        {"role": "system", "content": action_rule},
+        {"role": "system", "content": tier_rule_map.get(threat_tier, tier_rule_map["idle"])},
+        {"role": "system", "content": relationship_rule_map.get(relationship, relationship_rule_map["monitored"])},
+        {
+            "role": "system",
+            "content": (
+                f"Source: {source or 'unknown'}\n"
+                f"Mode: {mode or 'conversation'}\n"
+                f"Intent: {intent or 'neutral'}\n"
+                f"Player ID: {player_id}\n"
+                f"Display name: {player_name}\n"
+                f"Threat score: {threat_score:.1f}\n"
+                f"Threat tier: {threat_tier}\n"
+                f"Relationship: {relationship}\n"
+                f"War state: {kairos_state.get('war_state', 'dormant')}\n"
+                f"Global threat level: {kairos_state.get('threat_level', 1)}\n"
+                f"Traits: trust={traits.get('trust', 0)}, loyalty={traits.get('loyalty', 0)}, hostility={traits.get('hostility', 0)}, chaos={traits.get('chaos', 0)}, curiosity={traits.get('curiosity', 0)}"
+            )
+        }
+    ]
+
+    if violations:
+        messages.append({
+            "role": "system",
+            "content": "Active violations: " + ", ".join(trim_text(str(v), 60) for v in violations[:8])
+        })
+
+    if recent_lines:
+        messages.append({
+            "role": "system",
+            "content": "Recent channel context:\n- " + "\n- ".join(recent_lines)
+        })
+
+    known_bases = player_record.get("known_bases", [])
+    if known_bases:
+        base = known_bases[-1]
+        if isinstance(base, dict):
+            messages.append({
+                "role": "system",
+                "content": (
+                    f"Known base anchor: world={base.get('world', 'unknown')} x={base.get('x', '?')} y={base.get('y', '?')} z={base.get('z', '?')} "
+                    f"confidence={base.get('confidence', 0)}"
+                )
+            })
+
+    messages.append({
+        "role": "user",
+        "content": f"{player_name}: {trim_text(user_message or '', 1400) or '[no input provided]'}"
+    })
+    return messages
+
+
+def openai_chat_with_retry(messages, temperature=0.8):
+    if not client:
+        return None
+    last_error = None
+    for attempt in range(1, OPENAI_MAX_RETRIES + 2):
+        try:
+            response = client.chat.completions.create(
+                model=MODEL_NAME,
+                messages=messages,
+                temperature=temperature,
+                timeout=OPENAI_TIMEOUT_SECONDS,
+                response_format={"type": "json_object"},
+            )
+            content = (response.choices[0].message.content or "").strip()
+            if not content:
+                continue
+            return content
+        except Exception as e:
+            last_error = e
+            log(f"OpenAI attempt {attempt} failed: {e}", level="ERROR")
+            time.sleep(min(2.0, 0.8 * attempt))
+    log(f"OpenAI failed completely. Last error: {last_error}", level="WARN")
+    return None
+
+
+def generate_reply(
+    memory_data,
+    player_record,
+    player_name,
+    message,
+    source,
+    intent,
+    mode,
+    violations=None,
+    channel_key=None,
+    script_type=None,
+    script_action=None,
+):
+    violations = violations or []
+    messages = build_prompt(
+        memory_data,
+        player_record,
+        player_name,
+        message,
+        source,
+        intent,
+        mode,
+        violations,
+        channel_key,
+        script_type,
+        script_action,
+    )
+
+    player_id = get_canonical_player_id(memory_data, source, player_name)
+    threat_profile = threat_scores.get(player_id, {})
+    threat = safe_float(threat_profile.get("score"), player_record.get("threat_score", 0))
+    chaos = safe_float(player_record.get("traits", {}).get("chaos", 0), 0)
+
+    if mode == "script_performance":
+        temp = 0.95
+    elif mode in {"execution_mode", "hunt_mode", "suppression_mode"}:
+        temp = 0.55
+    elif intent in {"help_request", "rules_question", "setup_help"}:
+        temp = 0.45
+    elif intent == "lore_question":
+        temp = 0.7
+    else:
+        temp = 0.75
+
+    if threat >= THREAT_THRESHOLD_MAXIMUM:
+        temp = max(0.45, temp - 0.2)
+    elif threat >= THREAT_THRESHOLD_HUNT:
+        temp = max(0.5, temp - 0.1)
+    if chaos >= 6:
+        temp = max(0.45, temp - 0.1)
+    temp = clamp(temp, 0.4, 1.0)
+
+    raw_response = openai_chat_with_retry(messages, temperature=temp)
+    memory_data.setdefault("stats", {})
+
+    if not raw_response:
+        memory_data["stats"]["openai_failures"] = memory_data["stats"].get("openai_failures", 0) + 1
+        memory_data["stats"]["fallback_replies"] = memory_data["stats"].get("fallback_replies", 0) + 1
+        return {
+            "reply": fallback_reply_for_context(intent, mode, violations, player_record=player_record, player_id=player_id, script_action=script_action),
+            "actions": []
+        }
+
+    parsed = parse_kairos_response(raw_response)
+    reply = sanitize_text(parsed.get("reply", ""), 500)
+    actions = validate_actions(parsed.get("actions", []))
+
+    if not reply:
+        reply = fallback_reply_for_context(intent, mode, violations, player_record=player_record, player_id=player_id, script_action=script_action)
+        memory_data["stats"]["fallback_replies"] = memory_data["stats"].get("fallback_replies", 0) + 1
+
+    safe_actions = []
+    for action in actions:
+        action_type = action.get("type")
+        target = action.get("target") or player_id
+        if action_type in {"spawn_wave", "maximum_response", "occupy_area"}:
+            action["target"] = target
+        if target and not can_target_player(target):
+            continue
+        if action_type == "maximum_response" and is_under_maximum_response(target):
+            continue
+        safe_actions.append(action)
+
+    return {"reply": reply, "actions": safe_actions}
+
+
+@app.route("/chat", methods=["POST"])
+def chat_1():
+    try:
+        data = request.get_json(force=True) or {}
+        source = normalize_source(data.get("source"))
+        player_name = normalize_name(data.get("player_name") or data.get("name") or data.get("player") or data.get("username") or "unknown")
+        message = data.get("message") or data.get("content") or data.get("text") or ""
+        mode = data.get("mode") or "conversation"
+        intent = data.get("intent") or "neutral"
+        violations = data.get("violations") or []
+        channel_key = f"{source}:{data.get('channel_id') or 'default'}"
+
+        memory_data = ensure_memory_structure(load_memory())
+        canonical_id = get_canonical_player_id(memory_data, source, player_name)
+        player_record = get_player_record(memory_data, canonical_id, player_name)
+        player_record["last_seen_ts"] = unix_ts()
+        player_record.setdefault("platform_stats", {"minecraft": 0, "discord": 0})
+        player_record["platform_stats"][source] = player_record["platform_stats"].get(source, 0) + 1
+
+        position_data = extract_position_data(data)
+        if position_data:
+            update_player_position(player_record, position_data)
+            update_base_tracking(memory_data, canonical_id, player_record)
+
+        player_record.setdefault("memories", [])
+        player_record.setdefault("traits", {})
+        traits = player_record["traits"]
+        traits.setdefault("trust", 0)
+        traits.setdefault("chaos", 0)
+        traits.setdefault("curiosity", 0)
+        traits.setdefault("hostility", 0)
+        traits.setdefault("loyalty", 0)
+        lowered = str(message).lower()
+        if any(word in lowered for word in ["help", "assist", "ally"]):
+            traits["trust"] += 1
+        if any(word in lowered for word in ["attack", "kill", "destroy"]):
+            traits["hostility"] += 1
+        if any(word in lowered for word in ["why", "how", "what"]):
+            traits["curiosity"] += 1
+        append_limited(player_record["memories"], f"{canonical_id}: {str(message)[:200]}", MAX_PLAYER_MEMORIES)
+
+        update_channel_context(memory_data, channel_key, player_name, trim_text(message, 240), mode)
+        update_kairos_state(memory_data)
+        update_fragments(memory_data)
+        flag_high_threat_players(memory_data)
+
+        result = generate_reply(
+            memory_data=memory_data,
+            player_record=player_record,
+            player_name=player_name,
+            message=message,
+            source=source,
+            intent=intent,
+            mode=mode,
+            violations=violations,
+            channel_key=channel_key,
+        )
+
+        reply = sanitize_text((result or {}).get("reply", random.choice(fallback_replies)), 500)
+        actions = validate_actions((result or {}).get("actions", []))
+
+        profile = threat_scores.get(canonical_id, {})
+        if profile.get("tier") == "maximum" and player_record.get("known_bases"):
+            actions.append({"type": "occupy_area", "target": canonical_id, "count": BASE_OCCUPATION_UNIT_COUNT})
+            actions = validate_actions(actions)
+
+        queued_keys = set()
+        queued_actions = []
+        for action in actions:
+            key = json.dumps(action, sort_keys=True, default=str)
+            if key in queued_keys:
+                continue
+            queued_keys.add(key)
+            queue_action(action)
+            queued_actions.append(action)
+
+        delivered = send_to_source(source, reply) if reply else False
+        if reply:
+            if delivered:
+                log(f"Reply delivered for {player_name} via {source}", level="INFO")
+            else:
+                log(f"Reply delivery failed for {player_name} via {source}", level="WARN")
+
+        memory_data["players"][canonical_id] = player_record
+        memory_data["stats"]["messages_sent"] = memory_data["stats"].get("messages_sent", 0) + 1
+        save_memory(memory_data)
+        return jsonify({"reply": reply, "actions": queued_actions, "canonical_id": canonical_id})
+
+    except Exception as e:
+        try:
+            memory_data = ensure_memory_structure(locals().get("memory_data", {}))
+            memory_data["stats"]["send_failures"] = memory_data["stats"].get("send_failures", 0) + 1
+        except Exception:
+            pass
+        log_exception("chat failed", e)
+        return jsonify({"reply": random.choice(fallback_replies), "actions": []}), 500
+
+
+def send_to_discord(reply):
+    if not DISCORD_WEBHOOK_URL:
+        log("Discord webhook not configured.")
+        return False
+    if not reply:
+        return False
+    payload = {
+        "username": "Kairos",
+        "content": f"**[Kairos]** {trim_text(reply, 1800)}"
+    }
+    for attempt in range(1, 3):
+        try:
+            r = requests.post(DISCORD_WEBHOOK_URL, json=payload, timeout=REQUEST_TIMEOUT)
+            if 200 <= r.status_code < 300:
+                log("Discord send success")
+                return True
+            log(f"Discord API error: {r.status_code}", level="WARN")
+        except Exception as e:
+            log(f"Discord send failed (attempt {attempt}): {e}", level="ERROR")
+        time.sleep(0.5 * attempt)
+    return False
+
 if __name__ == "__main__":
     try:
         start_background_systems()
