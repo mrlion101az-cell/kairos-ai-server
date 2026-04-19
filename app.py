@@ -2421,7 +2421,7 @@ def load_memory():
                     data = json.load(f)
                     return ensure_memory_structure(data)
             except Exception as e:
-                log(f"Failed to load memory file: {e}", "ERROR")
+    log(f"Failed to load memory file: {e}", "ERROR")
 
         return ensure_memory_structure({})
 
@@ -2439,7 +2439,7 @@ def save_memory(memory_data):
             return True
 
         except Exception as e:
-            log(f"Failed to save memory file: {e}", "ERROR")
+    log(f"Failed to save memory file: {e}", "ERROR")
             return False
 
 
@@ -2464,7 +2464,7 @@ def sync_runtime_to_memory(memory_data):
         memory_data["active_engagements"] = active_engagements
 
     except Exception as e:
-        log(f"Runtime → Memory sync failed: {e}", "ERROR")
+    log(f"Runtime → Memory sync failed: {e}", "ERROR")
 
 
 def sync_memory_to_runtime(memory_data):
@@ -2489,7 +2489,7 @@ def sync_memory_to_runtime(memory_data):
         active_engagements.update(memory_data.get("active_engagements", {}))
 
     except Exception as e:
-        log(f"Memory → Runtime sync failed: {e}", "ERROR")
+    log(f"Memory → Runtime sync failed: {e}", "ERROR")
 
 # ------------------------------------------------------------
 # Channel Context (Kairos Context Intelligence Layer)
@@ -2853,7 +2853,7 @@ def add_world_event(memory_data, event_type, actor=None, source=None, details=No
 
     except Exception as e:
         if ENABLE_DEBUG_LOGGING:
-            log(f"World event tracking error: {e}", "ERROR")
+    log(f"World event tracking error: {e}", "ERROR")
 
     return event
 
@@ -6375,7 +6375,7 @@ def openai_chat_with_retry(messages, temperature=0.8):
 
         except Exception as e:
             last_error = e
-            log(f"OpenAI attempt {attempt} failed: {e}", level="ERROR")
+    log(f"OpenAI attempt {attempt} failed: {e}", level="ERROR")
 
             # Slight backoff
             time.sleep(min(2.0, 0.8 * attempt))
@@ -6598,7 +6598,7 @@ def queue_actions_from_ai(parsed_response):
         # Lightweight logging
         # -----------------------------
         try:
-            log(f"Queued action: {action_type} → {target}", level="INFO")
+    log(f"Queued action: {action_type} → {target}", level="INFO")
         except Exception:
             pass
 # ------------------------------------------------------------
@@ -6723,7 +6723,7 @@ def commander_loop():
             process_command_queue()
 
         except Exception as e:
-            log(f"Commander loop error: {e}", level="ERROR")
+    log(f"Commander loop error: {e}", level="ERROR")
             time.sleep(1)
 
 
@@ -6796,10 +6796,10 @@ def execute_action(action):
             handle_cleanup_units(action)
 
         else:
-            log(f"Unknown action type: {action_type}", level="WARN")
+    log(f"Unknown action type: {action_type}", level="WARN")
 
     except Exception as e:
-        log(f"Action execution failed: {action_type} | {e}", level="ERROR")
+    log(f"Action execution failed: {action_type} | {e}", level="ERROR")
 
 
 # ------------------------------------------------------------
@@ -6865,7 +6865,7 @@ def handle_cleanup_units(action):
 
 def send_mc_command(command):
     if not MC_HTTP_URL or not MC_HTTP_TOKEN:
-        log("MC HTTP not configured", level="WARN")
+    log("MC HTTP not configured", level="WARN")
         return
 
     try:
@@ -6876,7 +6876,7 @@ def send_mc_command(command):
             timeout=REQUEST_TIMEOUT
         )
     except Exception as e:
-        log(f"MC command failed: {e}", level="ERROR")
+    log(f"MC command failed: {e}", level="ERROR")
 
 # ------------------------------------------------------------
 # Minecraft / Discord Send (Hardened + Reliable)
@@ -6884,7 +6884,7 @@ def send_mc_command(command):
 
 def send_http_commands(command_list):
     if not MC_HTTP_URL or not MC_HTTP_TOKEN:
-        log("Minecraft send skipped: MC_HTTP not configured.")
+    log("Minecraft send skipped: MC_HTTP not configured.")
         return False
 
     if not command_list:
@@ -6910,13 +6910,13 @@ def send_http_commands(command_list):
             )
 
             if 200 <= r.status_code < 300:
-                log(f"MC send success ({len(command_list)} cmds)")
+    log(f"MC send success ({len(command_list)} cmds)")
                 return True
 
-            log(f"MC API error: {r.status_code}", level="WARN")
+    log(f"MC API error: {r.status_code}", level="WARN")
 
         except Exception as e:
-            log(f"MC send failed (attempt {attempt}): {e}", level="ERROR")
+    log(f"MC send failed (attempt {attempt}): {e}", level="ERROR")
 
         time.sleep(min(1.5, 0.5 * attempt))
 
@@ -6943,7 +6943,7 @@ def send_to_minecraft(reply):
 
 def send_to_discord(reply):
     if not DISCORD_WEBHOOK_URL:
-        log("Discord webhook not configured.")
+    log("Discord webhook not configured.")
         return False
 
     if not reply:
@@ -6963,13 +6963,13 @@ def send_to_discord(reply):
             )
 
             if 200 <= r.status_code < 300:
-                log("Discord send success")
+    log("Discord send success")
                 return True
 
-            log(f"Discord API error: {r.status_code}", level="WARN")
+    log(f"Discord API error: {r.status_code}", level="WARN")
 
         except Exception as e:
-            log(f"Discord send failed (attempt {attempt}): {e}", level="ERROR")
+    log(f"Discord send failed (attempt {attempt}): {e}", level="ERROR")
 
         time.sleep(0.5 * attempt)
 
@@ -7028,7 +7028,7 @@ def queue_action(action):
     # Prevent queue overflow
     # -----------------------------
     if len(command_queue) >= MAX_QUEUE_SIZE:
-        log("Action queue full, dropping action.", level="WARN")
+    log("Action queue full, dropping action.", level="WARN")
         return
 
     sig = _action_signature(action)
@@ -7126,10 +7126,10 @@ def execute_action(action):
             handle_cleanup_units(action)
 
         else:
-            log(f"Unknown action type: {action_type}", level="WARN")
+    log(f"Unknown action type: {action_type}", level="WARN")
 
     except Exception as e:
-        log(f"Action failed: {action_type} -> {e}", level="ERROR")
+    log(f"Action failed: {action_type} -> {e}", level="ERROR")
                # -----------------------------
         # Template → Mob Type Mapping
         # -----------------------------
@@ -7158,7 +7158,7 @@ def execute_action(action):
     # -----------------------------
     if commands:
         send_http_commands(commands)
-        log(f"Wave spawned: {template} x{count} → {target}", level="INFO")
+    log(f"Wave spawned: {template} x{count} → {target}", level="INFO")
 
         # -------------------------------
         # MAXIMUM RESPONSE (Controlled + Cinematic + Scalable)
@@ -7217,7 +7217,7 @@ def execute_action(action):
             # -----------------------------
             def release():
                 set_maximum_response(target, False)
-                log(f"Maximum response ended → {target}", level="INFO")
+    log(f"Maximum response ended → {target}", level="INFO")
 
             delayed_actions.append({
                 "type": "internal_release",
@@ -7225,7 +7225,7 @@ def execute_action(action):
                 "callback": release
             })
 
-            log(f"MAX RESPONSE initiated → {target}", level="WARN")
+    log(f"MAX RESPONSE initiated → {target}", level="WARN")
 
         # -------------------------------
         # ANNOUNCE (Flexible + Safe + Cinematic)
@@ -7271,7 +7271,7 @@ def execute_action(action):
             else:
                 send_to_minecraft(text)
 
-            log(f"Announce → {channel}: {text}", level="INFO")
+    log(f"Announce → {channel}: {text}", level="INFO")
 
         # -------------------------------
         # CLEANUP (Safe + Flexible + Scalable)
@@ -7299,7 +7299,7 @@ def execute_action(action):
 
             if commands:
                 send_http_commands(commands)
-                log(f"Cleanup executed → {'targeted ' + target if target else 'global'}", level="INFO")
+    log(f"Cleanup executed → {'targeted ' + target if target else 'global'}", level="INFO")
            # -----------------------------
 # Action Loop Tick
 # -----------------------------
@@ -7427,10 +7427,10 @@ def idle_loop():
                     last_idle_message_time = unix_ts()
                     last_activity_time = unix_ts()
 
-                log(f"Idle message sent: {msg}")
+    log(f"Idle message sent: {msg}")
 
         except Exception as e:
-            log(f"Idle loop error: {e}", level="ERROR")
+    log(f"Idle loop error: {e}", level="ERROR")
 
         time.sleep(IDLE_CHECK_INTERVAL)
 
@@ -7501,10 +7501,10 @@ def maybe_summarize(player_record):
 
             player_record["last_summary_ts"] = unix_ts()
 
-            log(f"Summary created for {player_record.get('display_name')}", level="INFO")
+    log(f"Summary created for {player_record.get('display_name')}", level="INFO")
 
     except Exception as e:
-        log(f"Failed to summarize history: {e}", level="ERROR")
+    log(f"Failed to summarize history: {e}", level="ERROR")
 
 # ------------------------------------------------------------
 # Private Notes (Upgraded Intelligence - Strategic Memory)
@@ -7580,7 +7580,7 @@ def maybe_create_private_note(player_record, player_id, player_name, source, mes
 
         player_record["last_note_ts"] = unix_ts()
 
-        log(f"Private note created → {player_name}: {note}", level="INFO")
+    log(f"Private note created → {player_name}: {note}", level="INFO")
 # --------------------------------------------------------
 # Heuristic fallback (Controlled + Deduplicated)
 # --------------------------------------------------------
@@ -7687,7 +7687,7 @@ def handle_model_notes(
                 player_record["last_model_note_ts"] = unix_ts()
 
     except Exception as e:
-        log(f"Model note generation failed: {e}", level="ERROR")
+    log(f"Model note generation failed: {e}", level="ERROR")
                 # -----------------------------
         # Quality filter (skip weak notes)
         # -----------------------------
@@ -7725,10 +7725,10 @@ def handle_model_notes(
 
         player_record["last_model_note_ts"] = unix_ts()
 
-        log(f"Model note created → {player_name}", level="INFO")
+    log(f"Model note created → {player_name}", level="INFO")
 
     except Exception as e:
-        log(f"Private note generation failed: {e}", level="ERROR")
+    log(f"Private note generation failed: {e}", level="ERROR")
 
 
 # ------------------------------------------------------------
@@ -7941,7 +7941,7 @@ def register_message_stats(memory_data, source, player_record):
                 THREAT_MAX_CAP
             )
 
-            log(
+    log(
                 f"Spam behavior detected → {player_record.get('display_name')}",
                 level="WARN"
             )
@@ -8166,7 +8166,7 @@ if actions:
 
         memory_data["stats"]["script_route_calls"] += 1
 
-        log(
+    log(
             f"Actions queued → {player_name}: {[a.get('type') for a in safe_actions]}",
             level="INFO"
         )
@@ -8793,7 +8793,7 @@ if reply:
         memory_data.setdefault("stats", {}).setdefault("send_failures", 0)
 memory_data["stats"]["send_failures"] += 1
 
-        log(
+    log(
             f"Send failed → source={source}, player={player_name}",
             level="ERROR"
         )
@@ -9043,7 +9043,7 @@ def event_ingest():
         with memory_lock:
             save_memory(memory_data)
 
-        log(f"EVENT INGESTED: {event_type} -> {content[:120]}")
+    log(f"EVENT INGESTED: {event_type} -> {content[:120]}")
 
         return jsonify({"status": "ok"})
 
@@ -9368,12 +9368,12 @@ def chat():
                 memory_data.setdefault("stats", {}).setdefault("send_failures", 0)
 memory_data["stats"]["send_failures"] += 1
 
-                log(
+    log(
                     f"Send failed → source={source}, player={player_name}",
                     level="ERROR"
                 )
         else:
-            log("Skipped send: empty reply", level="WARN")
+    log("Skipped send: empty reply", level="WARN")
 
         # -----------------------------------------
         # History + intelligence logging
@@ -9409,7 +9409,7 @@ memory_data["stats"]["send_failures"] += 1
             memory_data["stats"]["memory_saves"] += 1
 
         except Exception as save_err:
-            log(f"Memory save failed: {save_err}", level="ERROR")
+    log(f"Memory save failed: {save_err}", level="ERROR")
             memory_data["stats"]["memory_save_failures"] += 1
         # -----------------------------------------
         # Timing stats
@@ -9592,7 +9592,7 @@ def mission():
                 memory_cache_last_load = unix_ts()
 
         except Exception as save_err:
-            log(f"Mission save failed: {save_err}", level="ERROR")
+    log(f"Mission save failed: {save_err}", level="ERROR")
 
         return jsonify({
             "reply": "Directive issued.",
@@ -9667,13 +9667,13 @@ def start_background_systems():
     global background_started
 
     if background_started:
-        log("Background systems already initialized. Skipping duplicate start.")
+    log("Background systems already initialized. Skipping duplicate start.")
         return
 
     background_started = True
 
     try:
-        log("Initializing Kairos background systems...")
+    log("Initializing Kairos background systems...")
 
         # -----------------------------------------
         # Idle loop (presence / atmosphere)
@@ -9684,7 +9684,7 @@ def start_background_systems():
             daemon=True
         )
         idle_thread.start()
-        log("Idle loop started.")
+    log("Idle loop started.")
 
         # -----------------------------------------
         # Action loop (WAR ENGINE)
@@ -9695,7 +9695,7 @@ def start_background_systems():
             daemon=True
         )
         action_thread.start()
-        log("Action loop started.")
+    log("Action loop started.")
 
         # -----------------------------------------
         # Optional: future expansion hooks
@@ -9708,9 +9708,9 @@ def start_background_systems():
                     daemon=True
                 )
                 thread.start()
-                log(f"{name} started.")
+    log(f"{name} started.")
             except Exception as e:
-                log(f"{name} failed to start: {e}", level="ERROR")
+    log(f"{name} failed to start: {e}", level="ERROR")
 
         # Toggle flags
         ENABLE_TELEMETRY = False
@@ -9722,7 +9722,7 @@ def start_background_systems():
         if ENABLE_MISSION_LOOP:
             start_optional_system("mission_loop", mission_loop)
 
-        log("Kairos systems fully online.")
+    log("Kairos systems fully online.")
 
     except Exception as e:
         log_exception("BACKGROUND INIT FAILURE", e)
