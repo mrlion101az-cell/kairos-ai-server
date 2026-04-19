@@ -6296,7 +6296,12 @@ def build_messages(
         channel_lines = []
 
         for item in reversed(channel_context):
-            author = item.get("author", "unknown")
+            if isinstance(item, dict):
+        author = item.get("author", "unknown")
+        content = item.get("message") or item.get("content") or ""
+    else:
+        author = "unknown"
+        content = str(item)
             msg = item.get("message", "")
 
             key = f"{author}:{msg}".lower()
