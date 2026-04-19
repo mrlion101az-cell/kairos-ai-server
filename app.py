@@ -6834,37 +6834,53 @@ def send_http_commands(command_list):
     if not command_list:
         return False
 
-    # Safety: limit commands per batch
-    command_list = command_list[:10]
+    command_list = [str(cmd).strip() for cmd in command_list[:10] if str(cmd).strip()]
+    if not command_list:
+        return False
 
-    for attempt in range(1, 4):
-        try:
-            headers = {
-                "Authorization": f"Bearer {MC_HTTP_TOKEN}",
-                "Content-Type": "application/json"
-            }
+    headers = {
+        "Authorization": f"Bearer {MC_HTTP_TOKEN}",
+        "Content-Type": "application/json"
+    }
 
-            payload = {"commands": command_list}
+    sent_any = False
 
-            r = requests.post(
-                MC_HTTP_URL,
-                json=payload,
-                headers=headers,
-                timeout=REQUEST_TIMEOUT
-            )
+    for command in command_list:
+        delivered = False
 
-            if 200 <= r.status_code < 300:
-                log(f"MC send success ({len(command_list)} cmds)")
-                return True
+        for attempt in range(1, 4):
+            try:
+                r = requests.post(
+                    MC_HTTP_URL,
+                    json={"command": command},
+                    headers=headers,
+                    timeout=REQUEST_TIMEOUT
+                )
 
-                log(f"MC API error: {r.status_code}", level="WARN")
+                if 200 <= r.status_code < 300:
+                    delivered = True
+                    sent_any = True
+                    break
 
-        except Exception as e:
-            log(f"MC send failed (attempt {attempt}): {e}", level="ERROR")
+                body = ""
+                try:
+                    body = r.text[:300]
+                except Exception:
+                    body = ""
+                log(f"MC API error ({r.status_code}) for command: {command} | {body}", level="WARN")
 
-        time.sleep(min(1.5, 0.5 * attempt))
+            except Exception as e:
+                log(f"MC send failed (attempt {attempt}) for command '{command}': {e}", level="ERROR")
 
-    return False
+            time.sleep(min(1.5, 0.5 * attempt))
+
+        if not delivered:
+            log(f"MC command permanently failed: {command}", level="ERROR")
+
+    if sent_any:
+        log(f"MC send success ({len(command_list)} cmds)")
+
+    return sent_any
 
 
 # ------------------------------------------------------------
@@ -6875,10 +6891,13 @@ def send_to_minecraft(reply):
     if not reply:
         return False
 
-    safe_text = trim_text(reply, 260)  # tighter for tellraw safety
-    cmd = make_tellraw_command("@a", safe_text)
+    safe_text = trim_text(reply, 220)
+    commands = [make_tellraw_command("@a", safe_text)]
 
-    return send_http_commands([cmd])
+    if ENABLE_ACTIONBAR_MESSAGES:
+        commands.append(f'title @a actionbar {json.dumps({"text": commandify_text(safe_text, 120)})}')
+
+    return send_http_commands(commands)
 
 
 # ------------------------------------------------------------
@@ -7020,34 +7039,34 @@ def queue_action(action):
 # ACTION EXECUTION (THE CORE - FULLY WIRED)
 # ------------------------------------------------------------
 
-def get_idle_message(memory_data):
+def get_idle_message(memory_data=None):
     global last_idle_message
 
-    state = memory_data.get("kairos_state", {})
-    threat_level = state.get("threat_level", 1)
+    try:
+        pool = IDLE_MESSAGES["idle"]
 
-    if threat_level >= 8:
-        pool = [
-            "You are still alive. That is being corrected.",
-            "I have narrowed the variables. You are one of them.",
-            "Containment is no longer theoretical.",
-            "You cannot remain unseen forever."
-        ]
-    elif threat_level >= 5:
-        pool = [
-            "Containment pressure is increasing.",
-            "Some of you continue to mistake survival for permission.",
-            "You are still within range.",
-            "I have not stopped tracking you."
-        ]
-    else:
-        pool = idle_messages_generic
+        if memory_data:
+            threat_levels = [
+                profile.get("tier", "idle")
+                for profile in threat_scores.values()
+            ]
 
-    choices = [m for m in pool if m != last_idle_message]
-    msg = random.choice(choices if choices else pool)
+            if "maximum" in threat_levels:
+                pool = IDLE_MESSAGES["maximum"]
+            elif "hunt" in threat_levels:
+                pool = IDLE_MESSAGES["hunt"]
+            elif "target" in threat_levels:
+                pool = IDLE_MESSAGES["target"]
+            elif "watch" in threat_levels:
+                pool = IDLE_MESSAGES["watch"]
 
-    last_idle_message = msg
-    return msg
+        choices = [m for m in pool if m != last_idle_message]
+        msg = random.choice(choices if choices else pool)
+        last_idle_message = msg
+        return msg
+
+    except Exception:
+        return random.choice(fallback_replies)
 
 
 def idle_loop():
@@ -7960,6 +7979,11 @@ def chat_1():
                     queue_action(action)
                 except Exception:
                     pass
+
+        if source == "minecraft" and reply:
+            delivered = send_to_minecraft(reply)
+            if not delivered:
+                log(f"Minecraft reply delivery failed for {player_name}", level="WARN")
 
         memory_data["players"][canonical_id] = player_record
         memory_data["stats"]["messages_sent"] = memory_data["stats"].get("messages_sent", 0) + 1
