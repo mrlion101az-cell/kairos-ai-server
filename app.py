@@ -6814,17 +6814,33 @@ def handle_cleanup_units(action):
 def send_mc_command(command):
     if not MC_HTTP_URL or not MC_HTTP_TOKEN:
         log("MC HTTP not configured", level="WARN")
-        return
+        return False
 
     try:
-        requests.post(
+        response = requests.post(
             MC_HTTP_URL,
-            headers={"Authorization": f"Bearer {MC_HTTP_TOKEN}"},
-            json={"command": command},
+            headers={
+                "Authorization": f"Bearer {MC_HTTP_TOKEN}",
+                "Content-Type": "application/json"
+            },
+            json={"commands": [str(command)]},
             timeout=REQUEST_TIMEOUT
         )
+
+        if 200 <= response.status_code < 300:
+            return True
+
+        body = ""
+        try:
+            body = response.text[:300]
+        except Exception:
+            body = ""
+        log(f"MC command failed ({response.status_code}): {body}", level="WARN")
+        return False
+
     except Exception as e:
         log(f"MC command failed: {e}", level="ERROR")
+        return False
 
 # ------------------------------------------------------------
 # Minecraft / Discord Send (Hardened + Reliable)
@@ -6847,44 +6863,37 @@ def send_http_commands(command_list):
         "Content-Type": "application/json"
     }
 
-    sent_any = False
+    payload = {
+        "commands": command_list
+    }
 
-    for command in command_list:
-        delivered = False
+    for attempt in range(1, 4):
+        try:
+            r = requests.post(
+                MC_HTTP_URL,
+                json=payload,
+                headers=headers,
+                timeout=REQUEST_TIMEOUT
+            )
 
-        for attempt in range(1, 4):
+            if 200 <= r.status_code < 300:
+                log(f"MC send success ({len(command_list)} cmds)")
+                return True
+
+            body = ""
             try:
-                r = requests.post(
-                    MC_HTTP_URL,
-                    json={"command": command},
-                    headers=headers,
-                    timeout=REQUEST_TIMEOUT
-                )
-
-                if 200 <= r.status_code < 300:
-                    delivered = True
-                    sent_any = True
-                    break
-
+                body = r.text[:500]
+            except Exception:
                 body = ""
-                try:
-                    body = r.text[:300]
-                except Exception:
-                    body = ""
-                log(f"MC API error ({r.status_code}) for command: {command} | {body}", level="WARN")
+            log(f"MC API error ({r.status_code}) for commands: {command_list} | {body}", level="WARN")
 
-            except Exception as e:
-                log(f"MC send failed (attempt {attempt}) for command '{command}': {e}", level="ERROR")
+        except Exception as e:
+            log(f"MC send failed (attempt {attempt}) for commands {command_list}: {e}", level="ERROR")
 
-            time.sleep(min(1.5, 0.5 * attempt))
+        time.sleep(min(1.5, 0.5 * attempt))
 
-        if not delivered:
-            log(f"MC command permanently failed: {command}", level="ERROR")
-
-    if sent_any:
-        log(f"MC send success ({len(command_list)} cmds)")
-
-    return sent_any
+    log(f"MC commands permanently failed: {command_list}", level="ERROR")
+    return False
 
 
 # ------------------------------------------------------------
