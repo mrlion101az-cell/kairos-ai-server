@@ -6316,8 +6316,7 @@ def build_messages(
         if channel_lines:
             messages.append({
                 "role": "system",
-                "content": "Recent context:
-- " + "
+                "content": "Recent context:\n- " + "
 - ".join(reversed(channel_lines))
             })
 
