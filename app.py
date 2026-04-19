@@ -5113,19 +5113,23 @@ def adjust_fragments_from_context(memory_data, intent, player_id, player_record,
     # 🔒 Safe threat lookup
     profile = threat_scores.get(player_id, {})
     threat = profile.get("score", 0)
-    # -----------------------------
-    # War Engine Fragment
-    # -----------------------------
-    if intent == "threat" or hostility >= 6 or violations or threat >= THREAT_THRESHOLD_TARGET:
-        fragments["war_engine"]["status"] = "active"
-        fragments["war_engine"]["influence"] = clamp(
-            fragments["war_engine"]["influence"] + 0.05,
-            0.0,
-            1.0
-        )
-    else:
-        fragments["war_engine"]["status"] = "dormant"
+# -----------------------------
+# War Engine Fragment (FIXED)
+# -----------------------------
 
+# 🔒 Ensure war_engine exists
+war_engine = fragments.setdefault("war_engine", {})
+war_engine.setdefault("influence", 0.0)
+
+if intent == "threat" or hostility >= 6 or violations or threat >= THREAT_THRESHOLD_TARGET:
+    war_engine["status"] = "active"
+    war_engine["influence"] = clamp(
+        war_engine["influence"] + 0.05,
+        0.0,
+        1.0
+    )
+else:
+    war_engine["status"] = "dormant"
     # -----------------------------
     # Archive Node (Stability)
     # -----------------------------
@@ -8591,6 +8595,8 @@ def update_kairos_state(*args, **kwargs):
 # 🔒 HARD SAFETY BEFORE CALL
 memory_data = memory_data if isinstance(memory_data, dict) else {}
 player_record = player_record or {}
+violations = violations or []
+player_id = player_id if 'player_id' in locals() else "unknown"
 
 adjust_fragments_from_context(
     memory_data,
