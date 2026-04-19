@@ -7896,7 +7896,7 @@ def generate_script_response(script_text, action="perform", script_type=None):
 # ------------------------------------------------------------
 
 @app.route("/")
-def home():
+def home_1():
     return "Kairos AI Server is running"
 
 
@@ -7959,7 +7959,7 @@ def debug_queue():
 # ------------------------------------------------------------
 
 @app.route("/", methods=["GET", "HEAD"])
-def home():
+def home_2():
     return jsonify({"status": "ok", "service": "Kairos AI Server"})
 
 @app.route("/health", methods=["GET"])
