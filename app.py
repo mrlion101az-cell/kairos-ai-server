@@ -7831,8 +7831,11 @@ def flag_high_threat_players(memory_data):
 # 🔒 Ensure kairos_state exists
 kairos_state = memory_data.setdefault("kairos_state", {})
 
+# 🔒 Ensure threat_list exists
+threat_list = threat_list if 'threat_list' in locals() else []
+
 kairos_state["high_threat_targets"] = [
-    t["name"] for t in threat_list
+    t.get("name", "unknown") for t in threat_list
 ]
 
 kairos_state["high_threat_details"] = threat_list
