@@ -133,9 +133,6 @@ memory_data = globals().get("memory_data") or {}
 if not isinstance(memory_data, dict):
     memory_data = {}
 memory_data.setdefault("identity_links", {})
-# ensure stats
-memory_data.setdefault("stats", {})
-memory_data["stats"].setdefault("send_failures", 0)
 
 # Safe targeting
 targeting_priority = globals().get("targeting_priority", 0.0)
@@ -2317,73 +2314,70 @@ def ensure_memory_structure(memory_data):
     # -----------------------------
     # Core Containers
     # -----------------------------
-    memory_data.setdefault("players", {})
-    memory_data.setdefault("world_memory", [])
-    memory_data.setdefault("world_events", [])
+memory_data.setdefault("players", {})
+memory_data.setdefault("world_memory", [])
+memory_data.setdefault("world_events", [])
 
     # -----------------------------
     # Identity / Linking
     # -----------------------------
-    memory_data.setdefault("identity_links", {})
-# ensure stats
-memory_data.setdefault("stats", {})
-memory_data["stats"].setdefault("send_failures", 0)
+memory_data.setdefault("identity_links", {})
 
     # -----------------------------
     # Missions
     # -----------------------------
-    memory_data.setdefault("active_missions", {})
-    memory_data.setdefault("completed_missions", [])
-    memory_data.setdefault("failed_missions", [])
+memory_data.setdefault("active_missions", {})
+memory_data.setdefault("completed_missions", [])
+memory_data.setdefault("failed_missions", [])
 
     # -----------------------------
     # Lore + State
     # -----------------------------
-    memory_data.setdefault("nexus_lore", deepcopy(NEXUS_CORE_LORE))
-    memory_data.setdefault("kairos_state", deepcopy(DEFAULT_KAIROS_STATE))
-    memory_data.setdefault("system_fragments", deepcopy(DEFAULT_FRAGMENTS))
-    memory_data.setdefault("server_rules", deepcopy(DEFAULT_RULES))
+memory_data.setdefault("nexus_lore", deepcopy(NEXUS_CORE_LORE))
+memory_data.setdefault("kairos_state", deepcopy(DEFAULT_KAIROS_STATE))
+memory_data.setdefault("system_fragments", deepcopy(DEFAULT_FRAGMENTS))
+memory_data.setdefault("server_rules", deepcopy(DEFAULT_RULES))
 
     # -----------------------------
     # Channel Context
     # -----------------------------
-    memory_data.setdefault("channel_context", {})
+memory_data.setdefault("channel_context", {})
 
     # --------------------------------------------------------
     # Threat System (Persistent)
     # --------------------------------------------------------
-    memory_data.setdefault("threat_scores", {})
+memory_data.setdefault("threat_scores", {})
 
     # --------------------------------------------------------
     # Base Tracking (Persistent Territory Memory)
     # --------------------------------------------------------
-    memory_data.setdefault("known_bases", {})
-    memory_data.setdefault("base_history", {})
+memory_data.setdefault("known_bases", {})
+memory_data.setdefault("base_history", {})
 
     # --------------------------------------------------------
     # Telemetry Snapshot Memory
     # --------------------------------------------------------
-    memory_data.setdefault("last_known_positions", {})
-    memory_data.setdefault("region_memory", {})
+memory_data.setdefault("last_known_positions", {})
+memory_data.setdefault("region_memory", {})
 
     # --------------------------------------------------------
     # Army State Persistence
     # --------------------------------------------------------
-    memory_data.setdefault("active_units", {})
-    memory_data.setdefault("active_squads", {})
-    memory_data.setdefault("active_operations", {})
-    memory_data.setdefault("player_unit_map", {})
+memory_data.setdefault("active_units", {})
+memory_data.setdefault("active_squads", {})
+memory_data.setdefault("active_operations", {})
+memory_data.setdefault("player_unit_map", {})
 
     # --------------------------------------------------------
     # Engagement Memory
     # --------------------------------------------------------
-    memory_data.setdefault("active_engagements", {})
-    memory_data.setdefault("engagement_history", {})
+memory_data.setdefault("active_engagements", {})
+memory_data.setdefault("engagement_history", {})
 
     # --------------------------------------------------------
     # Relationship Memory
     # --------------------------------------------------------
-    memory_data.setdefault("relationships", {})
+memory_data.setdefault("relationships", {})
 
     # --------------------------------------------------------
     # System Metrics / Stats
@@ -2701,9 +2695,6 @@ def get_canonical_player_id(memory_data, source, player_name):
 
     # Ensure identity_links exists
     identity_links = memory_data.setdefault("identity_links", {})
-# ensure stats
-memory_data.setdefault("stats", {})
-memory_data["stats"].setdefault("send_failures", 0)
 
     source = str(source or "unknown")
     player_name = str(player_name or "unknown")
@@ -8432,9 +8423,6 @@ if not isinstance(memory_data, dict):
 
 # Ensure identity_links exists
 identity_links = memory_data.setdefault("identity_links", {})
-# ensure stats
-memory_data.setdefault("stats", {})
-memory_data["stats"].setdefault("send_failures", 0)
 
 # Ensure required variables exist
 source = locals().get("source", "unknown")
@@ -8567,11 +8555,8 @@ def lightweight_memory_extraction(*args, **kwargs):
         message = str(message)
 
     # -------- Ensure structures exist --------
-    memory_data.setdefault("world_memory", [])
-    memory_data.setdefault("identity_links", {})
-# ensure stats
-memory_data.setdefault("stats", {})
-memory_data["stats"].setdefault("send_failures", 0)
+memory_data.setdefault("world_memory", [])
+memory_data.setdefault("identity_links", {})
 
     player_record.setdefault("memories", [])
     player_record.setdefault("traits", {})
@@ -8807,8 +8792,7 @@ if reply:
     if success:
         memory_data["stats"]["messages_sent"] += 1
     else:
-        memory_data.setdefault("stats", {}).setdefault("send_failures", 0)
-memory_data["stats"]["send_failures"] += 1
+        memory_data["stats"]["send_failures"] += 1
 
         log(
             f"Send failed → source={source}, player={player_name}",
@@ -9126,10 +9110,7 @@ def chat():
         # -----------------------------
         # Identity linking (CRITICAL)
         # -----------------------------
-        memory_data.setdefault("identity_links", {})
-# ensure stats
-memory_data.setdefault("stats", {})
-memory_data["stats"].setdefault("send_failures", 0)
+memory_data.setdefault("identity_links", {})
 
         source_key = f"{source}:{player_name}".lower()
 
@@ -9385,8 +9366,7 @@ memory_data["stats"].setdefault("send_failures", 0)
             if success:
                 memory_data["stats"]["messages_sent"] += 1
             else:
-                memory_data.setdefault("stats", {}).setdefault("send_failures", 0)
-memory_data["stats"]["send_failures"] += 1
+                memory_data["stats"]["send_failures"] += 1
 
                 log(
                     f"Send failed → source={source}, player={player_name}",
@@ -9475,11 +9455,8 @@ def link_identity():
         # Load memory (safe)
         # -----------------------------
         memory_data = memory_cache if memory_cache else load_memory()
-        memory_data.setdefault("identity_links", {})
-# ensure stats
+memory_data.setdefault("identity_links", {})
 memory_data.setdefault("stats", {})
-memory_data["stats"].setdefault("send_failures", 0)
-        memory_data.setdefault("stats", {})
 
         mc_key = f"minecraft:{minecraft_name}".lower()
         dc_key = f"discord:{discord_name}".lower()
@@ -9542,7 +9519,7 @@ def mission():
         # Load memory (safe)
         # -----------------------------
         memory_data = memory_cache if memory_cache else load_memory()
-        memory_data.setdefault("stats", {})
+memory_data.setdefault("stats", {})
 
         # -----------------------------
         # Resolve player identity
