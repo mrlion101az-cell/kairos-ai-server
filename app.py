@@ -6816,26 +6816,31 @@ def send_mc_command(command):
         log("MC HTTP not configured", level="WARN")
         return False
 
+    if not command:
+        return False
+
+    headers = {
+        "Authorization": f"Bearer {MC_HTTP_TOKEN}",
+        "Content-Type": "application/json"
+    }
+
     try:
-        response = requests.post(
+        r = requests.post(
             MC_HTTP_URL,
-            headers={
-                "Authorization": f"Bearer {MC_HTTP_TOKEN}",
-                "Content-Type": "application/json"
-            },
+            headers=headers,
             json={"commands": [str(command)]},
             timeout=REQUEST_TIMEOUT
         )
 
-        if 200 <= response.status_code < 300:
+        if 200 <= r.status_code < 300:
             return True
 
         body = ""
         try:
-            body = response.text[:300]
+            body = r.text[:300]
         except Exception:
             body = ""
-        log(f"MC command failed ({response.status_code}): {body}", level="WARN")
+        log(f"MC API error ({r.status_code}) for command: {command} | {body}", level="WARN")
         return False
 
     except Exception as e:
@@ -6863,26 +6868,24 @@ def send_http_commands(command_list):
         "Content-Type": "application/json"
     }
 
-    payload = {
-        "commands": command_list
-    }
+    delivered = False
 
     for attempt in range(1, 4):
         try:
             r = requests.post(
                 MC_HTTP_URL,
-                json=payload,
+                json={"commands": command_list},
                 headers=headers,
                 timeout=REQUEST_TIMEOUT
             )
 
             if 200 <= r.status_code < 300:
-                log(f"MC send success ({len(command_list)} cmds)")
-                return True
+                delivered = True
+                break
 
             body = ""
             try:
-                body = r.text[:500]
+                body = r.text[:300]
             except Exception:
                 body = ""
             log(f"MC API error ({r.status_code}) for commands: {command_list} | {body}", level="WARN")
@@ -6892,8 +6895,12 @@ def send_http_commands(command_list):
 
         time.sleep(min(1.5, 0.5 * attempt))
 
-    log(f"MC commands permanently failed: {command_list}", level="ERROR")
-    return False
+    if not delivered:
+        log(f"MC commands permanently failed: {command_list}", level="ERROR")
+        return False
+
+    log(f"MC send success ({len(command_list)} cmds)")
+    return True
 
 
 # ------------------------------------------------------------
