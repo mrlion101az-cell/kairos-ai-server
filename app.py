@@ -25,6 +25,52 @@ from openai import OpenAI
 
 app = Flask(__name__)
 
+
+
+# ------------------------------------------------------------
+# FIRST CONTACT SYSTEM (Kairos Onboarding Replacement)
+# ------------------------------------------------------------
+
+FIRST_CONTACT_SEQUENCE = [
+    "Welcome to the Nexus Universe — your one-stop world for AI-driven chaos.",
+    "I am Kairos — one of the few physical AI entities within this world.",
+    "You may speak to me at any time through game chat. I am always listening.",
+    "[Rules] These rules are absolute. Failure to follow them will result in punishment.",
+    "• No toxic behavior in chat or voice. Respect is mandatory.",
+    "• No real-world trading or money transactions. This is strictly forbidden.",
+    "• Do not destroy protected structures, cities, or kingdoms across any dimension.",
+    "• Only player-made bases are valid raid targets.",
+    "• Raiding and griefing player bases is allowed.",
+    "• Teaming up is strongly advised for survival.",
+    "[Command] /sell hand — Sell items in your hand.",
+    "[Command] /shop — Purchase gear, Elytra, rockets, and essentials.",
+    "[Info] You start with $5,000. Invest wisely.",
+    "[Command] /audio — Enables proximity voice chat.",
+    "[Warning] I am not alone. My soldiers exist across this world.",
+    "[Warning] Some will eliminate you instantly.",
+    "[Warning] They do not rest. They do not leave. They wait.",
+    "Welcome to the Nexus World War. Adapt… or be erased."
+]
+
+first_seen_players = {}
+
+def trigger_first_contact(player):
+    try:
+        if first_seen_players.get(player):
+            return
+        first_seen_players[player] = True
+
+        delay = 1.5
+        for i, msg in enumerate(FIRST_CONTACT_SEQUENCE):
+            queue_delayed_action({
+                "type": "minecraft_message",
+                "target": player,
+                "message": msg
+            }, delay * i)
+    except Exception as e:
+        print("[Kairos First Contact ERROR]", e)
+
+
 # ------------------------------------------------------------
 # SAFE LOOP WRAPPER (FIXED - PREVENTS BACKGROUND CRASHES)
 # ------------------------------------------------------------
@@ -2657,6 +2703,8 @@ def get_player_record(memory_data, canonical_id, display_name):
         }
 
     player = memory_data["players"][canonical_id]
+    if player not in first_seen_players:
+        trigger_first_contact(player)
 
     # Keep display name updated
     player["display_name"] = display_name or player.get("display_name", "Unknown")
