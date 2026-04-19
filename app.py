@@ -7901,7 +7901,7 @@ def home_1():
 
 
 @app.route("/health")
-def health():
+def health_1():
     return jsonify({
         "status": "ok",
         "model": MODEL_NAME,
@@ -7963,7 +7963,7 @@ def home_2():
     return jsonify({"status": "ok", "service": "Kairos AI Server"})
 
 @app.route("/health", methods=["GET"])
-def health():
+def health_2():
     return jsonify({"status": "healthy"})
 
 @app.route("/status", methods=["GET"])
