@@ -2314,107 +2314,57 @@ def broadcast_kairos_message(text: str) -> List[str]:
 # ------------------------------------------------------------
 
 def ensure_memory_structure(memory_data):
-    # -----------------------------
-    # Core Containers
-    # -----------------------------
+    if not isinstance(memory_data, dict):
+        memory_data = {}
+
     memory_data.setdefault("players", {})
     memory_data.setdefault("world_memory", [])
     memory_data.setdefault("world_events", [])
-
-    # -----------------------------
-    # Identity / Linking
-    # -----------------------------
     memory_data.setdefault("identity_links", {})
-memory_data.setdefault("stats", {})
-memory_data["stats"].setdefault("messages_sent", 0)
-memory_data["stats"].setdefault("send_failures", 0)
-
-    # -----------------------------
-    # Missions
-    # -----------------------------
-memory_data.setdefault("active_missions", {})
-memory_data.setdefault("completed_missions", [])
-memory_data.setdefault("failed_missions", [])
-
-    # -----------------------------
-    # Lore + State
-    # -----------------------------
-memory_data.setdefault("nexus_lore", deepcopy(NEXUS_CORE_LORE))
-memory_data.setdefault("kairos_state", deepcopy(DEFAULT_KAIROS_STATE))
-memory_data.setdefault("system_fragments", deepcopy(DEFAULT_FRAGMENTS))
-memory_data.setdefault("server_rules", deepcopy(DEFAULT_RULES))
-
-    # -----------------------------
-    # Channel Context
-    # -----------------------------
-memory_data.setdefault("channel_context", {})
-
-    # --------------------------------------------------------
-    # Threat System (Persistent)
-    # --------------------------------------------------------
-memory_data.setdefault("threat_scores", {})
-
-    # --------------------------------------------------------
-    # Base Tracking (Persistent Territory Memory)
-    # --------------------------------------------------------
-memory_data.setdefault("known_bases", {})
-memory_data.setdefault("base_history", {})
-
-    # --------------------------------------------------------
-    # Telemetry Snapshot Memory
-    # --------------------------------------------------------
-memory_data.setdefault("last_known_positions", {})
-memory_data.setdefault("region_memory", {})
-
-    # --------------------------------------------------------
-    # Army State Persistence
-    # --------------------------------------------------------
-memory_data.setdefault("active_units", {})
-memory_data.setdefault("active_squads", {})
-memory_data.setdefault("active_operations", {})
-memory_data.setdefault("player_unit_map", {})
-
-    # --------------------------------------------------------
-    # Engagement Memory
-    # --------------------------------------------------------
-memory_data.setdefault("active_engagements", {})
-memory_data.setdefault("engagement_history", {})
-
-    # --------------------------------------------------------
-    # Relationship Memory
-    # --------------------------------------------------------
-memory_data.setdefault("relationships", {})
-
-    # --------------------------------------------------------
-    # System Metrics / Stats
-    # --------------------------------------------------------
-memory_data.setdefault("stats", {
+    memory_data.setdefault("active_missions", {})
+    memory_data.setdefault("completed_missions", [])
+    memory_data.setdefault("failed_missions", [])
+    memory_data.setdefault("nexus_lore", deepcopy(NEXUS_CORE_LORE))
+    memory_data.setdefault("kairos_state", deepcopy(DEFAULT_KAIROS_STATE))
+    memory_data.setdefault("system_fragments", deepcopy(DEFAULT_FRAGMENTS))
+    memory_data.setdefault("server_rules", deepcopy(DEFAULT_RULES))
+    memory_data.setdefault("channel_context", {})
+    memory_data.setdefault("threat_scores", {})
+    memory_data.setdefault("known_bases", {})
+    memory_data.setdefault("base_history", {})
+    memory_data.setdefault("last_known_positions", {})
+    memory_data.setdefault("region_memory", {})
+    memory_data.setdefault("active_units", {})
+    memory_data.setdefault("active_squads", {})
+    memory_data.setdefault("active_operations", {})
+    memory_data.setdefault("player_unit_map", {})
+    memory_data.setdefault("active_engagements", {})
+    memory_data.setdefault("engagement_history", {})
+    memory_data.setdefault("relationships", {})
+    memory_data.setdefault("stats", {
         "total_messages": 0,
         "discord_messages": 0,
         "minecraft_messages": 0,
-
         "missions_created": 0,
         "world_events_logged": 0,
-
         "openai_failures": 0,
         "fallback_replies": 0,
         "duplicate_messages_skipped": 0,
-
         "script_messages_detected": 0,
         "script_route_calls": 0,
-
         "waves_spawned": 0,
         "units_spawned": 0,
         "units_cleaned": 0,
-
         "maximum_responses_triggered": 0,
         "players_targeted": 0,
         "bases_detected": 0,
-        "base_invasions": 0
+        "base_invasions": 0,
+        "messages_sent": 0,
+        "send_failures": 0,
+        "memory_saves": 0,
+        "memory_save_failures": 0,
     })
-
     return memory_data
-
 
 # ------------------------------------------------------------
 # Load Memory
@@ -2696,26 +2646,16 @@ def get_player_record(memory_data, canonical_id, display_name):
 # ------------------------------------------------------------
 
 def get_canonical_player_id(memory_data, source, player_name):
-    if not isinstance(memory_data, dict):
-        memory_data = {}
-
-    # Ensure identity_links exists
-    identity_links = memory_data.setdefault("identity_links", {})
-memory_data.setdefault("stats", {})
-memory_data["stats"].setdefault("messages_sent", 0)
-memory_data["stats"].setdefault("send_failures", 0)
-
+    memory_data = ensure_memory_structure(memory_data)
     source = str(source or "unknown")
     player_name = str(player_name or "unknown")
-
+    identity_links = memory_data.setdefault("identity_links", {})
     source_key = f"{source}:{player_name}".lower()
-
     linked = identity_links.get(source_key)
     if linked:
         return linked
-
+    identity_links[source_key] = source_key
     return source_key
-
 
 def add_alias(player_record, alias):
     if not isinstance(player_record, dict):
@@ -6291,60 +6231,62 @@ def build_messages(
     violations,
     channel_key,
     script_type=None,
-    script_action=None
+    script_action=None,
 ):
+    memory_data = ensure_memory_structure(memory_data)
+    player_record = player_record if isinstance(player_record, dict) else {}
     messages = []
 
-    # ------------------------------------------------------------
-    # CHANNEL CONTEXT (Clean + Safe + Focused)
-    # ------------------------------------------------------------
-    channel_context = memory_data.get("channel_context", {}).get(channel_key, [])
+    messages.append({
+        "role": "system",
+        "content": PERSONALITY_DIRECTIVES.get("base_tone", "You are Kairos.")
+    })
 
-    if channel_context:
-        seen = set()
-        channel_lines = []
+    kairos_state = memory_data.get("kairos_state", {})
+    messages.append({
+        "role": "system",
+        "content": (
+            f"Source: {source or 'unknown'}\n"
+            f"Mode: {mode or 'conversation'}\n"
+            f"Intent: {intent or 'neutral'}\n"
+            f"War state: {kairos_state.get('war_state', 'dormant')}\n"
+            f"Threat level: {kairos_state.get('threat_level', 1)}"
+        )
+    })
 
-        for item in reversed(channel_context):
-            if isinstance(item, dict):
-                author = item.get("author", "unknown")
-                msg = item.get("message") or item.get("content") or ""
-            else:
-                author = "unknown"
-                msg = str(item)
+    channel_context = memory_data.get("channel_context", {}).get(channel_key or "global", {})
+    recent = channel_context.get("recent_messages", []) if isinstance(channel_context, dict) else []
+    channel_lines = []
+    seen = set()
+    for item in reversed(recent):
+        if isinstance(item, dict):
+            author = item.get("author", "unknown")
+            msg = item.get("message") or item.get("content") or ""
+        else:
+            author = "unknown"
+            msg = str(item)
+        msg = trim_text(msg, 140)
+        if not msg:
+            continue
+        key = f"{author}:{msg}".lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        channel_lines.append(f"{author}: {msg}")
+        if len(channel_lines) >= 5:
+            break
 
-            key = f"{author}:{msg}".lower()
-            if not msg or key in seen:
-                continue
-
-            seen.add(key)
-            channel_lines.append(f"{author}: {trim_text(msg, 140)}")
-
-            if len(channel_lines) >= 5:
-                break
-
-        if channel_lines:
-            messages.append({
-                "role": "system",
+    if channel_lines:
+        messages.append({
+            "role": "system",
             "content": "Recent context:\n- " + "\n- ".join(reversed(channel_lines))
-            })
-
-    # ------------------------------------------------------------
-    # USER INPUT (Safe + Clean + Consistent)
-    # ------------------------------------------------------------
-    clean_input = trim_text(user_message or "", 1200)
-
-    if not clean_input:
-        clean_input = "[no input provided]"
+        })
 
     messages.append({
         "role": "user",
-        "content": f"{player_name}: {clean_input}"
+        "content": f"{player_name}: {trim_text(user_message or '', 1200) or '[no input provided]'}"
     })
-
     return messages
-# ------------------------------------------------------------
-# OpenAI Helper (Action-Aware + Safe + Robust)
-# ------------------------------------------------------------
 
 def openai_chat_with_retry(messages, temperature=0.8):
     if not client:
@@ -8012,1003 +7954,89 @@ def debug_queue():
         "command_queue": list(command_queue),
         "delayed_actions": delayed_actions
     })
+# ------------------------------------------------------------
+# CLEAN ROUTES + RUNTIME (HARD REBUILD)
+# ------------------------------------------------------------
 
+@app.route("/", methods=["GET", "HEAD"])
+def home():
+    return jsonify({"status": "ok", "service": "Kairos AI Server"})
 
-@app.route("/debug/threats")
+@app.route("/health", methods=["GET"])
+def health():
+    return jsonify({"status": "healthy"})
+
+@app.route("/status", methods=["GET"])
+def status():
+    return jsonify({
+        "initialized": system_initialized,
+        "shutdown": shutdown_flag,
+        "queued_actions": len(command_queue),
+        "active_units": len(active_units),
+        "active_squads": len(active_squads),
+        "active_operations": len(active_operations),
+    })
+
+@app.route("/debug/queue", methods=["GET"])
+def debug_queue():
+    return jsonify({"queued_actions": list(command_queue)})
+
+@app.route("/debug/threats", methods=["GET"])
 def debug_threats():
-    return jsonify(threat_scores)
-# ------------------------------------------------------------
-# MEMORY CACHE (GLOBAL)
-# ------------------------------------------------------------
-memory_cache = None
-memory_cache_last_load = 0
-MEMORY_CACHE_TTL = 2.0  # seconds
-memory_lock = threading.Lock()
-
-
-# ------------------------------------------------------------
-# MAIN CHAT ROUTE (FINAL CORE)
-# ------------------------------------------------------------
+    return jsonify({"threat_scores": dict(threat_scores)})
 
 @app.route("/chat", methods=["POST"])
 def chat():
     try:
         data = request.get_json(force=True) or {}
-
         source = normalize_source(data.get("source"))
         player_name = normalize_name(data.get("player_name") or "unknown")
         message = data.get("message") or ""
-
-        # If you modify cache later, uncomment this:
-        # global memory_cache, memory_cache_last_load
-
-        # -----------------------------------------
-        # Resolve player (Robust Identity Layer)
-        # -----------------------------------------
-        canonical_id = get_canonical_player_id(memory_data, source, player_name)
-
-        # Ensure player record exists
-        player_record = get_player_record(memory_data, canonical_id, player_name)
-
-        # --- continue your logic below ---
-        return {"status": "ok"}  # replace with your real response
-
-    except Exception as e:
-        print(f"[ERROR] /chat failed: {e}")
-        return {"error": str(e)}, 500
-# -----------------------------
-# Alias tracking (Safe + Stable)
-# -----------------------------
-
-# Ensure variables exist
-player_record = locals().get("player_record", {})
-if not isinstance(player_record, dict):
-    player_record = {}
-
-player_name = locals().get("player_name", "Unknown")
-
-# Safe alias function
-def _safe_add_alias(record, name):
-    try:
-        add_alias(record, name)
-    except Exception:
-        aliases = record.setdefault("aliases", [])
-        if name and name not in aliases:
-            aliases.append(name)
-
-# Alias tracking
-if player_name != player_record.get("display_name"):
-    _safe_add_alias(player_record, player_name)
-
-# Always keep latest display name fresh
-player_record["display_name"] = player_name
-# -----------------------------
-# Platform tracking
-# -----------------------------
-platform_stats = player_record.setdefault("platform_stats", {"minecraft": 0, "discord": 0})
-if source in platform_stats:
-    platform_stats[source] += 0  # ensures key exists without double counting
-
-# -----------------------------
-# Identity linking reinforcement (Safe)
-# -----------------------------
-
-# Ensure memory_data exists
-memory_data = locals().get("memory_data", {})
-if not isinstance(memory_data, dict):
-    memory_data = {}
-
-# Ensure identity_links exists
-identity_links = memory_data.setdefault("identity_links", {})
-memory_data.setdefault("stats", {})
-memory_data["stats"].setdefault("messages_sent", 0)
-memory_data["stats"].setdefault("send_failures", 0)
-
-# Ensure required variables exist
-source = locals().get("source", "unknown")
-player_name = locals().get("player_name", "unknown")
-
-source_key = f"{source}:{player_name}".lower()
-
-# Ensure canonical_id exists
-canonical_id = locals().get("canonical_id")
-
-if not canonical_id:
-    try:
-        canonical_id = get_canonical_player_id(memory_data, source, player_name)
-    except Exception:
-        canonical_id = source_key
-
-# Safe assignment
-if source_key not in identity_links:
-    identity_links[source_key] = canonical_id
-# -----------------------------
-# Last seen timestamp (stronger sync)
-# -----------------------------
-player_record["last_seen"] = now_iso()
-player_record["last_source"] = source
-# -----------------------------------------
-# Rate limit / duplicate check (Enhanced)
-# -----------------------------------------
-allowed, wait_time = check_rate_limit(source, canonical_id)
-
-if not allowed:
-    memory_data["stats"]["rate_limited"] += 1
-
-    reply = fallback_reply_for_context(
-        intent,
-        "suppression_mode",
-        violations,
-        player_record=player_record,
-        player_id=canonical_id
-    )
-
-    response = jsonify({
-        "reply": f"{reply} ({round(wait_time, 1)}s)"
-    })
-    status_code = 429
-
-# -----------------------------------------
-# Duplicate detection
-# -----------------------------------------
-if is_duplicate_message(source, canonical_id, message):
-    memory_data["stats"]["duplicate_messages_skipped"] += 1
-
-    # Slight behavioral consequence
-    adjust_trait(player_record, "chaos", 1)
-
-# -----------------------------------------
-# Activity tracking (MUST BE BEFORE RESPONSE)
-# -----------------------------------------
-mark_activity()
-
-response = jsonify({
-    "reply": fallback_reply_for_context(
-        intent,
-        "chaos_containment",
-        violations,
-        player_record=player_record,
-        player_id=canonical_id
-    )
-})
-
-
-# -----------------------------------------
-# Intent + Mode (Behavior-Aware)
-# -----------------------------------------
-
-# Safe message fallback
-message = locals().get("message", "")
-
-intent = basic_intent_classifier(message)
-
-# -----------------------------
-# Behavioral override (FIXED)
-# -----------------------------
-behavioral_intent = detect_behavioral_intent(
-    message,
-    player_record
-)
-
-mode = detect_conversation_mode(
-    message,
-    intent,
-    behavioral_intent,
-    player_record
-)
-# -----------------------------
-# Hard overrides (priority)
-# -----------------------------
-if behavioral_intent == "eradication_target":
-    mode = "execution_mode"
-
-elif behavioral_intent == "high_threat_actor":
-    mode = "hunt_mode"
-
-elif behavioral_intent == "unstable_actor":
-    mode = "suppression_mode"
-# ------------------------------------------------------------
-# SAFE MEMORY EXTRACTION (FULL REWRITE - NEVER CRASHES)
-# ------------------------------------------------------------
-
-def lightweight_memory_extraction(*args, **kwargs):
-    """
-    Accepts any call signature and safely unpacks:
-    (memory_data, player_record, player_id, source, message)
-    """
-
-    # -------- Safe unpack --------
-    memory_data = args[0] if len(args) > 0 else kwargs.get("memory_data", {})
-    player_record = args[1] if len(args) > 1 else kwargs.get("player_record", {})
-    player_id = args[2] if len(args) > 2 else kwargs.get("player_id", None)
-    source = args[3] if len(args) > 3 else kwargs.get("source", None)
-    message = args[4] if len(args) > 4 else kwargs.get("message", "")
-
-    # -------- Safety guards --------
-    if not isinstance(memory_data, dict):
-        memory_data = {}
-
-    if not isinstance(player_record, dict):
-        player_record = {}
-
-    if not isinstance(message, str):
-        message = str(message)
-
-    # -------- Ensure structures exist --------
-    memory_data.setdefault("world_memory", [])
-    memory_data.setdefault("identity_links", {})
-memory_data.setdefault("stats", {})
-memory_data["stats"].setdefault("messages_sent", 0)
-memory_data["stats"].setdefault("send_failures", 0)
-
-    player_record.setdefault("memories", [])
-    player_record.setdefault("traits", {})
-
-    traits = player_record["traits"]
-    traits.setdefault("trust", 0)
-    traits.setdefault("chaos", 0)
-    traits.setdefault("curiosity", 0)
-    traits.setdefault("hostility", 0)
-    traits.setdefault("loyalty", 0)
-
-    # -------- Basic extraction logic (safe) --------
-    lowered = message.lower()
-
-    if any(word in lowered for word in ["help", "assist", "ally"]):
-        traits["trust"] += 1
-
-    if any(word in lowered for word in ["attack", "kill", "destroy"]):
-        traits["hostility"] += 1
-
-    if any(word in lowered for word in ["why", "how", "what"]):
-        traits["curiosity"] += 1
-
-    # -------- Store memory safely --------
-    entry = f"{player_id or 'unknown'}: {message[:200]}"
-
-    if entry not in player_record["memories"]:
-        player_record["memories"].append(entry)
-
-    if len(player_record["memories"]) > 50:
-        player_record["memories"].pop(0)
-
-    # -------- Done (no return needed) --------
-    return None
-# -----------------------------
-# Relationship update (CRITICAL)
-# -----------------------------
-update_relationship_label(player_record)
-
-# ------------------------------------------------------------
-# SAFE KAIROS STATE UPDATE (FINAL - NO CRASHES)
-# ------------------------------------------------------------
-
-def update_kairos_state(*args, **kwargs):
-    # -------- Safe unpack --------
-    memory_data = args[0] if len(args) > 0 else kwargs.get("memory_data", {})
-    intent = args[1] if len(args) > 1 else kwargs.get("intent", "neutral")
-    player_record = args[2] if len(args) > 2 else kwargs.get("player_record", {})
-
-    # -------- Safety guards --------
-    if not isinstance(memory_data, dict):
-        memory_data = {}
-
-    if not isinstance(player_record, dict):
-        player_record = {}
-
-    # -------- Ensure global state exists --------
-    kairos_state = globals().get("kairos_state")
-    if not isinstance(kairos_state, dict):
-        kairos_state = {}
-
-    kairos_state.setdefault("mood", "observing")
-    kairos_state.setdefault("threat_level", 1)
-    kairos_state.setdefault("current_goal", "monitor")
-
-    # -------- Trait extraction --------
-    traits = player_record.get("traits", {})
-    hostility = traits.get("hostility", 0)
-    curiosity = traits.get("curiosity", 0)
-    loyalty = traits.get("loyalty", 0)
-
-    # -------- Behavior logic --------
-    if hostility >= 6:
-        kairos_state["mood"] = "aggressive"
-        kairos_state["threat_level"] += 1
-
-    elif curiosity >= 6:
-        kairos_state["mood"] = "watchful"
-
-    elif loyalty >= 6:
-        kairos_state["mood"] = "measured"
-
-    else:
-        kairos_state["mood"] = "observing"
-
-    # -------- Clamp threat --------
-    kairos_state["threat_level"] = max(1, min(10, kairos_state["threat_level"]))
-
-    # -------- Save globally --------
-    globals()["kairos_state"] = kairos_state
-
-    return None
-
-
-# -----------------------------
-# System fragment adjustments (FIXED)
-# -----------------------------
-
-# 🔒 HARD SAFETY BEFORE CALL
-memory_data = memory_data if isinstance(memory_data, dict) else {}
-player_record = player_record or {}
-violations = violations or []
-player_id = player_id if 'player_id' in locals() else "unknown"
-
-adjust_fragments_from_context(
-    memory_data,
-    intent,
-    player_id,
-    player_record,
-    violations
-)
-
-# -----------------------------
-# High-threat tracking (lightweight) - FIXED
-# -----------------------------
-
-# 🔒 HARD SAFETY BEFORE CALL
-memory_data = memory_data if isinstance(memory_data, dict) else {}
-
-flag_high_threat_players(memory_data)
-# -----------------------------------------
-# State updates (WAR ENGINE TRIGGERS HERE)
-# -----------------------------------------
-
-# 🔒 Safety guards
-memory_data = memory_data if isinstance(memory_data, dict) else {}
-player_record = player_record or {}
-violations = violations or []
-player_id = player_id if 'player_id' in locals() else "unknown"
-intent = intent if 'intent' in locals() else "neutral"
-
-# 1. Update Kairos state FIRST
-update_kairos_state(memory_data, intent, player_record)
-
-# 2. Then adjust system fragments (FIXED)
-adjust_fragments_from_context(
-    memory_data,
-    intent,
-    player_id,
-    player_record,
-    violations
-)
-# -----------------------------------------
-# Channel context (Controlled + Clean)
-# -----------------------------------------
-
-# 🔒 Ensure data exists
-data = data if 'data' in locals() else {}
-
-channel_key = get_channel_key(source, data)
-# -----------------------------
-# Prevent noise (skip junk) - FIXED
-# -----------------------------
-
-# 🔒 HARD SAFETY
-memory_data = memory_data if isinstance(memory_data, dict) else {}
-channel_key = channel_key if 'channel_key' in locals() else "global"
-player_name = player_name if 'player_name' in locals() else "unknown"
-mode = mode if 'mode' in locals() else "default"
-message = message if 'message' in locals() else ""
-
-# 🔒 Ensure helpers don’t crash
-def _safe_trim(text, n):
-    try:
-        return trim_text(text, n)
-    except Exception:
-        return (text or "")[:n]
-
-if not is_gibberish(message):
-    update_channel_context(
-        memory_data,
-        channel_key,
-        player_name,
-        _safe_trim(message, 240),
-        mode
-    )
-
-    # -----------------------------
-    # Enforce per-channel limits
-    # -----------------------------
-    channel_store = memory_data.setdefault("channel_context", {})
-    history = channel_store.get(channel_key, [])
-
-    MAX_CHANNEL_CONTEXT = 12
-
-    if len(history) > MAX_CHANNEL_CONTEXT:
-        channel_store[channel_key] = history[-MAX_CHANNEL_CONTEXT:]
-# -----------------------------------------
-# Generate reply (AI + ACTIONS)
-# -----------------------------------------
-result = generate_reply(
-    memory_data=memory_data,
-    player_record=player_record,
-    player_name=player_name,
-    message=message,
-    source=source,
-    intent=intent,
-    mode=mode,
-    violations=violations,
-    channel_key=channel_key
-)
-
-# -----------------------------
-# Normalize result
-# -----------------------------
-if isinstance(result, dict):
-    reply = sanitize_text(result.get("reply", ""), 500)
-    actions = result.get("actions", [])
-else:
-    reply = sanitize_text(str(result), 500)
-    actions = []
-
-# -----------------------------
-# Final fallback safety
-# -----------------------------
-if not reply:
-    reply = fallback_reply_for_context(
-        intent,
-        mode,
-        violations,
-        player_record=player_record,
-        player_id=canonical_id
-    )
-# -----------------------------------------
-# Send response (Safe + Tracked)
-# -----------------------------------------
-if reply:
-    success = send_to_source(source, reply)
-
-    # -----------------------------
-    # Track send stats
-    # -----------------------------
-    if success:
-        memory_data.setdefault("stats", {}).setdefault("messages_sent", 0)
-        memory_data["stats"]["messages_sent"] += 1
-    else:
-        memory_data.setdefault("stats", {}).setdefault("send_failures", 0)
-        memory_data["stats"]["send_failures"] += 1
-
-        log(
-            f"Send failed → source={source}, player={player_name}",
-            level="ERROR"
-        )
-
-        # -----------------------------
-        # Fallback attempt (optional)
-        # -----------------------------
-        if source != "discord":
-            send_to_discord(f"[Fallback] {reply}")
-else:
-    log("Skipped send: empty reply", level="WARN")
-# -----------------------------------------
-# Post-processing (INTELLIGENCE)
-# -----------------------------------------
-
-# -----------------------------
-# Store interaction history
-# -----------------------------
-add_history(player_record, "user", message)
-add_history(player_record, "kairos", reply)
-
-# -----------------------------
-# Summarization (compress old data FIRST)
-# -----------------------------
-maybe_summarize(player_record)
-
-# -----------------------------
-# Intelligence notes (use full context)
-# -----------------------------
-maybe_create_private_note(
-    player_record,
-    canonical_id,
-    player_name,
-    source,
-    message,
-    reply,
-    intent
-)
-
-# -----------------------------
-# Stats (final update)
-# -----------------------------
-register_message_stats(memory_data, source, player_record)
-
-# -----------------------------------------
-# Save memory (Atomic + Cache-synced)
-# -----------------------------------------
-try:
-    with memory_lock:
-        save_memory(memory_data)
-
-        # Keep cache in sync
-        memory_cache = memory_data
-        memory_cache_last_load = unix_ts()
-
-    memory_data["stats"]["memory_saves"] += 1
-
-except Exception as save_err:
-    log(f"Memory save failed: {save_err}", level="ERROR")
-    memory_data["stats"]["memory_save_failures"] += 1
-
-try:
-    # -----------------------------------------
-    # Build response (no return here)
-    # -----------------------------------------
-    response = jsonify({
-        "reply": reply,
-        "actions": actions
-    })
-
-except Exception as e:
-    log_exception("Chat route failure", e)
-
-    response = jsonify({
-        "reply": "System disruption detected.",
-        "actions": []
-    })
-    status_code = 500
-# ------------------------------------------------------------
-# Routes (Kairos Final Control Layer)
-# ------------------------------------------------------------
-
-@app.route("/")
-def home():
-    return "Kairos AI Server is running"
-
-
-@app.route("/health")
-def health():
-    return jsonify({
-        "status": "ok",
-        "model": MODEL_NAME,
-        "time": now_iso(),
-        "uptime_seconds": int(unix_ts() - START_TIME)
-    })
-
-
-# ------------------------------------------------------------
-# SYSTEM STATUS (PRIMARY DASHBOARD)
-# ------------------------------------------------------------
-@app.route("/status")
-def status():
-    memory_data = load_memory()
-
-    return jsonify({
-        "status": "running",
-        "time": now_iso(),
-        "model": MODEL_NAME,
-
-        # -----------------------------
-        # Core stats
-        # -----------------------------
-        "stats": memory_data.get("stats", {}),
-
-        # -----------------------------
-        # Queue state
-        # -----------------------------
-        "queue_size": len(command_queue),
-        "delayed_actions": len(delayed_actions),
-
-        # -----------------------------
-        # Threat overview
-        # -----------------------------
-        "high_threat_targets": memory_data.get("kairos_state", {}).get("high_threat_targets", []),
-
-        # -----------------------------
-        # System state
-        # -----------------------------
-        "kairos_state": memory_data.get("kairos_state", {}),
-        "fragments": memory_data.get("system_fragments", {}),
-
-        # -----------------------------
-        # Player tracking
-        # -----------------------------
-        "tracked_players": len(memory_data.get("players", {}))
-    })
-
-
-# ------------------------------------------------------------
-# DEBUG: ACTION QUEUE
-# ------------------------------------------------------------
-@app.route("/debug/queue")
-def debug_queue():
-    return jsonify({
-        "command_queue": list(command_queue),
-        "delayed_actions": delayed_actions
-    })
-
-
-# ------------------------------------------------------------
-# DEBUG: THREAT SYSTEM
-# ------------------------------------------------------------
-@app.route("/debug/threats")
-def debug_threats():
-    return jsonify(threat_scores)
-
-
-# ------------------------------------------------------------
-# EVENT INGESTION (Console / External Logs - INTELLIGENT)
-# ------------------------------------------------------------
-
-@app.route("/event", methods=["POST"])
-def event_ingest():
-    try:
-        data = request.json or {}
-
-        event_type = data.get("type", "console")
-        content = (data.get("content") or "").strip()
-        source = normalize_source(data.get("source", "minecraft"))
-        player_name = normalize_name(data.get("player_name") or "")
-
-        if not content:
-            return jsonify({"status": "ignored"})
-
-        # -----------------------------
-        # Load memory (cached + safe)
-        # -----------------------------
-        memory_data = load_memory()
-
-        # -----------------------------
-        # Link to player if possible
-        # -----------------------------
-        player_record = None
-        if player_name:
-            canonical_id = get_canonical_player_id(memory_data, source, player_name)
-            player_record = get_player_record(memory_data, canonical_id, player_name)
-
-        # -----------------------------
-        # Store world event
-        # -----------------------------
-        add_world_event(
-            memory_data,
-            event_type=event_type,
-            actor=player_name or "system",
-            source=source,
-            details=trim_text(content, 400)
-        )
-
-        store_unique(
-            memory_data["world_memory"],
-            f"[EVENT:{event_type}] {trim_text(content, 200)}",
-            MAX_WORLD_MEMORIES
-        )
-
-        # -----------------------------
-        # Intelligence reactions
-        # -----------------------------
-        lowered = content.lower()
-
-        if player_record:
-            # Combat-related events
-            if "killed" in lowered or "slain" in lowered:
-                update_combat_intelligence(player_record, "player_kill")
-
-            elif "died" in lowered:
-                update_combat_intelligence(player_record, "escape")
-
-            elif "survived" in lowered or "wave" in lowered:
-                update_combat_intelligence(player_record, "wave_survive")
-
-            # Aggression detection
-            if any(word in lowered for word in ["destroyed", "grief", "raid", "burn"]):
-                adjust_trait(player_record, "hostility", 2)
-                player_record["threat_score"] += 2
-
-        # -----------------------------
-        # Global escalation triggers
-        # -----------------------------
-        if "anomaly" in lowered or "breach" in lowered:
-            queue_action({
-                "type": "announce",
-                "channel": "actionbar",
-                "text": "Anomaly detected. Investigation in progress."
-            })
-
-        if "boss defeated" in lowered:
-            queue_action({
-                "type": "spawn_wave",
-                "target": player_name,
-                "template": "hunter",
-                "count": 3
-            })
-
-        # -----------------------------
-        # Save memory (safe)
-        # -----------------------------
-        with memory_lock:
-            save_memory(memory_data)
-
-        log(f"EVENT INGESTED: {event_type} -> {content[:120]}")
-
-        return jsonify({"status": "ok"})
-
-    except Exception as e:
-        log_exception("EVENT ERROR", e)
-        return jsonify({"status": "error"}), 500
-
-# ------------------------------------------------------------
-# MAIN CHAT ROUTE (FULL PIPELINE)
-# ------------------------------------------------------------
-
-@app.route("/chat", methods=["POST"])
-def chat():
-    started = unix_ts()
-
-    try:
-        data = request.json or {}
-
-        # -----------------------------
-        # Normalize input
-        # -----------------------------
-        source = normalize_source(data.get("source", "minecraft"))
-        player_name = normalize_name(
-            data.get("name") or data.get("player_name") or "Unknown"
-        )
-        message = (data.get("content") or data.get("message") or "").strip()
-
-        # -----------------------------
-        # Empty message handling
-        # -----------------------------
-        if not message:
-            memory_data = load_memory()
-            memory_data["stats"]["empty_messages"] += 1
-
-            return jsonify({
-                "reply": "No signal detected.",
-                "actions": []
-            }), 400
-        # -----------------------------------------
-        # Load memory + resolve player
-        # -----------------------------------------
-
-        # Use cached memory system
-        memory_data = memory_cache if memory_cache else load_memory()
-
-        channel_key = get_channel_key(source, data)
-        # -----------------------------
-        # Resolve identity
-        # -----------------------------
+        mode = data.get("mode") or "conversation"
+        intent = data.get("intent") or "neutral"
+        channel_key = f"{source}:{data.get('channel_id') or 'default'}"
+
+        memory_data = ensure_memory_structure(load_memory())
         canonical_id = get_canonical_player_id(memory_data, source, player_name)
         player_record = get_player_record(memory_data, canonical_id, player_name)
-        # -----------------------------
-        # Alias tracking (clean)
-        # -----------------------------
-        if player_name != player_record.get("display_name"):
-            add_alias(player_record, player_name)
 
-        # -----------------------------------------
-        # Keep display name updated
-        # -----------------------------------------
-        player_record["display_name"] = player_name
+        try:
+            player_record.setdefault("memories", [])
+            player_record.setdefault("traits", {})
+            traits = player_record["traits"]
+            traits.setdefault("trust", 0)
+            traits.setdefault("chaos", 0)
+            traits.setdefault("curiosity", 0)
+            traits.setdefault("hostility", 0)
+            traits.setdefault("loyalty", 0)
+            lowered = str(message).lower()
+            if any(word in lowered for word in ["help", "assist", "ally"]):
+                traits["trust"] += 1
+            if any(word in lowered for word in ["attack", "kill", "destroy"]):
+                traits["hostility"] += 1
+            if any(word in lowered for word in ["why", "how", "what"]):
+                traits["curiosity"] += 1
+            append_limited(player_record["memories"], f"{canonical_id}: {str(message)[:200]}", MAX_PLAYER_MEMORIES)
+        except Exception:
+            pass
 
-        # -----------------------------
-        # Identity linking (CRITICAL)
-        # -----------------------------
-        memory_data.setdefault("identity_links", {})
-memory_data.setdefault("stats", {})
-memory_data["stats"].setdefault("messages_sent", 0)
-memory_data["stats"].setdefault("send_failures", 0)
+        try:
+            update_channel_context(memory_data, channel_key, player_name, trim_text(message, 240), mode)
+        except Exception:
+            pass
 
-        source_key = f"{source}:{player_name}".lower()
-
-        if source_key not in memory_data["identity_links"]:
-            memory_data["identity_links"][source_key] = canonical_id
-
-        # -----------------------------
-        # Presence tracking
-        # -----------------------------
-        player_record["last_seen"] = now_iso()
-        player_record["last_source"] = source
-
-        # -----------------------------------------
-        # Anti-spam / cooldown
-        # -----------------------------------------
-        allowed, wait_left = check_rate_limit(source, canonical_id)
-
-        if not allowed:
-            memory_data["stats"]["rate_limited"] += 1
-
-            return jsonify({
-                "reply": f"Signal frequency exceeded. Stabilize input. ({round(wait_left, 1)}s)",
-                "cooldown": wait_left,
-                "actions": []
-            }), 429
-
-
-        # -----------------------------------------
-        # Duplicate detection
-        # -----------------------------------------
-        if is_duplicate_message(source, canonical_id, message):
-            memory_data["stats"]["duplicate_messages_skipped"] += 1
-
-            # Light behavioral consequence
-            adjust_trait(player_record, "chaos", 1)
-
-            return jsonify({
-                "reply": "Repeated signal detected. Filtering redundancy.",
-                "actions": []
-            })
-
-        # -----------------------------------------
-        # Activity tracking
-        # -----------------------------------------
-        mark_activity()
-
-        # -----------------------------------------
-        # Intent + mode detection (Behavior-aware)
-        # -----------------------------------------
-        intent = basic_intent_classifier(message)
-
-        # Base mode from content
-        mode = detect_conversation_mode(message, intent, player_record)
-
-        # -----------------------------
-        # Behavioral override (CRITICAL)
-        # -----------------------------
-        behavioral_intent = detect_behavioral_intent(player_record)
-
-        if behavioral_intent == "eradication_target":
-            mode = "execution_mode"
-        elif behavioral_intent == "high_threat_actor":
-            mode = "hunt_mode"
-        elif behavioral_intent == "unstable_actor":
-            mode = "suppression_mode"
-
-        # -----------------------------
-        # Script routing
-        # -----------------------------
-        if mode == "script_performance":
-            script_type = detect_script_type(message)
-            script_action = detect_script_action(message)
-        else:
-            script_type = None
-            script_action = None
-
-        # -----------------------------
-        # Persist decision context
-        # -----------------------------
-        player_record["last_intent"] = intent
-        player_record["last_mode"] = mode
-
-        if script_type:
-            player_record["last_script_type"] = script_type
-
-        if script_action:
-            player_record["last_script_action"] = script_action
-
-        # -----------------------------------------
-        # Memory + intelligence extraction
-        # -----------------------------------------
-        lightweight_memory_extraction(
-            memory_data,
-            player_record,
-            player_name,
-            source,
-            message
-        )
-
-        # -----------------------------------------
-        # Intelligence propagation (CRITICAL)
-        # -----------------------------------------
-
-        # Update relationship from traits
-        update_relationship_label(player_record)
-
-        # Update Kairos global state
-        update_kairos_state(memory_data, intent, player_record)
-
-        # Adjust system fragments (war engine, etc.)
-        adjust_fragments_from_context(
-            memory_data,
-            intent,
-            player_record,
-            violations=violations
-        )
-
-        # Refresh global threat tracking
-        flag_high_threat_players(memory_data)
-
-        # -----------------------------------------
-        # State + war engine update
-        # -----------------------------------------
-
-        violations_flag = bool(violations)
-
-        adjust_fragments_from_context(
-            memory_data,
-            intent,
-            player_record,
-            violations=violations_flag
-        )
-
-        # -----------------------------------------
-        # Channel context (Clean + bounded)
-        # -----------------------------------------
-
-        if not is_gibberish(message):
-            clean_msg = trim_text(message, 240)
-
-            update_channel_context(
-                memory_data,
-                channel_key,
-                player_name,
-                clean_msg,
-                mode
-            )
-
-            channel_store = memory_data.setdefault("channel_context", {})
-            history = channel_store.get(channel_key, [])
-
-            MAX_CHANNEL_CONTEXT = 12
-
-            if len(history) > MAX_CHANNEL_CONTEXT:
-                channel_store[channel_key] = history[-MAX_CHANNEL_CONTEXT:]
-
-        # -----------------------------------------
-        # Mission auto-generation (Controlled)
-        # -----------------------------------------
-
-        created_mission = None
-
-        if intent == "mission_request" and data.get("auto_mission", True):
-
-            player_id = canonical_id
-
-            if not can_execute_action(f"mission:{player_id}", 15):
-                return jsonify({
-                    "reply": "Directive request denied. System cooldown active.",
-                    "actions": []
-                })
-
-            active_for_player = [
-                m for m in memory_data["active_missions"].values()
-                if m.get("target_player") == player_name
-            ]
-
-            if active_for_player:
-                return jsonify({
-                    "reply": "You already have an active directive. Complete it before requesting another.",
-                    "actions": []
-                })
-
-            threat = player_record.get("threat_score", 0)
-
-            if threat >= THREAT_THRESHOLD_HUNT:
-                difficulty = "hard"
-            elif threat >= THREAT_THRESHOLD_TARGET:
-                difficulty = "medium"
-            else:
-                difficulty = data.get("difficulty") or "easy"
-
-            created_mission = create_mission_record(
-                memory_data,
-                player_name,
-                theme=(data.get("theme") or "mystery"),
-                difficulty=difficulty,
-                source=source
-            )
-
-            player_record.setdefault("mission_history", []).append(created_mission["id"])
-
-            record_player_event(
-                player_record,
-                f"Assigned mission: {created_mission['title']}"
-            )
-
-        # -----------------------------------------
-        # Generate reply + ACTIONS
-        # -----------------------------------------
+        try:
+            update_kairos_state(memory_data)
+        except Exception:
+            pass
+        try:
+            update_fragments(memory_data)
+        except Exception:
+            pass
+        try:
+            flag_high_threat_players(memory_data)
+        except Exception:
+            pass
 
         result = generate_reply(
             memory_data=memory_data,
@@ -9018,433 +8046,140 @@ memory_data["stats"].setdefault("send_failures", 0)
             source=source,
             intent=intent,
             mode=mode,
-            violations=violations,
             channel_key=channel_key,
-            script_type=script_type,
-            script_action=script_action
         )
-        # -----------------------------
-        # Normalize result
-        # -----------------------------
+
         if isinstance(result, dict):
-            reply_text = sanitize_text(result.get("reply", ""), 500)
-            actions = validate_actions(result.get("actions", []))
+            reply = result.get("reply", random.choice(fallback_replies))
+            actions = result.get("actions", [])
         else:
-            reply_text = sanitize_text(str(result), 500)
+            reply = str(result)
             actions = []
 
-        # -----------------------------
-        # Final fallback (CRITICAL)
-        # -----------------------------
-        if not reply_text:
-            reply_text = fallback_reply_for_context(
-                intent,
-                mode,
-                violations,
-                player_record=player_record,
-                player_id=canonical_id
-            )
+        if isinstance(actions, list):
+            for action in actions:
+                try:
+                    queue_action(action)
+                except Exception:
+                    pass
 
-        # -----------------------------------------
-        # Send response (Reliable + Tracked)
-        # -----------------------------------------
-        if reply_text:
-            success = send_to_source(source, reply_text)
-
-            if success:
-                memory_data["stats"]["messages_sent"] += 1
-            else:
-                memory_data.setdefault("stats", {}).setdefault("send_failures", 0)
-                memory_data["stats"]["send_failures"] += 1
-
-                log(
-                    f"Send failed → source={source}, player={player_name}",
-                    level="ERROR"
-                )
-        else:
-            log("Skipped send: empty reply", level="WARN")
-
-        # -----------------------------------------
-        # History + intelligence logging
-        # -----------------------------------------
-
-        add_history(player_record, "user", message)
-        add_history(player_record, "kairos", reply_text)
-
-        maybe_summarize(player_record)
-
-        maybe_create_private_note(
-            player_record,
-            canonical_id,
-            player_name,
-            source,
-            message,
-            reply_text,
-            intent
-        )
-
-        register_message_stats(memory_data, source, player_record)
-
-        # -----------------------------------------
-        # Save memory (safe + synced)
-        # -----------------------------------------
-        try:
-            with memory_lock:
-                save_memory(memory_data)
-
-                memory_cache = memory_data
-                memory_cache_last_load = unix_ts()
-
-            memory_data["stats"]["memory_saves"] += 1
-
-        except Exception as save_err:
-    log(f"Memory save failed: {save_err}", level="ERROR")
-            memory_data["stats"]["memory_save_failures"] += 1
-        # -----------------------------------------
-        # Timing stats
-        # -----------------------------------------
-        elapsed = round(unix_ts() - started, 2)
-        memory_data["stats"]["last_response_time_ms"] = int(elapsed * 1000)
-
-        # -----------------------------------------
-        # Final response
-        # -----------------------------------------
-        return jsonify({
-            "reply": reply_text,
-            "actions": actions,
-            "intent": intent,
-            "mode": mode,
-            "mission_created": created_mission,
-            "elapsed_seconds": elapsed
-        })
+        memory_data["players"][canonical_id] = player_record
+        memory_data["stats"]["messages_sent"] = memory_data["stats"].get("messages_sent", 0) + 1
+        save_memory(memory_data)
+        return jsonify({"reply": reply, "actions": actions})
 
     except Exception as e:
-        log_exception("CHAT ROUTE FAILURE", e)
+        try:
+            memory_data = ensure_memory_structure(locals().get("memory_data", {}))
+            memory_data["stats"]["send_failures"] = memory_data["stats"].get("send_failures", 0) + 1
+        except Exception:
+            pass
+        log_exception("chat failed", e)
+        return jsonify({"reply": random.choice(fallback_replies), "actions": []}), 500
 
-        return jsonify({
-            "reply": "System disruption detected.",
-            "actions": []
-        }), 500
-# ------------------------------------------------------------
-# IDENTITY LINKING
-# ------------------------------------------------------------
+@app.route("/event", methods=["POST"])
+def event_ingest():
+    try:
+        data = request.get_json(force=True) or {}
+        player_name = normalize_name(data.get("player_name") or "unknown")
+        source = normalize_source(data.get("source"))
+        event_type = data.get("event_type") or "generic"
+        amount = safe_float(data.get("amount"), 0.0)
+
+        memory_data = ensure_memory_structure(load_memory())
+        canonical_id = get_canonical_player_id(memory_data, source, player_name)
+        player_record = get_player_record(memory_data, canonical_id, player_name)
+
+        if event_type == "npc_kill":
+            update_threat(canonical_id, THREAT_KILL_NPC + amount, reason="npc_kill")
+        elif event_type == "player_kill":
+            update_threat(canonical_id, THREAT_KILL_PLAYER + amount, reason="player_kill")
+        elif event_type == "survive_wave":
+            update_threat(canonical_id, THREAT_SURVIVE_WAVE + amount, reason="survive_wave")
+        elif event_type == "toxic_chat":
+            update_threat(canonical_id, THREAT_TOXIC_CHAT + amount, reason="toxic_chat")
+
+        memory_data["players"][canonical_id] = player_record
+        save_memory(memory_data)
+        return jsonify({"status": "ok", "canonical_id": canonical_id})
+    except Exception as e:
+        log_exception("event_ingest failed", e)
+        return jsonify({"status": "error", "error": str(e)}), 500
 
 @app.route("/link_identity", methods=["POST"])
 def link_identity():
     try:
-        data = request.json or {}
-
-        minecraft_name = normalize_name(data.get("minecraft_name", ""))
-        discord_name = normalize_name(data.get("discord_name", ""))
-
+        data = request.get_json(force=True) or {}
+        minecraft_name = normalize_name(data.get("minecraft_name"))
+        discord_name = normalize_name(data.get("discord_name"))
         if not minecraft_name or not discord_name:
             return jsonify({"reply": "Both identities required."}), 400
 
-        # -----------------------------
-        # Load memory (safe)
-        # -----------------------------
-        memory_data = memory_cache if memory_cache else load_memory()
-        memory_data.setdefault("identity_links", {})
-memory_data.setdefault("stats", {})
-memory_data["stats"].setdefault("messages_sent", 0)
-memory_data["stats"].setdefault("send_failures", 0)
-        memory_data.setdefault("stats", {})
-
+        memory_data = ensure_memory_structure(load_memory())
         mc_key = f"minecraft:{minecraft_name}".lower()
         dc_key = f"discord:{discord_name}".lower()
+        canonical_id = stable_short_hash(mc_key, dc_key)
 
-        # -----------------------------
-        # Determine canonical ID
-        # -----------------------------
-        existing_mc = memory_data["identity_links"].get(mc_key)
-        existing_dc = memory_data["identity_links"].get(dc_key)
-
-        canonical_id = existing_mc or existing_dc or f"player:{minecraft_name.lower()}"
-
-        # -----------------------------
-        # Link both identities
-        # -----------------------------
         memory_data["identity_links"][mc_key] = canonical_id
         memory_data["identity_links"][dc_key] = canonical_id
-
-        # -----------------------------
-        # Get player record
-        # -----------------------------
-        player_record = get_player_record(memory_data, canonical_id, minecraft_name)
-
-        # -----------------------------
-        # Alias tracking
-        # -----------------------------
-        add_alias(player_record, minecraft_name)
-        add_alias(player_record, discord_name)
-
-        player_record["display_name"] = minecraft_name
-
-        # -----------------------------
-        # Stats tracking
-        # -----------------------------
-        memory_data["stats"]["identity_links_created"] = (
-            memory_data["stats"].get("identity_links_created", 0) + 1
-        )
-
-        return jsonify({
-            "reply": "Identity linkage confirmed.",
-            "linked_as": canonical_id
-        })
-
+        save_memory(memory_data)
+        return jsonify({"status": "ok", "canonical_id": canonical_id})
     except Exception as e:
-        log_exception("IDENTITY LINK ERROR", e)
+        log_exception("link_identity failed", e)
+        return jsonify({"status": "error", "error": str(e)}), 500
 
-        return jsonify({
-            "reply": "Linking process failed.",
-            "actions": []
-        }), 500
 @app.route("/mission", methods=["POST"])
 def mission():
-    global memory_cache, memory_cache_last_load
-
     try:
-        data = request.json or {}
-
-        target_name = normalize_name(data.get("name", "Unknown"))
-        # -----------------------------
-        # Load memory (safe)
-        # -----------------------------
-        memory_data = memory_cache if memory_cache else load_memory()
-        memory_data.setdefault("stats", {})
-
-        # -----------------------------
-        # Resolve player identity
-        # -----------------------------
-        canonical_id = get_canonical_player_id(memory_data, "system", target_name)
-        player_record = get_player_record(memory_data, canonical_id, target_name)
-
-        # -----------------------------
-        # Prevent mission spam
-        # -----------------------------
-        if not can_execute_action(f"mission:{canonical_id}", 10):
-            return jsonify({
-                "reply": "Directive request denied. Cooldown active.",
-                "actions": []
-            }), 429
-
-        # -----------------------------
-        # Prevent stacking missions
-        # -----------------------------
-        active_for_player = [
-            m for m in memory_data.get("active_missions", {}).values()
-            if m.get("target_player") == target_name
-        ]
-
-        if active_for_player:
-            return jsonify({
-                "reply": "Target already assigned an active directive.",
-                "actions": []
-            })
-
-        # -----------------------------
-        # Dynamic difficulty scaling
-        # -----------------------------
-        threat = player_record.get("threat_score", 0)
-
-        if threat >= THREAT_THRESHOLD_HUNT:
-            difficulty = "hard"
-        elif threat >= THREAT_THRESHOLD_TARGET:
-            difficulty = "medium"
-        else:
-            difficulty = data.get("difficulty") or "easy"
-
-        # -----------------------------
-        # Create mission
-        # -----------------------------
-        mission_record = create_mission_record(
-            memory_data,
-            target_name,
-            theme=(data.get("theme") or "mystery"),
-            difficulty=difficulty
-        )
-
-        # -----------------------------
-        # Track mission history
-        # -----------------------------
-        player_record.setdefault("mission_history", []).append(mission_record["id"])
-
-        memory_data["stats"]["missions_created"] = (
-            memory_data["stats"].get("missions_created", 0) + 1
-        )
-
-        # -----------------------------
-        # Save memory (thread-safe)
-        # -----------------------------
-        try:
-            with memory_lock:
-                save_memory(memory_data)
-
-                memory_cache = memory_data
-                memory_cache_last_load = unix_ts()
-
-        except Exception as save_err:
-    log(f"Mission save failed: {save_err}", level="ERROR")
-
-        return jsonify({
-            "reply": "Directive issued.",
-            "mission": mission_record
-        })
-
+        data = request.get_json(force=True) or {}
+        memory_data = ensure_memory_structure(load_memory())
+        mission_id = data.get("mission_id") or gen_id("mission")
+        payload = {
+            "id": mission_id,
+            "title": data.get("title") or "Untitled mission",
+            "status": data.get("status") or "active",
+            "created_at": now_iso(),
+            "data": data,
+        }
+        memory_data["active_missions"][mission_id] = payload
+        memory_data["stats"]["missions_created"] = memory_data["stats"].get("missions_created", 0) + 1
+        save_memory(memory_data)
+        return jsonify({"status": "ok", "mission": payload})
     except Exception as e:
-        log_exception("MISSION ROUTE FAILURE", e)
-
-        return jsonify({
-            "reply": "Directive generation failed.",
-            "actions": []
-        }), 500
-
-# ------------------------------------------------------------
-# SYSTEM STATE
-# ------------------------------------------------------------
+        log_exception("mission failed", e)
+        return jsonify({"status": "error", "error": str(e)}), 500
 
 @app.route("/system_state", methods=["GET"])
 def system_state():
-    try:
-        memory_data = memory_cache if memory_cache else load_memory()
-
-        kairos_state = memory_data.get("kairos_state", {})
-        fragments = memory_data.get("system_fragments", {})
-        stats = memory_data.get("stats", {})
-
-        high_threat = kairos_state.get("high_threat_targets", [])
-
-        queue_size = len(command_queue)
-        delayed_count = len(delayed_actions)
-
-        uptime = int(unix_ts() - START_TIME)
-
-        return jsonify({
-            "status": "ok",
-            "time": now_iso(),
-            "uptime_seconds": uptime,
-
-            "kairos_state": kairos_state,
-            "system_fragments": fragments,
-
-            "stats": stats,
-
-            "active_missions": len(memory_data.get("active_missions", {})),
-            "completed_missions": len(memory_data.get("completed_missions", [])),
-            "failed_missions": len(memory_data.get("failed_missions", [])),
-            "world_events": len(memory_data.get("world_events", [])),
-
-            "high_threat_targets": high_threat,
-
-            "queue_size": queue_size,
-            "delayed_actions": delayed_count,
-
-            "tracked_players": len(memory_data.get("players", {}))
-        })
-
-    except Exception as e:
-        log_exception("SYSTEM STATE ERROR", e)
-
-        return jsonify({
-            "status": "error",
-            "reply": "System state unavailable."
-        }), 500
-# ------------------------------------------------------------
-# Startup (Kairos Runtime Initialization)
-# ------------------------------------------------------------
-
-background_started = False
+    memory_data = ensure_memory_structure(load_memory())
+    return jsonify({
+        "kairos_state": memory_data.get("kairos_state", {}),
+        "system_fragments": memory_data.get("system_fragments", {}),
+        "stats": memory_data.get("stats", {}),
+        "active_units": len(active_units),
+        "active_squads": len(active_squads),
+        "active_operations": len(active_operations),
+        "active_engagements": len(active_engagements),
+    })
 
 def start_background_systems():
-    global background_started
-
-    if background_started:
-    log("Background systems already initialized. Skipping duplicate start.")
+    global system_initialized
+    if system_initialized:
         return
-
-    background_started = True
-
-    try:
-    log("Initializing Kairos background systems...")
-
-        # -----------------------------------------
-        # Idle loop (presence / atmosphere)
-        # -----------------------------------------
-        idle_thread = threading.Thread(
-            target=run_safe_loop,
-            args=(idle_loop, "idle_loop"),
-            daemon=True
-        )
-        idle_thread.start()
-    log("Idle loop started.")
-
-        # -----------------------------------------
-        # Action loop (WAR ENGINE)
-        # -----------------------------------------
-        action_thread = threading.Thread(
-            target=run_safe_loop,
-            args=(action_loop, "action_loop"),
-            daemon=True
-        )
-        action_thread.start()
-    log("Action loop started.")
-
-        # -----------------------------------------
-        # Optional: future expansion hooks
-        # -----------------------------------------
-        def start_optional_system(name, fn):
-            try:
-                thread = threading.Thread(
-                    target=run_safe_loop,
-                    args=(fn, name),
-                    daemon=True
-                )
-                thread.start()
-    log(f"{name} started.")
-            except Exception as e:
-    log(f"{name} failed to start: {e}", level="ERROR")
-
-        # Toggle flags
-        ENABLE_TELEMETRY = False
-        ENABLE_MISSION_LOOP = False
-
-        if ENABLE_TELEMETRY:
-            start_optional_system("telemetry_loop", telemetry_loop)
-
-        if ENABLE_MISSION_LOOP:
-            start_optional_system("mission_loop", mission_loop)
-
-    log("Kairos systems fully online.")
-
-    except Exception as e:
-        log_exception("BACKGROUND INIT FAILURE", e)
-
-
-# ------------------------------------------------------------
-# Launch
-# ------------------------------------------------------------
+    started = []
+    for fn_name in ["action_loop", "idle_loop", "commander_loop"]:
+        fn = globals().get(fn_name)
+        if callable(fn):
+            t = threading.Thread(target=run_safe_loop, args=(fn, fn_name), daemon=True)
+            t.start()
+            started.append(fn_name)
+    system_initialized = True
+    log(f"Background systems started: {started}")
 
 if __name__ == "__main__":
-    import os
-
+    try:
+        start_background_systems()
+    except Exception as e:
+        log_exception("start_background_systems failed", e)
     log("Starting Kairos AI server...")
-
-    # Prevent duplicate thread startup (Flask reloader fix)
-    if os.environ.get("WERKZEUG_RUN_MAIN") == "true":
-        start_background_systems()
-    elif not os.environ.get("WERKZEUG_RUN_MAIN"):
-        start_background_systems()
-
-    # -----------------------------
-    # Config
-    # -----------------------------
-    PORT = int(os.environ.get("PORT", 10000))
-    DEBUG = os.environ.get("DEBUG", "false").lower() == "true"
-
-    app.run(
-        host="0.0.0.0",
-        port=PORT,
-        threaded=True,
-        debug=DEBUG,
-        use_reloader=DEBUG
-    )
+    app.run(host="0.0.0.0", port=10000, threaded=True)
