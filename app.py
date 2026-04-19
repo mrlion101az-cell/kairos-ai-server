@@ -6316,9 +6316,7 @@ def build_messages(
         if channel_lines:
             messages.append({
                 "role": "system",
-                "content": "Recent context:
-- " + "
-- ".join(reversed(channel_lines))
+            "content": "Recent context:\n- " + "\n- ".join(reversed(channel_lines))
             })
 
     # ------------------------------------------------------------
@@ -8792,12 +8790,7 @@ if reply:
     if success:
         memory_data["stats"]["messages_sent"] += 1
     else:
-        
-# 🔒 Ensure stats exists
-memory_data.setdefault("stats", {})
-memory_data["stats"].setdefault("send_failures", 0)
-
-memory_data["stats"]["send_failures"] += 1
+        memory_data["stats"]["send_failures"] += 1
 
         log(
             f"Send failed → source={source}, player={player_name}",
@@ -9371,12 +9364,7 @@ def chat():
             if success:
                 memory_data["stats"]["messages_sent"] += 1
             else:
-                
-# 🔒 Ensure stats exists
-memory_data.setdefault("stats", {})
-memory_data["stats"].setdefault("send_failures", 0)
-
-memory_data["stats"]["send_failures"] += 1
+                memory_data["stats"]["send_failures"] += 1
 
                 log(
                     f"Send failed → source={source}, player={player_name}",
