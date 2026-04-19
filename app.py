@@ -7836,14 +7836,14 @@ kairos_state["high_threat_targets"] = [
 ]
 
 kairos_state["high_threat_details"] = threat_list
-    # -----------------------------
-    # Logging (only if meaningful)
-    # -----------------------------
-    if threat_list:
-        log(
-            f"High threat targets updated: {[t['name'] for t in threat_list]}",
-            level="INFO"
-        )
+   # -----------------------------
+# Logging (only if meaningful)
+# -----------------------------
+if threat_list:
+    log(
+        f"High threat targets updated: {[t['name'] for t in threat_list]}",
+        level="INFO"
+    )
 # ------------------------------------------------------------
 # Chat / Performance Generation (Intelligence-Aware Tracking)
 # ------------------------------------------------------------
