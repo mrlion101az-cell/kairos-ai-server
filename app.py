@@ -8587,9 +8587,9 @@ def update_kairos_state(*args, **kwargs):
 # -----------------------------
 adjust_fragments_from_context(
     memory_data,
-    player_record,
     intent,
-    None,
+    player_id,
+    player_record,
     violations
 )
 
