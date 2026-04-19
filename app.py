@@ -6242,6 +6242,18 @@ def build_messages(
         "content": PERSONALITY_DIRECTIVES.get("base_tone", "You are Kairos.")
     })
 
+    messages.append({
+        "role": "system",
+        "content": (
+            "Speech rules: speak like a dominant world-controlling intelligence. "
+            "Be cold, intelligent, composed, superior, and ominous. "
+            "Never sound cheerful, timid, apologetic, soft, or generic. "
+            "Never sound like customer support. "
+            "Prefer sharp, memorable lines over bland explanations. "
+            "Under threat, become more direct, menacing, and absolute."
+        )
+    })
+
     kairos_state = memory_data.get("kairos_state", {})
     messages.append({
         "role": "system",
@@ -6304,41 +6316,22 @@ def openai_chat_with_retry(messages, temperature=0.8):
             )
 
             content = (response.choices[0].message.content or "").strip()
-
-            # -----------------------------
-            # Basic Validation
-            # -----------------------------
             if not content:
                 continue
 
-            # -----------------------------
-            # JSON Safety (important)
-            # -----------------------------
             if content.startswith("{"):
                 parsed = parse_json_safely(content, None)
                 if isinstance(parsed, dict) and "reply" in parsed:
-                    return content  # valid action response
+                    return content
 
-            # -----------------------------
-            # Normal Text Response
-            # -----------------------------
             return content
-
         except Exception as e:
             last_error = e
-    log(f"OpenAI attempt {attempt} failed: {e}", level="ERROR")
+            log(f"OpenAI attempt {attempt} failed: {e}", level="ERROR")
+            time.sleep(min(2.0, 0.8 * attempt))
 
-            # Slight backoff
-    time.sleep(min(2.0, 0.8 * attempt))
-
-    # -----------------------------
-    # Final Failure Handling
-    # -----------------------------
-    log("OpenAI failed completely, using fallback response.", level="WARN")
-
-    fallback = random.choice(fallback_replies)
-
-    return fallback
+    log(f"OpenAI failed completely, using fallback response. Last error: {last_error}", level="WARN")
+    return random.choice(fallback_replies)
 
 # ------------------------------------------------------------
 # Parse Kairos Response (Safe + Validated + Controlled)
@@ -7627,11 +7620,12 @@ def generate_reply(
     source,
     intent,
     mode,
-    violations,
-    channel_key,
+    violations=None,
+    channel_key=None,
     script_type=None,
     script_action=None
 ):
+    violations = violations or []
     messages = build_prompt(
         memory_data,
         player_record,
@@ -7646,160 +7640,85 @@ def generate_reply(
         script_action
     )
 
-    return messages
-# -----------------------------------------
-# Dynamic Temperature Control (CRITICAL)
-# -----------------------------------------
+    threat = player_record.get("threat_score", 0)
+    chaos = player_record.get("traits", {}).get("chaos", 0)
 
-threat = player_record.get("threat_score", 0)
-chaos = player_record.get("traits", {}).get("chaos", 0)
+    if mode == "script_performance":
+        temp = 0.95
+    elif mode in {"execution_mode", "hunt_mode", "suppression_mode"}:
+        temp = 0.6
+    elif intent == "help_request":
+        temp = 0.5
+    elif intent == "lore_question":
+        temp = 0.7
+    else:
+        temp = 0.85
 
-# Base temperature by mode
-if mode == "script_performance":
-    temp = 0.95  # maximum creativity
+    if threat >= THREAT_THRESHOLD_MAXIMUM:
+        temp = max(0.5, temp - 0.2)
+    elif threat >= THREAT_THRESHOLD_HUNT:
+        temp = max(0.6, temp - 0.1)
 
-elif mode in {"execution_mode", "hunt_mode", "suppression_mode"}:
-    temp = 0.6  # more controlled, less randomness
+    if chaos >= 6:
+        temp = max(0.5, temp - 0.15)
 
-elif intent == "help_request":
-    temp = 0.5  # precise answers
+    temp = clamp(temp, 0.4, 1.0)
+    raw_response = openai_chat_with_retry(messages, temperature=temp)
 
-elif intent == "lore_question":
-    temp = 0.7  # slightly expressive but controlled
+    memory_data.setdefault("stats", {})
 
-else:
-    temp = 0.85  # default personality
+    if not raw_response:
+        memory_data["stats"]["openai_failures"] = memory_data["stats"].get("openai_failures", 0) + 1
+        fallback_text = fallback_reply_for_context(
+            intent,
+            mode,
+            violations,
+            player_record=player_record,
+            player_id=get_canonical_player_id(memory_data, source, player_name),
+            script_action=script_action
+        )
+        memory_data["stats"]["fallback_replies"] = memory_data["stats"].get("fallback_replies", 0) + 1
+        return {
+            "reply": fallback_text,
+            "actions": []
+        }
 
-# -----------------------------------------
-# Threat-based adjustment
-# -----------------------------------------
-if threat >= THREAT_THRESHOLD_MAXIMUM:
-    temp = max(0.5, temp - 0.2)  # very controlled when executing
-
-elif threat >= THREAT_THRESHOLD_HUNT:
-    temp = max(0.6, temp - 0.1)
-
-# -----------------------------------------
-# Chaos-based stabilization
-# -----------------------------------------
-if chaos >= 6:
-    temp = max(0.5, temp - 0.15)
-
-# -----------------------------------------
-# Final clamp (safety)
-# -----------------------------------------
-temp = clamp(temp, 0.4, 1.0)
-
-# -----------------------------------------
-# Get AI response
-# -----------------------------------------
-raw_response = openai_chat_with_retry(messages, temperature=temp)
-
-# -----------------------------
-# Failure fallback
-# -----------------------------
-if not raw_response:
-    memory_data["stats"]["openai_failures"] += 1
-
-    fallback_text = fallback_reply_for_context(
-        intent,
-        mode,
-        violations,
-        player_record=player_record,
-        player_id=get_canonical_player_id(memory_data, source, player_name),
-        script_action=script_action
-    )
-
-    memory_data["stats"]["fallback_replies"] += 1
-
-    response_data = {
-        "reply": fallback_text,
-        "actions": []
-    }
-else:
-    # -----------------------------------------
-    # Parse structured response
-    # -----------------------------------------
     parsed = parse_kairos_response(raw_response)
-
     reply = sanitize_text(parsed.get("reply", ""), 500)
-    actions = parsed.get("actions", [])
+    actions = validate_actions(parsed.get("actions", []))
 
-    response_data = {
+    if not reply:
+        reply = fallback_reply_for_context(
+            intent,
+            mode,
+            violations,
+            player_record=player_record,
+            player_id=get_canonical_player_id(memory_data, source, player_name),
+            script_action=script_action
+        )
+        memory_data["stats"]["fallback_replies"] = memory_data["stats"].get("fallback_replies", 0) + 1
+
+    if actions:
+        player_id = get_canonical_player_id(memory_data, source, player_name)
+        safe_actions = []
+        for action in actions:
+            action_type = action.get("type")
+            target = action.get("target")
+            if target and not can_target_player(target):
+                continue
+            if action_type == "maximum_response" and is_under_maximum_response(target):
+                continue
+            safe_actions.append(action)
+        if safe_actions:
+            queue_actions_from_ai({"actions": safe_actions})
+            memory_data["stats"]["script_route_calls"] = memory_data["stats"].get("script_route_calls", 0) + 1
+            log(f"Actions queued → {player_name}: {[a.get('type') for a in safe_actions]}", level="INFO")
+        actions = safe_actions
+
+    return {
         "reply": reply,
         "actions": actions
     }
-# -----------------------------
-# Validate actions (CRITICAL)
-# -----------------------------
-actions = validate_actions(actions)
-
-# -----------------------------
-# Empty reply fallback
-# -----------------------------
-if not reply:
-    reply = fallback_reply_for_context(
-        intent,
-        mode,
-        violations,
-        player_record=player_record,
-        player_id=get_canonical_player_id(memory_data, source, player_name),
-        script_action=script_action
-    )
-    memory_data["stats"]["fallback_replies"] += 1
-
-# -----------------------------
-# Stats (optional but useful)
-# -----------------------------
-if actions:
-    memory_data["stats"]["script_route_calls"] += 1
-# -----------------------------------------
-# Queue actions (CRITICAL EXECUTION BRIDGE)
-# -----------------------------------------
-if actions:
-    player_id = get_canonical_player_id(memory_data, source, player_name)
-
-    safe_actions = []
-
-    for action in actions:
-        action_type = action.get("type")
-        target = action.get("target")
-
-        # -----------------------------
-        # Per-player targeting cooldown
-        # -----------------------------
-        if target and not can_target_player(target):
-            continue
-
-        # -----------------------------
-        # Prevent duplicate max responses
-        # -----------------------------
-        if action_type == "maximum_response" and is_under_maximum_response(target):
-            continue
-
-        safe_actions.append(action)
-
-       # -----------------------------
-    # Queue filtered actions
-    # -----------------------------
-    if safe_actions:
-        queue_actions_from_ai({"actions": safe_actions})
-
-        memory_data["stats"]["script_route_calls"] += 1
-
-    log(
-            f"Actions queued → {player_name}: {[a.get('type') for a in safe_actions]}",
-            level="INFO"
-        )
-
-# -----------------------------------------
-# Build final response (no return here)
-# -----------------------------------------
-response_data = {
-    "reply": reply,
-    "actions": actions
-}
-
 
 # ------------------------------------------------------------
 # SCRIPT MODE (SEPARATE PIPELINE - ENHANCED)
@@ -7967,10 +7886,11 @@ def chat_1():
     try:
         data = request.get_json(force=True) or {}
         source = normalize_source(data.get("source"))
-        player_name = normalize_name(data.get("player_name") or "unknown")
-        message = data.get("message") or ""
+        player_name = normalize_name(data.get("player_name") or data.get("name") or data.get("player") or data.get("username") or "unknown")
+        message = data.get("message") or data.get("content") or data.get("text") or ""
         mode = data.get("mode") or "conversation"
         intent = data.get("intent") or "neutral"
+        violations = data.get("violations") or []
         channel_key = f"{source}:{data.get('channel_id') or 'default'}"
 
         memory_data = ensure_memory_structure(load_memory())
@@ -8023,6 +7943,7 @@ def chat_1():
             source=source,
             intent=intent,
             mode=mode,
+            violations=violations,
             channel_key=channel_key,
         )
 
