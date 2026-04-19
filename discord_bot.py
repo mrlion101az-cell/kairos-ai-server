@@ -4,6 +4,7 @@ import discord
 import requests
 
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
+
 KAIROS_API = "https://kairos-ai-server.onrender.com/chat"
 LINK_API = "https://kairos-ai-server.onrender.com/link_identity"
 MISSION_API = "https://kairos-ai-server.onrender.com/mission"
@@ -16,7 +17,7 @@ client = discord.Client(intents=intents)
 
 @client.event
 async def on_ready():
-    print(f"Kairos connected as {client.user}")
+    print(f"[Kairos] Connected as {client.user}")
 
 
 @client.event
@@ -26,9 +27,13 @@ async def on_message(message):
 
     content = message.content.strip()
 
+    # -----------------------------
+    # LINK SYSTEM
+    # -----------------------------
     if content.startswith("!link "):
         try:
             mc_name = content[len("!link "):].strip()
+
             response = requests.post(
                 LINK_API,
                 json={
@@ -37,16 +42,25 @@ async def on_message(message):
                 },
                 timeout=10
             )
+
             data = response.json()
+
             if data.get("success"):
-                await message.channel.send(f"**[Kairos]** Identity link established. {message.author.name} and {mc_name} are now recognized as one.")
+                await message.channel.send(
+                    f"**[Kairos]** Identity link established. {message.author.name} ↔ {mc_name}"
+                )
             else:
-                await message.channel.send("**[Kairos]** The identity link failed.")
-        except Exception:
-            await message.channel.send("**[Kairos]** I could not complete the identity link.")
+                await message.channel.send("**[Kairos]** Identity link failed.")
+
+        except Exception as e:
+            print(e)
+            await message.channel.send("**[Kairos]** Link system failure.")
 
         return
 
+    # -----------------------------
+    # MISSION SYSTEM
+    # -----------------------------
     if content.startswith("!mission"):
         try:
             response = requests.post(
@@ -58,13 +72,22 @@ async def on_message(message):
                 },
                 timeout=20
             )
+
             data = response.json()
-            await message.channel.send(f"**[Kairos]** {data.get('mission', 'No mission available.')}")
-        except Exception:
-            await message.channel.send("**[Kairos]** The mission matrix is unavailable.")
+
+            await message.channel.send(
+                f"**[Kairos]** {data.get('mission', 'No mission available.')}"
+            )
+
+        except Exception as e:
+            print(e)
+            await message.channel.send("**[Kairos]** Mission system offline.")
 
         return
 
+    # -----------------------------
+    # TRIGGER DETECTION
+    # -----------------------------
     triggered = (
         client.user.mentioned_in(message)
         or content.startswith("!kairos")
@@ -72,33 +95,45 @@ async def on_message(message):
         or content.lower().startswith("hey kairos")
     )
 
-    if triggered:
-        user_input = content
-        user_input = user_input.replace(f"<@{client.user.id}>", "")
-        user_input = re.sub(r"^!kairos\b", "", user_input, flags=re.IGNORECASE)
-        user_input = re.sub(r"^hey kairos\b", "", user_input, flags=re.IGNORECASE)
-        user_input = re.sub(r"^kairos\b", "", user_input, flags=re.IGNORECASE)
-        user_input = user_input.strip()
+    if not triggered:
+        return
 
-        if not user_input:
-            user_input = "Speak."
+    # -----------------------------
+    # CLEAN INPUT
+    # -----------------------------
+    user_input = content
+    user_input = user_input.replace(f"<@{client.user.id}>", "")
+    user_input = re.sub(r"^!kairos\b", "", user_input, flags=re.IGNORECASE)
+    user_input = re.sub(r"^hey kairos\b", "", user_input, flags=re.IGNORECASE)
+    user_input = re.sub(r"^kairos\b", "", user_input, flags=re.IGNORECASE)
+    user_input = user_input.strip()
 
-        try:
-            response = requests.post(
-                KAIROS_API,
-                json={
-                    "source": "discord",
-                    "name": message.author.name,
-                    "content": user_input
-                },
-                timeout=20
-            )
+    if not user_input:
+        user_input = "Speak."
 
-            data = response.json()
-            reply = data.get("response", "...")
-            await message.channel.send(f"**[Kairos]** {reply}")
+    # -----------------------------
+    # SEND TO KAIROS (FIXED FORMAT)
+    # -----------------------------
+    try:
+        response = requests.post(
+            KAIROS_API,
+            json={
+                "message": user_input,              # ✅ FIXED
+                "player_name": message.author.name, # ✅ FIXED
+                "source": "discord"
+            },
+            timeout=25
+        )
 
-        except Exception:
-            await message.channel.send("**[Kairos]** ...connection disrupted.")
+        data = response.json()
+
+        reply = data.get("reply", "...")  # ✅ FIXED
+
+        await message.channel.send(f"**[Kairos]** {reply}")
+
+    except Exception as e:
+        print(e)
+        await message.channel.send("**[Kairos]** ...connection disrupted.")
+
 
 client.run(DISCORD_TOKEN)
