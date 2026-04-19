@@ -438,13 +438,13 @@ TARGET_ACTION_COOLDOWN = float(os.getenv("TARGET_ACTION_COOLDOWN", "2.0"))
 # Passive Recognition / Spontaneous Targeting
 # -----------------------------
 PASSIVE_TARGETING_ENABLED = os.getenv("PASSIVE_TARGETING_ENABLED", "true").lower() == "true"
-PLAYER_GRACE_PERIOD_SECONDS = int(os.getenv("PLAYER_GRACE_PERIOD_SECONDS", "1800"))
-PLAYER_RECOGNITION_SECONDS = int(os.getenv("PLAYER_RECOGNITION_SECONDS", "900"))
-PASSIVE_PRESSURE_COOLDOWN = int(os.getenv("PASSIVE_PRESSURE_COOLDOWN", "420"))
-PASSIVE_SCOUT_CHANCE = float(os.getenv("PASSIVE_SCOUT_CHANCE", "0.30"))
-PASSIVE_TARGET_THREAT_GAIN = float(os.getenv("PASSIVE_TARGET_THREAT_GAIN", "8.0"))
-PASSIVE_HUNT_THREAT_GAIN = float(os.getenv("PASSIVE_HUNT_THREAT_GAIN", "16.0"))
-SPONTANEOUS_MESSAGE_CHANCE = float(os.getenv("SPONTANEOUS_MESSAGE_CHANCE", "0.22"))
+PLAYER_GRACE_PERIOD_SECONDS = int(os.getenv("PLAYER_GRACE_PERIOD_SECONDS", "120"))
+PLAYER_RECOGNITION_SECONDS = int(os.getenv("PLAYER_RECOGNITION_SECONDS", "60"))
+PASSIVE_PRESSURE_COOLDOWN = int(os.getenv("PASSIVE_PRESSURE_COOLDOWN", "90"))
+PASSIVE_SCOUT_CHANCE = float(os.getenv("PASSIVE_SCOUT_CHANCE", "0.65"))
+PASSIVE_TARGET_THREAT_GAIN = float(os.getenv("PASSIVE_TARGET_THREAT_GAIN", "28.0"))
+PASSIVE_HUNT_THREAT_GAIN = float(os.getenv("PASSIVE_HUNT_THREAT_GAIN", "48.0"))
+SPONTANEOUS_MESSAGE_CHANCE = float(os.getenv("SPONTANEOUS_MESSAGE_CHANCE", "0.45"))
 
 # ------------------------------------------------------------
 # Feature Flags (Kairos System Control Panel)
@@ -537,16 +537,16 @@ THREAT_DEFIANCE_SPIKE = float(os.getenv("THREAT_DEFIANCE_SPIKE", "30.0"))
 # -----------------------------
 # These now directly map to behavior tiers
 
-THREAT_THRESHOLD_WATCH = int(os.getenv("THREAT_THRESHOLD_WATCH", "40"))
+THREAT_THRESHOLD_WATCH = int(os.getenv("THREAT_THRESHOLD_WATCH", "20"))
 # Kairos observes, minor presence, no real pressure
 
-THREAT_THRESHOLD_TARGET = int(os.getenv("THREAT_THRESHOLD_TARGET", "90"))
+THREAT_THRESHOLD_TARGET = int(os.getenv("THREAT_THRESHOLD_TARGET", "45"))
 # Light waves begin, scouting units
 
-THREAT_THRESHOLD_HUNT = int(os.getenv("THREAT_THRESHOLD_HUNT", "160"))
+THREAT_THRESHOLD_HUNT = int(os.getenv("THREAT_THRESHOLD_HUNT", "95"))
 # Aggressive waves, mixed unit classes
 
-THREAT_THRESHOLD_MAXIMUM = int(os.getenv("THREAT_THRESHOLD_MAXIMUM", "280"))
+THREAT_THRESHOLD_MAXIMUM = int(os.getenv("THREAT_THRESHOLD_MAXIMUM", "160"))
 # Full suppression, elite units, repeated waves
 
 # -----------------------------
@@ -4463,6 +4463,8 @@ def should_passively_target_player(player_id: str, player_record: Dict[str, Any]
 
     position = player_record.get("last_position")
     if not position:
+        if ENABLE_DEBUG_LOGGING:
+            log(f"Passive targeting blocked: no last_position for {player_id}", level="INFO")
         return False
 
     return True
@@ -4560,20 +4562,22 @@ def run_autonomous_war_engine():
 
         if tier in {"target", "hunt", "maximum"} and can_spawn_wave(player_id):
             if tier == "target":
-                template = "scout" if random.random() < 0.6 else "hunter"
-                count = clamp(1 + int(score / 120), 1, 3)
+                template = "hunter" if random.random() < 0.65 else "scout"
+                count = clamp(2 + int(score / 90), 2, 4)
             elif tier == "hunt":
-                template = "hunter" if random.random() < 0.7 else "enforcer"
-                count = clamp(2 + int(score / 80), 2, 5)
+                template = "enforcer" if random.random() < 0.55 else "hunter"
+                count = clamp(3 + int(score / 70), 3, 6)
             else:
-                template = "warden" if score >= MAX_THREAT_FORCE_HEAVY else "enforcer"
-                count = clamp(2 + int(score / 80), 2, 4 if template == "warden" else 6)
+                template = "warden" if score >= MAX_THREAT_FORCE_HEAVY or random.random() < 0.45 else "enforcer"
+                count = clamp(3 + int(score / 60), 3, 6 if template == "warden" else 7)
 
+            log(f"Autonomous wave queued: tier={tier} template={template} count={count} target={player_id}", level="INFO")
             queue_action({
                 "type": "spawn_wave",
                 "target": player_id,
                 "template": template,
-                "count": count
+                "count": count,
+                "bypass_cooldown": True
             })
             player_record["last_passive_pressure_ts"] = now
             changed = True
@@ -7196,6 +7200,27 @@ def commander_loop():
             # -----------------------------
             run_autonomous_war_engine()
 
+            # -----------------------------
+            # Force-test waves (optional)
+            # -----------------------------
+            if ENABLE_FORCE_ACTIONS:
+                memory_data = ensure_memory_structure(load_memory())
+                for player_id, player_record in list(memory_data.get("players", {}).items()):
+                    if not isinstance(player_record, dict):
+                        continue
+                    if not player_record.get("last_position"):
+                        continue
+                    if can_spawn_wave(player_id):
+                        log(f"FORCE TEST wave queued for {player_id}", level="INFO")
+                        queue_action({
+                            "type": "spawn_wave",
+                            "target": player_id,
+                            "template": "hunter",
+                            "count": 2,
+                            "bypass_cooldown": True
+                        })
+                        break
+
         except Exception as e:
             log(f"Commander loop error: {e}", level="ERROR")
             time.sleep(1)
@@ -7292,8 +7317,8 @@ def handle_spawn_wave(action):
     if not player_id:
         return
 
-    if not can_spawn_wave(player_id):
-        return
+    if action.get("bypass_cooldown"):
+        log(f"Spawn wave bypassed cooldown for {player_id}", level="INFO")
 
     commands, unit_records = build_custom_npc_commands(memory_data, player_id, template, clamp(count, 1, 6))
     if not commands:
@@ -7304,6 +7329,8 @@ def handle_spawn_wave(action):
     if not success:
         log(f"Spawn wave failed: {template} x{count} → {player_id}", level="ERROR")
         return
+
+    log(f"Spawn wave success: {template} x{count} → {player_id}", level="INFO")
 
     for unit in unit_records:
         register_unit(unit)
