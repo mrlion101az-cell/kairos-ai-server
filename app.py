@@ -7911,7 +7911,7 @@ def health_1():
 
 
 @app.route("/status")
-def status():
+def status_1():
     memory_data = load_memory()
 
     return jsonify({
@@ -7958,35 +7958,12 @@ def debug_queue():
 # CLEAN ROUTES + RUNTIME (HARD REBUILD)
 # ------------------------------------------------------------
 
-@app.route("/", methods=["GET", "HEAD"])
-def home_2():
-    return jsonify({"status": "ok", "service": "Kairos AI Server"})
-
-@app.route("/health", methods=["GET"])
-def health_2():
-    return jsonify({"status": "healthy"})
-
-@app.route("/status", methods=["GET"])
-def status():
-    return jsonify({
-        "initialized": system_initialized,
-        "shutdown": shutdown_flag,
-        "queued_actions": len(command_queue),
-        "active_units": len(active_units),
-        "active_squads": len(active_squads),
-        "active_operations": len(active_operations),
-    })
-
-@app.route("/debug/queue", methods=["GET"])
-def debug_queue():
-    return jsonify({"queued_actions": list(command_queue)})
-
 @app.route("/debug/threats", methods=["GET"])
 def debug_threats():
     return jsonify({"threat_scores": dict(threat_scores)})
 
 @app.route("/chat", methods=["POST"])
-def chat():
+def chat_1():
     try:
         data = request.get_json(force=True) or {}
         source = normalize_source(data.get("source"))
