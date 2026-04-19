@@ -4075,6 +4075,363 @@ def reset_wave_cooldown(player_id: str):
         del last_wave_times[player_id]
 
 
+# ------------------------------------------------------------
+# Custom NPC Class Templates (Citizens + Sentinel)
+# ------------------------------------------------------------
+NPC_CLASS_TEMPLATES = {
+    "scout": {
+        "entity_type": "player",
+        "display_prefix": "Scout",
+        "health": 28,
+        "damage": 5,
+        "armor": 0.15,
+        "speed": 1.35,
+        "range": 22,
+        "chaserange": 38,
+        "weapon": "crossbow",
+        "offhand": "spyglass",
+        "skin": "MHF_ArrowLeft",
+        "respawntime": -1,
+        "realistic": True,
+        "knockback": True,
+        "guard": False
+    },
+    "hunter": {
+        "entity_type": "player",
+        "display_prefix": "Hunter",
+        "health": 40,
+        "damage": 7,
+        "armor": 0.28,
+        "speed": 1.18,
+        "range": 28,
+        "chaserange": 48,
+        "weapon": "bow",
+        "offhand": "iron_sword",
+        "skin": "MHF_Steve",
+        "respawntime": -1,
+        "realistic": True,
+        "knockback": True,
+        "guard": False
+    },
+    "enforcer": {
+        "entity_type": "player",
+        "display_prefix": "Enforcer",
+        "health": 72,
+        "damage": 10,
+        "armor": 0.42,
+        "speed": 0.98,
+        "range": 20,
+        "chaserange": 34,
+        "weapon": "netherite_axe",
+        "offhand": "shield",
+        "skin": "MHF_Blaze",
+        "respawntime": -1,
+        "realistic": False,
+        "knockback": False,
+        "guard": False
+    },
+    "warden": {
+        "entity_type": "warden",
+        "display_prefix": "Warden",
+        "health": 160,
+        "damage": 18,
+        "armor": 0.58,
+        "speed": 0.92,
+        "range": 26,
+        "chaserange": 45,
+        "weapon": "netherite_axe",
+        "offhand": "totem_of_undying",
+        "skin": None,
+        "respawntime": -1,
+        "realistic": False,
+        "knockback": False,
+        "guard": False
+    },
+    "base_guard": {
+        "entity_type": "player",
+        "display_prefix": "Guard",
+        "health": 56,
+        "damage": 8,
+        "armor": 0.35,
+        "speed": 0.95,
+        "range": 30,
+        "chaserange": 18,
+        "weapon": "netherite_sword",
+        "offhand": "shield",
+        "skin": "MHF_Golem",
+        "respawntime": 30,
+        "realistic": True,
+        "knockback": False,
+        "guard": True
+    }
+}
+
+BASE_OCCUPATION_COOLDOWNS: Dict[str, float] = {}
+ACTIVE_BASE_GUARDS: Dict[str, List[str]] = defaultdict(list)
+
+
+def extract_position_data(data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    if not isinstance(data, dict):
+        return None
+
+    x = data.get('x', data.get('pos_x'))
+    y = data.get('y', data.get('pos_y'))
+    z = data.get('z', data.get('pos_z'))
+    world = data.get('world') or data.get('dimension')
+
+    if x is None or y is None or z is None:
+        return None
+
+    try:
+        position = {
+            'x': float(x),
+            'y': float(y),
+            'z': float(z),
+            'world': normalize_world_name(world or 'world'),
+            'timestamp': unix_ts(),
+            'is_stationary': to_bool(data.get('is_stationary'), False)
+        }
+        return position
+    except Exception:
+        return None
+
+
+def _sanitize_npc_name(name: str) -> str:
+    cleaned = re.sub(r'[^A-Za-z0-9_\- ]', '', str(name or '')).strip()
+    return cleaned[:32] if cleaned else f'Kairos_{uuid.uuid4().hex[:6]}'
+
+
+def _latest_known_position(memory_data: Dict[str, Any], player_id: str) -> Optional[Dict[str, Any]]:
+    player = memory_data.get('players', {}).get(player_id, {})
+    pos = player.get('last_position')
+    if isinstance(pos, dict) and {'x', 'y', 'z'} <= set(pos.keys()):
+        return pos
+
+    bases = player.get('known_bases', [])
+    if bases:
+        latest = bases[-1]
+        if isinstance(latest, dict):
+            return latest.get('location') or latest
+    return None
+
+
+def update_base_tracking(memory_data: Dict[str, Any], player_id: str, player_record: Dict[str, Any]):
+    pos = player_record.get('last_position')
+    if not isinstance(pos, dict):
+        return
+
+    world = normalize_world_name(pos.get('world', 'world'))
+    x = safe_float(pos.get('x'))
+    y = safe_float(pos.get('y', 64))
+    z = safe_float(pos.get('z'))
+    region_key = get_region_key(world, x, z)
+    now = unix_ts()
+
+    if player_record.get('is_stationary'):
+        stationary_start = player_record.get('stationary_start', now)
+        stationary_for = max(0.0, now - stationary_start)
+        gain = BASE_CONFIDENCE_GAIN_RATE * max(1.0, stationary_for / max(1, BASE_MIN_STATIONARY_SECONDS))
+        player_record['base_confidence'] = clamp(player_record.get('base_confidence', 0.0) + gain, 0.0, 1.0)
+    else:
+        player_record['base_confidence'] = clamp(player_record.get('base_confidence', 0.0) - BASE_CONFIDENCE_DECAY_RATE, 0.0, 1.0)
+
+    if player_record.get('base_confidence', 0.0) < BASE_CONFIDENCE_THRESHOLD:
+        return
+
+    base_id = generate_base_id(player_record.get('display_name', player_id), world, x, z)
+    player_record['active_base_id'] = base_id
+
+    base_entry = {
+        'id': base_id,
+        'owner': player_id,
+        'region_key': region_key,
+        'confidence': round(player_record.get('base_confidence', 0.0), 3),
+        'location': {'world': world, 'x': x, 'y': y, 'z': z},
+        'last_seen': now_iso()
+    }
+
+    memory_data.setdefault('known_bases', {})[base_id] = base_entry
+    history = memory_data.setdefault('base_history', {}).setdefault(player_id, [])
+    history.append(base_entry)
+    if len(history) > MAX_BASE_HISTORY:
+        del history[:-MAX_BASE_HISTORY]
+
+    known_bases = player_record.setdefault('known_bases', [])
+    if not any(b.get('id') == base_id for b in known_bases if isinstance(b, dict)):
+        known_bases.append(base_entry)
+        if len(known_bases) > MAX_BASE_HISTORY:
+            del known_bases[:-MAX_BASE_HISTORY]
+        add_world_event(
+            memory_data,
+            'base_detected',
+            actor=player_id,
+            source='telemetry',
+            details=f"Potential base detected for {player_record.get('display_name', player_id)}",
+            location=f"{world} {int(x)} {int(y)} {int(z)}",
+            metadata={'base_id': base_id, 'confidence': base_entry['confidence']}
+        )
+
+
+def _selectable_name_for(player_id: str, template_key: str, ordinal: int = 0) -> str:
+    prefix = NPC_CLASS_TEMPLATES.get(template_key, NPC_CLASS_TEMPLATES['scout'])['display_prefix']
+    suffix = uuid.uuid4().hex[:4]
+    return _sanitize_npc_name(f"Kairos {prefix} {player_id.split(':')[-1][:8]} {ordinal}{suffix}")
+
+
+def _spawn_offsets(count: int, radius_min: int = None, radius_max: int = None) -> List[Tuple[int, int]]:
+    radius_min = radius_min or SPAWN_RADIUS_MIN
+    radius_max = radius_max or SPAWN_RADIUS_MAX
+    offsets = []
+    used = set()
+    tries = 0
+    while len(offsets) < count and tries < count * 10:
+        tries += 1
+        dx, dz = get_random_offset(radius_min, radius_max)
+        key = (dx // 2, dz // 2)
+        if key in used:
+            continue
+        used.add(key)
+        offsets.append((dx, dz))
+    return offsets
+
+
+def _npc_equipment_commands(npc_name: str, weapon: str = None, offhand: str = None) -> List[str]:
+    cmds = [f'npc select "{npc_name}"']
+    if weapon:
+        cmds.append(f'npc setequipment hand {weapon}')
+    if offhand:
+        cmds.append(f'npc setequipment offhand {offhand}')
+    return cmds
+
+
+def build_custom_npc_commands(memory_data: Dict[str, Any], player_id: str, template_key: str, count: int, *, occupy: bool = False) -> Tuple[List[str], List[Dict[str, Any]]]:
+    template = dict(NPC_CLASS_TEMPLATES.get(template_key, NPC_CLASS_TEMPLATES['scout']))
+    player = memory_data.get('players', {}).get(player_id, {})
+    display_name = player.get('display_name', player_id.split(':')[-1])
+    anchor = _latest_known_position(memory_data, player_id)
+
+    commands: List[str] = []
+    units: List[Dict[str, Any]] = []
+
+    if anchor:
+        world = normalize_world_name(anchor.get('world', 'world'))
+        base_x = safe_int(anchor.get('x', 0))
+        base_y = safe_int(anchor.get('y', 64))
+        base_z = safe_int(anchor.get('z', 0))
+        offsets = _spawn_offsets(count, 3 if occupy else SPAWN_RADIUS_MIN, 8 if occupy else SPAWN_RADIUS_MAX)
+        locations = [(base_x + dx, base_y + SPAWN_HEIGHT_OFFSET, base_z + dz, world) for dx, dz in offsets]
+    else:
+        world = 'world'
+        locations = []
+        for dx, dz in _spawn_offsets(count):
+            locations.append((0 + dx, 64 + SPAWN_HEIGHT_OFFSET, 0 + dz, world))
+
+    for index, (x, y, z, world) in enumerate(locations, start=1):
+        npc_name = _selectable_name_for(player_id, 'base_guard' if occupy else template_key, index)
+        entity_type = template.get('entity_type', 'player')
+        traits = 'sentinel'
+        commands.append(f'npc create "{npc_name}" --type {entity_type} --at {x},{y},{z},{world} --trait {traits}')
+        commands.append(f'npc select "{npc_name}"')
+        commands.append('npc respawn -1')
+        commands.append(f'sentinel health {template.get("health", 20)}')
+        commands.append(f'sentinel damage {template.get("damage", 4)}')
+        commands.append(f'sentinel armor {template.get("armor", 0.0)}')
+        commands.append(f'sentinel speed {template.get("speed", 1.0)}')
+        commands.append(f'sentinel range {template.get("range", 20)}')
+        commands.append(f'sentinel chaserange {template.get("chaserange", 30)}')
+        commands.append(f'sentinel respawntime {template.get("respawntime", -1)}')
+        commands.append('sentinel removeignore owner')
+        commands.append('sentinel addignore npcs')
+        commands.append(f'sentinel addtarget "player:{display_name}"')
+        commands.append(f'sentinel realistic {str(template.get("realistic", True)).lower()}')
+        commands.append(f'sentinel knockback {str(template.get("knockback", True)).lower()}')
+        commands.append(f'sentinel squad kairos_{player_id.split(":")[-1][:12]}')
+        commands.extend(_npc_equipment_commands(npc_name, template.get('weapon'), template.get('offhand')))
+        if template.get('skin') and entity_type.lower() == 'player':
+            commands.append(f'npc skin {template.get("skin")}')
+        if occupy or template.get('guard'):
+            commands.append(f'npc pathopt --path-range 12 --stationary-ticks 20')
+            commands.append('sentinel spawnpoint')
+            commands.append(f'sentinel greeting Base secured.')
+            commands.append(f'sentinel warning Access denied.')
+            commands.append('sentinel autoswitch true')
+        else:
+            commands.append('sentinel autoswitch true')
+            commands.append(f'sentinel warning You were found.')
+            commands.append(f'sentinel greeting Target acquired.')
+
+        unit_id = generate_unit_id()
+        unit_record = {
+            'id': unit_id,
+            'name': npc_name,
+            'class': 'base_guard' if occupy else template_key,
+            'target': player_id,
+            'spawn_time': unix_ts(),
+            'last_seen': unix_ts(),
+            'health': template.get('health', 20),
+            'region': get_region_key(world, x, z),
+            'is_elite': template_key in {'warden', 'enforcer'},
+            'npc_name': npc_name,
+            'location': {'world': world, 'x': x, 'y': y, 'z': z}
+        }
+        units.append(unit_record)
+
+    return commands, units
+
+
+def cleanup_player_units(player_id: str, include_guards: bool = True) -> bool:
+    units = list(player_unit_map.get(player_id, set()))
+    if not units:
+        return False
+    commands = []
+    for unit_id in units:
+        unit = active_units.get(unit_id)
+        if not unit:
+            continue
+        if not include_guards and unit.get('class') == 'base_guard':
+            continue
+        npc_name = unit.get('npc_name') or unit.get('name')
+        if npc_name:
+            commands.append(f'npc remove "{npc_name}"')
+    success = send_http_commands(commands) if commands else False
+    if success:
+        for unit_id in units:
+            unit = active_units.get(unit_id)
+            if unit and (include_guards or unit.get('class') != 'base_guard'):
+                remove_unit(unit_id)
+    return success
+
+
+def run_autonomous_war_engine():
+    memory_data = ensure_memory_structure(load_memory())
+    changed = False
+    now = unix_ts()
+    for player_id, profile in list(threat_scores.items()):
+        if not isinstance(profile, dict):
+            continue
+        tier = profile.get('tier', 'idle')
+        score = safe_float(profile.get('score', 0))
+        if tier not in {'hunt', 'maximum'}:
+            continue
+        if can_spawn_wave(player_id):
+            template = 'hunter' if tier == 'hunt' else ('warden' if score >= MAX_THREAT_FORCE_HEAVY else 'enforcer')
+            queue_action({
+                'type': 'spawn_wave',
+                'target': player_id,
+                'template': template,
+                'count': clamp(2 + int(score / 80), 2, 4 if template == 'warden' else 6)
+            })
+        player_record = memory_data.get('players', {}).get(player_id, {})
+        has_base = bool(player_record.get('known_bases'))
+        if tier == 'maximum' and has_base and now - BASE_OCCUPATION_COOLDOWNS.get(player_id, 0.0) >= BASE_INVASION_COOLDOWN:
+            queue_action({'type': 'occupy_area', 'target': player_id, 'count': BASE_OCCUPATION_UNIT_COUNT})
+            BASE_OCCUPATION_COOLDOWNS[player_id] = now
+            changed = True
+    if changed:
+        sync_runtime_to_memory(memory_data)
+        save_memory(memory_data)
+
+
 def reset_all_wave_cooldowns():
     last_wave_times.clear()
 
@@ -6670,6 +7027,11 @@ def commander_loop():
             # -----------------------------
             process_command_queue()
 
+            # -----------------------------
+            # Autonomous War Engine
+            # -----------------------------
+            run_autonomous_war_engine()
+
         except Exception as e:
             log(f"Commander loop error: {e}", level="ERROR")
             time.sleep(1)
@@ -6755,9 +7117,13 @@ def execute_action(action):
 # ------------------------------------------------------------
 
 def handle_spawn_wave(action):
+    memory_data = ensure_memory_structure(load_memory())
     player_id = action.get("target")
-    template = action.get("template", "scout")
-    count = action.get("count", 2)
+    template = sanitize_text(action.get("template", "scout"), 30).lower()
+    count = safe_int(action.get("count", 2))
+
+    if template not in NPC_CLASS_TEMPLATES:
+        template = "scout"
 
     if not player_id:
         return
@@ -6765,10 +7131,31 @@ def handle_spawn_wave(action):
     if not can_spawn_wave(player_id):
         return
 
-    # Example command dispatch (you will hook this to HTTP Commands / Citizens)
-    send_mc_command(f"kairos_spawn {player_id} {template} {count}")
+    commands, unit_records = build_custom_npc_commands(memory_data, player_id, template, clamp(count, 1, 6))
+    if not commands:
+        log(f"Spawn wave skipped: no commands generated for {player_id}", level="WARN")
+        return
 
-    log(f"Spawned wave: {template} x{count} → {player_id}", level="INFO")
+    success = send_http_commands(commands)
+    if not success:
+        log(f"Spawn wave failed: {template} x{count} → {player_id}", level="ERROR")
+        return
+
+    for unit in unit_records:
+        register_unit(unit)
+        add_world_event(
+            memory_data,
+            "unit_spawned",
+            actor=player_id,
+            source="system",
+            details=f"{unit['class']} deployed: {unit['npc_name']}",
+            location=f"{unit['location']['world']} {unit['location']['x']} {unit['location']['y']} {unit['location']['z']}",
+            metadata={"npc_name": unit['npc_name'], "unit_id": unit['id']}
+        )
+    add_world_event(memory_data, "wave_spawned", actor=player_id, source="system", details=f"{template} x{len(unit_records)}")
+    sync_runtime_to_memory(memory_data)
+    save_memory(memory_data)
+    log(f"Spawned custom wave: {template} x{len(unit_records)} → {player_id}", level="INFO")
 
 
 def handle_maximum_response(action):
@@ -6779,8 +7166,11 @@ def handle_maximum_response(action):
 
     set_maximum_response(player_id, True)
 
-    send_mc_command(f"kairos_max_response {player_id}")
-
+    commands = [
+        f'title {player_id.split(":")[-1]} title {json.dumps({"text": "RUN.", "color": "dark_red"})}',
+        f'playsound minecraft:entity.warden.emerge master {player_id.split(":")[-1]} ~ ~ ~ 1 0.5'
+    ]
+    send_http_commands(commands)
     log(f"MAX RESPONSE triggered → {player_id}", level="WARN")
 
 
@@ -6795,16 +7185,51 @@ def handle_announce(action):
 
 
 def handle_occupy_area(action):
+    memory_data = ensure_memory_structure(load_memory())
     player_id = action.get("target")
+    count = safe_int(action.get("count", BASE_OCCUPATION_UNIT_COUNT))
 
     if not player_id:
         return
 
-    send_mc_command(f"kairos_occupy {player_id}")
+    cleanup_player_units(player_id, include_guards=False)
+    commands, unit_records = build_custom_npc_commands(memory_data, player_id, "base_guard", clamp(count, 2, 8), occupy=True)
+    if not commands:
+        log(f"Occupy area skipped: no base anchor for {player_id}", level="WARN")
+        return
+
+    success = send_http_commands(commands)
+    if not success:
+        log(f"Occupy area failed → {player_id}", level="ERROR")
+        return
+
+    ACTIVE_BASE_GUARDS[player_id] = []
+    for unit in unit_records:
+        register_unit(unit)
+        ACTIVE_BASE_GUARDS[player_id].append(unit['id'])
+        add_world_event(memory_data, "unit_spawned", actor=player_id, source="system", details=f"Base guard deployed: {unit['npc_name']}")
+
+    add_world_event(memory_data, "base_invasion", actor=player_id, source="system", details=f"Base occupied with {len(unit_records)} guards")
+    sync_runtime_to_memory(memory_data)
+    save_memory(memory_data)
+    log(f"Base occupied → {player_id} with {len(unit_records)} guards", level="WARN")
 
 
 def handle_cleanup_units(action):
-    send_mc_command("kairos_cleanup")
+    target = action.get("target")
+    if target:
+        cleanup_player_units(target, include_guards=True)
+        return
+
+    commands = []
+    for unit in list(active_units.values()):
+        npc_name = unit.get("npc_name") or unit.get("name")
+        if npc_name:
+            commands.append(f'npc remove "{npc_name}"')
+    if commands and send_http_commands(commands):
+        active_units.clear()
+        active_squads.clear()
+        player_unit_map.clear()
 
 
 # ------------------------------------------------------------
@@ -7936,6 +8361,11 @@ def chat_1():
         canonical_id = get_canonical_player_id(memory_data, source, player_name)
         player_record = get_player_record(memory_data, canonical_id, player_name)
 
+        position_data = extract_position_data(data)
+        if position_data:
+            update_player_position(player_record, position_data)
+            update_base_tracking(memory_data, canonical_id, player_record)
+
         try:
             player_record.setdefault("memories", [])
             player_record.setdefault("traits", {})
@@ -7992,6 +8422,10 @@ def chat_1():
         else:
             reply = str(result)
             actions = []
+
+        profile = threat_scores.get(canonical_id, {})
+        if profile.get("tier") == "maximum" and player_record.get("known_bases"):
+            actions.append({"type": "occupy_area", "target": canonical_id, "count": BASE_OCCUPATION_UNIT_COUNT})
 
         if isinstance(actions, list):
             for action in actions:
