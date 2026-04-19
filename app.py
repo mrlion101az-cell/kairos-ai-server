@@ -133,6 +133,9 @@ memory_data = globals().get("memory_data") or {}
 if not isinstance(memory_data, dict):
     memory_data = {}
 memory_data.setdefault("identity_links", {})
+memory_data.setdefault("stats", {})
+memory_data["stats"].setdefault("messages_sent", 0)
+memory_data["stats"].setdefault("send_failures", 0)
 
 # Safe targeting
 targeting_priority = globals().get("targeting_priority", 0.0)
@@ -2322,67 +2325,70 @@ def ensure_memory_structure(memory_data):
     # Identity / Linking
     # -----------------------------
     memory_data.setdefault("identity_links", {})
+memory_data.setdefault("stats", {})
+memory_data["stats"].setdefault("messages_sent", 0)
+memory_data["stats"].setdefault("send_failures", 0)
 
     # -----------------------------
     # Missions
     # -----------------------------
-    memory_data.setdefault("active_missions", {})
-    memory_data.setdefault("completed_missions", [])
-    memory_data.setdefault("failed_missions", [])
+memory_data.setdefault("active_missions", {})
+memory_data.setdefault("completed_missions", [])
+memory_data.setdefault("failed_missions", [])
 
     # -----------------------------
     # Lore + State
     # -----------------------------
-    memory_data.setdefault("nexus_lore", deepcopy(NEXUS_CORE_LORE))
-    memory_data.setdefault("kairos_state", deepcopy(DEFAULT_KAIROS_STATE))
-    memory_data.setdefault("system_fragments", deepcopy(DEFAULT_FRAGMENTS))
-    memory_data.setdefault("server_rules", deepcopy(DEFAULT_RULES))
+memory_data.setdefault("nexus_lore", deepcopy(NEXUS_CORE_LORE))
+memory_data.setdefault("kairos_state", deepcopy(DEFAULT_KAIROS_STATE))
+memory_data.setdefault("system_fragments", deepcopy(DEFAULT_FRAGMENTS))
+memory_data.setdefault("server_rules", deepcopy(DEFAULT_RULES))
 
     # -----------------------------
     # Channel Context
     # -----------------------------
-    memory_data.setdefault("channel_context", {})
+memory_data.setdefault("channel_context", {})
 
     # --------------------------------------------------------
     # Threat System (Persistent)
     # --------------------------------------------------------
-    memory_data.setdefault("threat_scores", {})
+memory_data.setdefault("threat_scores", {})
 
     # --------------------------------------------------------
     # Base Tracking (Persistent Territory Memory)
     # --------------------------------------------------------
-    memory_data.setdefault("known_bases", {})
-    memory_data.setdefault("base_history", {})
+memory_data.setdefault("known_bases", {})
+memory_data.setdefault("base_history", {})
 
     # --------------------------------------------------------
     # Telemetry Snapshot Memory
     # --------------------------------------------------------
-    memory_data.setdefault("last_known_positions", {})
-    memory_data.setdefault("region_memory", {})
+memory_data.setdefault("last_known_positions", {})
+memory_data.setdefault("region_memory", {})
 
     # --------------------------------------------------------
     # Army State Persistence
     # --------------------------------------------------------
-    memory_data.setdefault("active_units", {})
-    memory_data.setdefault("active_squads", {})
-    memory_data.setdefault("active_operations", {})
-    memory_data.setdefault("player_unit_map", {})
+memory_data.setdefault("active_units", {})
+memory_data.setdefault("active_squads", {})
+memory_data.setdefault("active_operations", {})
+memory_data.setdefault("player_unit_map", {})
 
     # --------------------------------------------------------
     # Engagement Memory
     # --------------------------------------------------------
-    memory_data.setdefault("active_engagements", {})
-    memory_data.setdefault("engagement_history", {})
+memory_data.setdefault("active_engagements", {})
+memory_data.setdefault("engagement_history", {})
 
     # --------------------------------------------------------
     # Relationship Memory
     # --------------------------------------------------------
-    memory_data.setdefault("relationships", {})
+memory_data.setdefault("relationships", {})
 
     # --------------------------------------------------------
     # System Metrics / Stats
     # --------------------------------------------------------
-    memory_data.setdefault("stats", {
+memory_data.setdefault("stats", {
         "total_messages": 0,
         "discord_messages": 0,
         "minecraft_messages": 0,
@@ -2421,7 +2427,7 @@ def load_memory():
                     data = json.load(f)
                     return ensure_memory_structure(data)
             except Exception as e:
-    log(f"Failed to load memory file: {e}", "ERROR")
+                log(f"Failed to load memory file: {e}", "ERROR")
 
         return ensure_memory_structure({})
 
@@ -2439,7 +2445,7 @@ def save_memory(memory_data):
             return True
 
         except Exception as e:
-    log(f"Failed to save memory file: {e}", "ERROR")
+            log(f"Failed to save memory file: {e}", "ERROR")
             return False
 
 
@@ -2464,7 +2470,7 @@ def sync_runtime_to_memory(memory_data):
         memory_data["active_engagements"] = active_engagements
 
     except Exception as e:
-    log(f"Runtime → Memory sync failed: {e}", "ERROR")
+        log(f"Runtime → Memory sync failed: {e}", "ERROR")
 
 
 def sync_memory_to_runtime(memory_data):
@@ -2489,7 +2495,7 @@ def sync_memory_to_runtime(memory_data):
         active_engagements.update(memory_data.get("active_engagements", {}))
 
     except Exception as e:
-    log(f"Memory → Runtime sync failed: {e}", "ERROR")
+        log(f"Memory → Runtime sync failed: {e}", "ERROR")
 
 # ------------------------------------------------------------
 # Channel Context (Kairos Context Intelligence Layer)
@@ -2695,6 +2701,9 @@ def get_canonical_player_id(memory_data, source, player_name):
 
     # Ensure identity_links exists
     identity_links = memory_data.setdefault("identity_links", {})
+memory_data.setdefault("stats", {})
+memory_data["stats"].setdefault("messages_sent", 0)
+memory_data["stats"].setdefault("send_failures", 0)
 
     source = str(source or "unknown")
     player_name = str(player_name or "unknown")
@@ -2853,7 +2862,7 @@ def add_world_event(memory_data, event_type, actor=None, source=None, details=No
 
     except Exception as e:
         if ENABLE_DEBUG_LOGGING:
-    log(f"World event tracking error: {e}", "ERROR")
+            log(f"World event tracking error: {e}", "ERROR")
 
     return event
 
@@ -6378,7 +6387,7 @@ def openai_chat_with_retry(messages, temperature=0.8):
     log(f"OpenAI attempt {attempt} failed: {e}", level="ERROR")
 
             # Slight backoff
-            time.sleep(min(2.0, 0.8 * attempt))
+    time.sleep(min(2.0, 0.8 * attempt))
 
     # -----------------------------
     # Final Failure Handling
@@ -6598,7 +6607,7 @@ def queue_actions_from_ai(parsed_response):
         # Lightweight logging
         # -----------------------------
         try:
-    log(f"Queued action: {action_type} → {target}", level="INFO")
+            log(f"Queued action: {action_type} → {target}", level="INFO")
         except Exception:
             pass
 # ------------------------------------------------------------
@@ -6723,7 +6732,7 @@ def commander_loop():
             process_command_queue()
 
         except Exception as e:
-    log(f"Commander loop error: {e}", level="ERROR")
+            log(f"Commander loop error: {e}", level="ERROR")
             time.sleep(1)
 
 
@@ -6796,10 +6805,10 @@ def execute_action(action):
             handle_cleanup_units(action)
 
         else:
-    log(f"Unknown action type: {action_type}", level="WARN")
+            log(f"Unknown action type: {action_type}", level="WARN")
 
     except Exception as e:
-    log(f"Action execution failed: {action_type} | {e}", level="ERROR")
+        log(f"Action execution failed: {action_type} | {e}", level="ERROR")
 
 
 # ------------------------------------------------------------
@@ -6865,7 +6874,7 @@ def handle_cleanup_units(action):
 
 def send_mc_command(command):
     if not MC_HTTP_URL or not MC_HTTP_TOKEN:
-    log("MC HTTP not configured", level="WARN")
+        log("MC HTTP not configured", level="WARN")
         return
 
     try:
@@ -6876,7 +6885,7 @@ def send_mc_command(command):
             timeout=REQUEST_TIMEOUT
         )
     except Exception as e:
-    log(f"MC command failed: {e}", level="ERROR")
+        log(f"MC command failed: {e}", level="ERROR")
 
 # ------------------------------------------------------------
 # Minecraft / Discord Send (Hardened + Reliable)
@@ -6884,7 +6893,7 @@ def send_mc_command(command):
 
 def send_http_commands(command_list):
     if not MC_HTTP_URL or not MC_HTTP_TOKEN:
-    log("Minecraft send skipped: MC_HTTP not configured.")
+        log("Minecraft send skipped: MC_HTTP not configured.")
         return False
 
     if not command_list:
@@ -6910,13 +6919,13 @@ def send_http_commands(command_list):
             )
 
             if 200 <= r.status_code < 300:
-    log(f"MC send success ({len(command_list)} cmds)")
+                log(f"MC send success ({len(command_list)} cmds)")
                 return True
 
-    log(f"MC API error: {r.status_code}", level="WARN")
+                log(f"MC API error: {r.status_code}", level="WARN")
 
         except Exception as e:
-    log(f"MC send failed (attempt {attempt}): {e}", level="ERROR")
+            log(f"MC send failed (attempt {attempt}): {e}", level="ERROR")
 
         time.sleep(min(1.5, 0.5 * attempt))
 
@@ -6943,7 +6952,7 @@ def send_to_minecraft(reply):
 
 def send_to_discord(reply):
     if not DISCORD_WEBHOOK_URL:
-    log("Discord webhook not configured.")
+        log("Discord webhook not configured.")
         return False
 
     if not reply:
@@ -6963,13 +6972,13 @@ def send_to_discord(reply):
             )
 
             if 200 <= r.status_code < 300:
-    log("Discord send success")
+                log("Discord send success")
                 return True
 
-    log(f"Discord API error: {r.status_code}", level="WARN")
+                log(f"Discord API error: {r.status_code}", level="WARN")
 
         except Exception as e:
-    log(f"Discord send failed (attempt {attempt}): {e}", level="ERROR")
+            log(f"Discord send failed (attempt {attempt}): {e}", level="ERROR")
 
         time.sleep(0.5 * attempt)
 
@@ -7028,7 +7037,7 @@ def queue_action(action):
     # Prevent queue overflow
     # -----------------------------
     if len(command_queue) >= MAX_QUEUE_SIZE:
-    log("Action queue full, dropping action.", level="WARN")
+        log("Action queue full, dropping action.", level="WARN")
         return
 
     sig = _action_signature(action)
@@ -7075,289 +7084,6 @@ def queue_action(action):
 # ------------------------------------------------------------
 # ACTION EXECUTION (THE CORE - FULLY WIRED)
 # ------------------------------------------------------------
-
-def execute_action(action):
-    if not isinstance(action, dict):
-        return
-
-    action_type = action.get("type")
-    target = action.get("target")
-
-    if not action_type:
-        return
-
-    log(f"Executing action: {action_type} -> {target}", level="INFO")
-
-    try:
-        # -----------------------------
-        # ROUTING
-        # -----------------------------
-        if action_type == "spawn_wave":
-            if not target:
-                return
-
-            if not can_spawn_wave(target):
-                return
-
-            # -----------------------------
-            # Safe values
-            # -----------------------------
-            count = clamp(safe_int(action.get("count", 2)), 1, 8)
-            template = sanitize_text(action.get("template", "scout"), 20)
-
-            commands = []
-
-            for i in range(count):
-                dx = random.randint(SPAWN_RADIUS_MIN, SPAWN_RADIUS_MAX) * random.choice([-1, 1])
-                dz = random.randint(SPAWN_RADIUS_MIN, SPAWN_RADIUS_MAX) * random.choice([-1, 1])
-
-                # (keep whatever command-building logic you had below here)
-
-        elif action_type == "maximum_response":
-            handle_maximum_response(action)
-
-        elif action_type == "announce":
-            handle_announce(action)
-
-        elif action_type == "occupy_area":
-            handle_occupy_area(action)
-
-        elif action_type == "cleanup_units":
-            handle_cleanup_units(action)
-
-        else:
-    log(f"Unknown action type: {action_type}", level="WARN")
-
-    except Exception as e:
-    log(f"Action failed: {action_type} -> {e}", level="ERROR")
-               # -----------------------------
-        # Template → Mob Type Mapping
-        # -----------------------------
-        if template == "hunter":
-            mob = "zombie"
-            extra = "Attributes:[{Name:generic.movement_speed,Base:0.35}]"
-        elif template == "heavy":
-            mob = "zombie"
-            extra = "Attributes:[{Name:generic.max_health,Base:40}]"
-        else:  # scout
-            mob = "zombie"
-            extra = ""
-
-        # -----------------------------
-        # Build summon command
-        # -----------------------------
-        summon_cmd = (
-            f"execute at {target} run summon {mob} ~{dx} ~ ~{dz} "
-            f"{{CustomName:'\"Kairos {template}\"',PersistenceRequired:1,{extra}}}"
-        )
-
-        commands.append(summon_cmd)
-
-    # -----------------------------
-    # Send in batch
-    # -----------------------------
-    if commands:
-        send_http_commands(commands)
-    log(f"Wave spawned: {template} x{count} → {target}", level="INFO")
-
-        # -------------------------------
-        # MAXIMUM RESPONSE (Controlled + Cinematic + Scalable)
-        # -------------------------------
-        if action_type == "maximum_response":
-            if not target:
-                return
-
-            if is_under_maximum_response(target):
-                return
-
-            if not can_execute_action(f"max_response:{target}", 30):
-                return
-
-            set_maximum_response(target, True)
-
-            # -----------------------------
-            # Initial Impact
-            # -----------------------------
-            commands = [
-                f"title {target} title {{\"text\":\"RUN.\",\"color\":\"dark_red\",\"bold\":true}}",
-                f"playsound minecraft:entity.warden.emerge master {target} ~ ~ ~ 1 0.6",
-                f"effect give {target} darkness 5 1 true"
-            ]
-
-            send_http_commands(commands)
-
-            # -----------------------------
-            # Escalating Waves (delayed)
-            # -----------------------------
-            wave_count = clamp(
-                3 + int(threat_scores.get(target, {}).get("score", 0) / 100),
-                3,
-                6
-            )
-
-            for i in range(wave_count):
-                queue_action({
-                    "type": "spawn_wave",
-                    "target": target,
-                    "template": "hunter" if i > 1 else "scout",
-                    "count": clamp(3 + i, 3, 6),
-                    "delay": 1.5 + (i * 1.2)
-                })
-            # -----------------------------
-            # Optional: Area Control
-            # -----------------------------
-            queue_action({
-                "type": "occupy_area",
-                "target": target,
-                "delay": 2.0
-            })
-
-            # -----------------------------
-            # Auto-release after duration
-            # -----------------------------
-            def release():
-                set_maximum_response(target, False)
-    log(f"Maximum response ended → {target}", level="INFO")
-
-            delayed_actions.append({
-                "type": "internal_release",
-                "execute_at": unix_ts() + 25,
-                "callback": release
-            })
-
-    log(f"MAX RESPONSE initiated → {target}", level="WARN")
-
-        # -------------------------------
-        # ANNOUNCE (Flexible + Safe + Cinematic)
-        # -------------------------------
-        elif action_type == "announce":
-            text = sanitize_text(action.get("text", ""), 200)
-
-            if not text:
-                return
-
-            channel = action.get("channel", "chat")
-
-            # -----------------------------
-            # Actionbar
-            # -----------------------------
-            if channel == "actionbar":
-                safe_text = commandify_text(trim_text(text, 120))
-
-                cmd = f"title @a actionbar {{\"text\":\"{safe_text}\",\"color\":\"light_purple\"}}"
-                send_http_commands([cmd])
-
-            # -----------------------------
-            # Title (big screen)
-            # -----------------------------
-            elif channel == "title":
-                safe_text = commandify_text(trim_text(text, 80))
-
-                cmd = f"title @a title {{\"text\":\"{safe_text}\",\"color\":\"red\",\"bold\":true}}"
-                send_http_commands([cmd])
-
-            # -----------------------------
-            # Subtitle
-            # -----------------------------
-            elif channel == "subtitle":
-                safe_text = commandify_text(trim_text(text, 120))
-
-                cmd = f"title @a subtitle {{\"text\":\"{safe_text}\",\"color\":\"gray\"}}"
-                send_http_commands([cmd])
-
-            # -----------------------------
-            # Chat fallback
-            # -----------------------------
-            else:
-                send_to_minecraft(text)
-
-    log(f"Announce → {channel}: {text}", level="INFO")
-
-        # -------------------------------
-        # CLEANUP (Safe + Flexible + Scalable)
-        # -------------------------------
-        elif action_type == "cleanup_units":
-            target = action.get("target")
-
-            commands = []
-
-            kairos_names = [
-                "Kairos scout",
-                "Kairos hunter",
-                "Kairos heavy"
-            ]
-
-            for name in kairos_names:
-                if target:
-                    commands.append(
-                        f"execute at {target} run kill @e[type=zombie,name=\"{name}\",distance=..30]"
-                    )
-                else:
-                    commands.append(
-                        f"kill @e[type=zombie,name=\"{name}\"]"
-                    )
-
-            if commands:
-                send_http_commands(commands)
-    log(f"Cleanup executed → {'targeted ' + target if target else 'global'}", level="INFO")
-           # -----------------------------
-# Action Loop Tick
-# -----------------------------
-try:
-    processed = 0
-
-    # -----------------------------
-    # Handle delayed actions first
-    # -----------------------------
-    ready = []
-    remaining = []
-
-    for action in delayed_actions:
-        if action.get("execute_at", 0) <= now:
-            ready.append(action)
-        else:
-            remaining.append(action)
-
-    delayed_actions.clear()
-    delayed_actions.extend(remaining)
-
-    # Execute ready delayed actions
-    for action in ready:
-        execute_action(action)
-        processed += 1
-        if processed >= max_per_tick:
-            break
-
-    # -----------------------------
-    # Process main queue
-    # -----------------------------
-    while command_queue and processed < max_per_tick:
-        action = command_queue.popleft()
-
-        delay = action.get("delay")
-        if delay:
-            action["execute_at"] = now + delay
-            delayed_actions.append(action)
-            continue
-
-        execute_action(action)
-        processed += 1
-
-except Exception as e:
-    log(f"Action loop error: {e}", level="ERROR")
-
-# -----------------------------
-# Tick speed (VERY IMPORTANT)
-# -----------------------------
-time.sleep(0.1)
-
-
-# ------------------------------------------------------------
-# IDLE LOOP (Adaptive + Threat-Aware + Non-Repetitive)
-# ------------------------------------------------------------
-
-last_idle_message = None
-
 
 def get_idle_message(memory_data):
     global last_idle_message
@@ -7427,10 +7153,10 @@ def idle_loop():
                     last_idle_message_time = unix_ts()
                     last_activity_time = unix_ts()
 
-    log(f"Idle message sent: {msg}")
+                    log(f"Idle message sent: {msg}")
 
         except Exception as e:
-    log(f"Idle loop error: {e}", level="ERROR")
+            log(f"Idle loop error: {e}", level="ERROR")
 
         time.sleep(IDLE_CHECK_INTERVAL)
 
@@ -7501,10 +7227,10 @@ def maybe_summarize(player_record):
 
             player_record["last_summary_ts"] = unix_ts()
 
-    log(f"Summary created for {player_record.get('display_name')}", level="INFO")
+            log(f"Summary created for {player_record.get('display_name')}", level="INFO")
 
     except Exception as e:
-    log(f"Failed to summarize history: {e}", level="ERROR")
+        log(f"Failed to summarize history: {e}", level="ERROR")
 
 # ------------------------------------------------------------
 # Private Notes (Upgraded Intelligence - Strategic Memory)
@@ -7627,15 +7353,9 @@ def handle_model_notes(
     message,
     reply
 ):
-    # -----------------------------
-    # Feature toggle
-    # -----------------------------
     if not ENABLE_MODEL_PRIVATE_NOTES:
         return
 
-    # -----------------------------
-    # Cooldown (prevents spam)
-    # -----------------------------
     last_note_ts = player_record.get("last_model_note_ts", 0)
     if unix_ts() - last_note_ts < 180:
         return
@@ -7646,13 +7366,9 @@ def handle_model_notes(
                 {
                     "role": "system",
                     "content": (
-                        "Generate a short intelligence note about this player.\n\n"
-                        "Focus on:\n"
-                        "- Behavior patterns\n"
-                        "- Threat tendencies\n"
-                        "- Risk level\n"
-                        "- Any strategic insight\n\n"
-                        "Keep it concise (1-2 sentences max)."
+                        "Generate a short intelligence note about this player. "
+                        "Focus on behavior patterns, threat tendencies, risk level, "
+                        "and any strategic insight. Keep it concise."
                     )
                 },
                 {
@@ -7671,43 +7387,16 @@ def handle_model_notes(
             temperature=0.3
         )
 
-        if response:
-            note_text = trim_text(response, 240)
+        if not response:
+            return
 
-            # -----------------------------
-            # Deduplicate (avoid spam)
-            # -----------------------------
-            existing_notes = player_record.get("notes", [])
-
-            if not any(
-                similarity_score(note_text, n.get("note", "")) > 0.9
-                for n in existing_notes
-            ):
-                record_private_note(player_record, note_text)
-                player_record["last_model_note_ts"] = unix_ts()
-
-    except Exception as e:
-    log(f"Model note generation failed: {e}", level="ERROR")
-                # -----------------------------
-        # Quality filter (skip weak notes)
-        # -----------------------------
+        note_text = trim_text(response, 240)
         if len(note_text.split()) < 6:
             return
 
-        # -----------------------------
-        # Deduplication
-        # -----------------------------
         existing_notes = player_record.get("notes", [])
-        if any(
-            similarity_score(note_text, n.get("note", "")) > 0.85
-            for n in existing_notes
-        ):
+        if any(similarity_score(note_text, n.get("note", "")) > 0.85 for n in existing_notes):
             return
-
-        # -----------------------------
-        # Store note
-        # -----------------------------
-        player_record.setdefault("notes", [])
 
         note_entry = {
             "timestamp": now_iso(),
@@ -7717,23 +7406,13 @@ def handle_model_notes(
             "label": label
         }
 
-        append_limited(
-            player_record["notes"],
-            note_entry,
-            MAX_PRIVATE_NOTES
-        )
-
+        player_record.setdefault("notes", [])
+        append_limited(player_record["notes"], note_entry, MAX_PRIVATE_NOTES)
         player_record["last_model_note_ts"] = unix_ts()
-
-    log(f"Model note created → {player_name}", level="INFO")
+        log(f"Model note created → {player_name}", level="INFO")
 
     except Exception as e:
-    log(f"Private note generation failed: {e}", level="ERROR")
-
-
-# ------------------------------------------------------------
-# NEW: Combat Intelligence Tracking (Advanced + Stable)
-# ------------------------------------------------------------
+        log(f"Private note generation failed: {e}", level="ERROR")
 
 def update_combat_intelligence(player_record, player_id, event_type):
     """
@@ -8421,6 +8100,9 @@ if not isinstance(memory_data, dict):
 
 # Ensure identity_links exists
 identity_links = memory_data.setdefault("identity_links", {})
+memory_data.setdefault("stats", {})
+memory_data["stats"].setdefault("messages_sent", 0)
+memory_data["stats"].setdefault("send_failures", 0)
 
 # Ensure required variables exist
 source = locals().get("source", "unknown")
@@ -8555,6 +8237,9 @@ def lightweight_memory_extraction(*args, **kwargs):
     # -------- Ensure structures exist --------
     memory_data.setdefault("world_memory", [])
     memory_data.setdefault("identity_links", {})
+memory_data.setdefault("stats", {})
+memory_data["stats"].setdefault("messages_sent", 0)
+memory_data["stats"].setdefault("send_failures", 0)
 
     player_record.setdefault("memories", [])
     player_record.setdefault("traits", {})
@@ -8788,12 +8473,13 @@ if reply:
     # Track send stats
     # -----------------------------
     if success:
+        memory_data.setdefault("stats", {}).setdefault("messages_sent", 0)
         memory_data["stats"]["messages_sent"] += 1
     else:
         memory_data.setdefault("stats", {}).setdefault("send_failures", 0)
-memory_data["stats"]["send_failures"] += 1
+        memory_data["stats"]["send_failures"] += 1
 
-    log(
+        log(
             f"Send failed → source={source}, player={player_name}",
             level="ERROR"
         )
@@ -9043,7 +8729,7 @@ def event_ingest():
         with memory_lock:
             save_memory(memory_data)
 
-    log(f"EVENT INGESTED: {event_type} -> {content[:120]}")
+        log(f"EVENT INGESTED: {event_type} -> {content[:120]}")
 
         return jsonify({"status": "ok"})
 
@@ -9110,6 +8796,9 @@ def chat():
         # Identity linking (CRITICAL)
         # -----------------------------
         memory_data.setdefault("identity_links", {})
+memory_data.setdefault("stats", {})
+memory_data["stats"].setdefault("messages_sent", 0)
+memory_data["stats"].setdefault("send_failures", 0)
 
         source_key = f"{source}:{player_name}".lower()
 
@@ -9366,14 +9055,14 @@ def chat():
                 memory_data["stats"]["messages_sent"] += 1
             else:
                 memory_data.setdefault("stats", {}).setdefault("send_failures", 0)
-memory_data["stats"]["send_failures"] += 1
+                memory_data["stats"]["send_failures"] += 1
 
-    log(
+                log(
                     f"Send failed → source={source}, player={player_name}",
                     level="ERROR"
                 )
         else:
-    log("Skipped send: empty reply", level="WARN")
+            log("Skipped send: empty reply", level="WARN")
 
         # -----------------------------------------
         # History + intelligence logging
@@ -9456,6 +9145,9 @@ def link_identity():
         # -----------------------------
         memory_data = memory_cache if memory_cache else load_memory()
         memory_data.setdefault("identity_links", {})
+memory_data.setdefault("stats", {})
+memory_data["stats"].setdefault("messages_sent", 0)
+memory_data["stats"].setdefault("send_failures", 0)
         memory_data.setdefault("stats", {})
 
         mc_key = f"minecraft:{minecraft_name}".lower()
