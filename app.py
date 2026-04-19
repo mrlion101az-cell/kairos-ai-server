@@ -5158,14 +5158,18 @@ else:
             1.0
         )
 
-    # -----------------------------
-    # Redstone Ghost (Chaos System)
-    # -----------------------------
-    if chaos >= 6:
-        fragments["redstone_ghost"]["status"] = "active"
-    elif fragments["redstone_ghost"]["status"] == "active":
-        fragments["redstone_ghost"]["status"] = "unstable"
+   # -----------------------------
+# Redstone Ghost (Chaos System) - FIXED
+# -----------------------------
 
+# 🔒 Ensure fragment exists
+redstone_ghost = fragments.setdefault("redstone_ghost", {})
+redstone_ghost.setdefault("status", "dormant")
+
+if chaos >= 6:
+    redstone_ghost["status"] = "active"
+elif redstone_ghost["status"] == "active":
+    redstone_ghost["status"] = "unstable"
     # -----------------------------
     # High Threat Escalation (NEW)
     # -----------------------------
