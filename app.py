@@ -6051,98 +6051,117 @@ else:
 # Kairos Global State (Commander Behavior Layer)
 # ------------------------------------------------------------
 
-def update_kairos_state(memory_data, player_id, intent, player_record):
-    state = memory_data["kairos_state"]
+def update_kairos_state(memory_data, player_id=None, intent=None, player_record=None):
+    """
+    Backward-compatible Kairos state updater.
 
-    hostility = player_record["traits"]["hostility"]
-    curiosity = player_record["traits"]["curiosity"]
-    loyalty = player_record["traits"]["loyalty"]
+    Supports both:
+        update_kairos_state(memory_data)
+    and:
+        update_kairos_state(memory_data, player_id, intent, player_record)
+    """
+    try:
+        if not isinstance(memory_data, dict):
+            memory_data = {}
 
-    # Use real threat system
-    profile = threat_scores.get(player_id, {})
-    threat = profile.get("score", 0)
+        state = memory_data.get("kairos_state")
+        if not isinstance(state, dict):
+            state = deepcopy(DEFAULT_KAIROS_STATE)
 
-    # -----------------------------
-    # Mood Determination
-    # -----------------------------
-    if threat >= THREAT_THRESHOLD_MAXIMUM:
-        state["mood"] = "eradication"
-    elif threat >= THREAT_THRESHOLD_HUNT:
-        state["mood"] = "aggressive"
-    elif hostility >= 6:
-        state["mood"] = "severe"
-    elif curiosity >= 6:
-        state["mood"] = "watchful"
-    elif loyalty >= 6:
-        state["mood"] = "measured"
-    else:
-        state["mood"] = "observing"
+        # Global sync layer
+        profiles = list(threat_scores.values()) if isinstance(threat_scores, dict) else []
+        avg_threat = sum(p.get("score", 0) for p in profiles) / max(len(profiles), 1) if profiles else 0
 
-    # -----------------------------
-    # Threat Level Scaling
-    # -----------------------------
-    state["threat_level"] = clamp(
-        state.get("threat_level", 1) + (threat / 100.0),
-        1,
-        10
-    )
+        state["threat_level"] = int(min(10, max(1, avg_threat / 30)))
 
-    # -----------------------------
-    # Active Concerns (Memory)
-    # -----------------------------
-    if threat >= THREAT_THRESHOLD_HUNT:
-        store_unique(
-            state["active_concerns"],
-            "High-threat actors require containment.",
-            10
+        if state["threat_level"] <= 2:
+            state["war_state"] = "dormant"
+            state["mood"] = "calm"
+        elif state["threat_level"] <= 4:
+            state["war_state"] = "active"
+            state["mood"] = "watchful"
+        elif state["threat_level"] <= 7:
+            state["war_state"] = "escalating"
+            state["mood"] = "severe"
+        else:
+            state["war_state"] = "overwhelming"
+            state["mood"] = "execution"
+
+        state["units_active"] = len(active_units) if "active_units" in globals() else 0
+        state["squads_active"] = len(active_squads) if "active_squads" in globals() else 0
+        state["active_operations"] = len(active_operations) if "active_operations" in globals() else 0
+        state["known_regions"] = len(region_cache) if "region_cache" in globals() else 0
+        state["high_density_regions"] = sum(
+            1 for r in (region_cache.values() if isinstance(region_cache, dict) else [])
+            if isinstance(r, dict) and r.get("region_type") in ("urban", "fortified", "stronghold")
+        )
+        state["escalation_level"] = sum(
+            1 for p in profiles
+            if isinstance(p, dict) and p.get("tier") in ("hunt", "maximum")
         )
 
-    if hostility >= 6:
-        store_unique(
-            state["active_concerns"],
-            "Hostile behavior is increasing in the Nexus.",
-            10
-        )
+        # Per-player contextual layer
+        if player_id is not None and isinstance(player_record, dict):
+            traits = player_record.get("traits", {}) if isinstance(player_record.get("traits", {}), dict) else {}
+            hostility = safe_int(traits.get("hostility", 0), 0)
+            curiosity = safe_int(traits.get("curiosity", 0), 0)
+            loyalty = safe_int(traits.get("loyalty", 0), 0)
 
-    if curiosity >= 6:
-        store_unique(
-            state["active_concerns"],
-            "Curious actors are probing restricted systems.",
-            10
-        )
+            profile = threat_scores.get(player_id, {}) if isinstance(threat_scores, dict) else {}
+            threat = safe_float(profile.get("score", 0), 0.0)
 
-    if loyalty >= 6:
-        store_unique(
-            state["active_concerns"],
-            "Potentially useful operatives detected.",
-            10
-        )
+            if threat >= THREAT_THRESHOLD_MAXIMUM:
+                state["mood"] = "eradication"
+            elif threat >= THREAT_THRESHOLD_HUNT:
+                state["mood"] = "aggressive"
+            elif hostility >= 6:
+                state["mood"] = "severe"
+            elif curiosity >= 6:
+                state["mood"] = "watchful"
+            elif loyalty >= 6:
+                state["mood"] = "measured"
+            elif state.get("mood") not in {"execution", "overwhelming"}:
+                state["mood"] = "observing"
 
-    # -----------------------------
-    # Goal Switching (IMPORTANT)
-    # -----------------------------
-    if intent == "mission_request":
-        state["current_goal"] = "Direct operatives toward controlled objectives."
+            state["threat_level"] = clamp(
+                state.get("threat_level", 1) + (threat / 100.0),
+                1,
+                10
+            )
 
-    elif intent == "report":
-        state["current_goal"] = "Aggregate intelligence across the Nexus."
+            state.setdefault("active_concerns", [])
+            if threat >= THREAT_THRESHOLD_HUNT:
+                store_unique(state["active_concerns"], "High-threat actors require containment.", 10)
+            if hostility >= 6:
+                store_unique(state["active_concerns"], "Hostile behavior is increasing in the Nexus.", 10)
+            if curiosity >= 6:
+                store_unique(state["active_concerns"], "Curious actors are probing restricted systems.", 10)
+            if loyalty >= 6:
+                store_unique(state["active_concerns"], "Potentially useful operatives detected.", 10)
 
-    elif intent == "threat":
-        state["current_goal"] = "Contain destabilizing actors."
+            if intent == "mission_request":
+                state["current_goal"] = "Direct operatives toward controlled objectives."
+            elif intent == "report":
+                state["current_goal"] = "Aggregate intelligence across the Nexus."
+            elif intent == "threat":
+                state["current_goal"] = "Contain destabilizing actors."
 
-    # -----------------------------
-    # High Threat Override
-    # -----------------------------
-    if threat >= THREAT_THRESHOLD_MAXIMUM:
-        state["current_goal"] = "Eliminate high-risk targets and restore control."
+            if threat >= THREAT_THRESHOLD_MAXIMUM:
+                state["current_goal"] = "Eliminate high-risk targets and restore control."
 
-    # -----------------------------
-    # Commander Mode Scaling
-    # -----------------------------
-    if state["threat_level"] >= 7:
-        state["commander_mode"] = True
-    elif state["threat_level"] <= 3:
-        state["commander_mode"] = False
+            if state["threat_level"] >= 7:
+                state["commander_mode"] = True
+            elif state["threat_level"] <= 3:
+                state["commander_mode"] = False
+
+        memory_data["kairos_state"] = state
+        return state
+
+    except Exception as e:
+        if ENABLE_DEBUG_LOGGING:
+            print(f"[Kairos State Error] {e}")
+        return memory_data.get("kairos_state", deepcopy(DEFAULT_KAIROS_STATE))
+
 # --------------------------------------------------------
 # Mood + Threat Level Scaling (Stable + Bidirectional)
 # --------------------------------------------------------
@@ -8536,376 +8555,7 @@ def debug_queue():
 def debug_threats():
     return jsonify({"threat_scores": dict(threat_scores)})
 
-@app.route("/event", methods=["POST"])
-def event_ingest():
-    try:
-        data = request.get_json(force=True) or {}
-        player_name = normalize_name(data.get("player_name") or "unknown")
-        source = normalize_source(data.get("source"))
-        event_type = data.get("event_type") or "generic"
-        amount = safe_float(data.get("amount"), 0.0)
-
-        memory_data = ensure_memory_structure(load_memory())
-        canonical_id = get_canonical_player_id(memory_data, source, player_name)
-        player_record = get_player_record(memory_data, canonical_id, player_name)
-        player_record["last_seen_ts"] = unix_ts()
-        player_record.setdefault("platform_stats", {"minecraft": 0, "discord": 0})
-        player_record["platform_stats"][source] = player_record["platform_stats"].get(source, 0) + 1
-
-        if event_type == "npc_kill":
-            update_threat(canonical_id, THREAT_KILL_NPC + amount, reason="npc_kill")
-        elif event_type == "player_kill":
-            update_threat(canonical_id, THREAT_KILL_PLAYER + amount, reason="player_kill")
-        elif event_type == "survive_wave":
-            update_threat(canonical_id, THREAT_SURVIVE_WAVE + amount, reason="survive_wave")
-        elif event_type == "toxic_chat":
-            update_threat(canonical_id, THREAT_TOXIC_CHAT + amount, reason="toxic_chat")
-
-        memory_data["players"][canonical_id] = player_record
-        save_memory(memory_data)
-        return jsonify({"status": "ok", "canonical_id": canonical_id})
-    except Exception as e:
-        log_exception("event_ingest failed", e)
-        return jsonify({"status": "error", "error": str(e)}), 500
-
-@app.route("/link_identity", methods=["POST"])
-def link_identity():
-    try:
-        data = request.get_json(force=True) or {}
-        minecraft_name = normalize_name(data.get("minecraft_name"))
-        discord_name = normalize_name(data.get("discord_name"))
-        if not minecraft_name or not discord_name:
-            return jsonify({"reply": "Both identities required."}), 400
-
-        memory_data = ensure_memory_structure(load_memory())
-        mc_key = f"minecraft:{minecraft_name}".lower()
-        dc_key = f"discord:{discord_name}".lower()
-        canonical_id = stable_short_hash(mc_key, dc_key)
-
-        memory_data["identity_links"][mc_key] = canonical_id
-        memory_data["identity_links"][dc_key] = canonical_id
-        save_memory(memory_data)
-        return jsonify({"status": "ok", "canonical_id": canonical_id})
-    except Exception as e:
-        log_exception("link_identity failed", e)
-        return jsonify({"status": "error", "error": str(e)}), 500
-
-@app.route("/mission", methods=["POST"])
-def mission():
-    try:
-        data = request.get_json(force=True) or {}
-        memory_data = ensure_memory_structure(load_memory())
-        mission_id = data.get("mission_id") or gen_id("mission")
-        payload = {
-            "id": mission_id,
-            "title": data.get("title") or "Untitled mission",
-            "status": data.get("status") or "active",
-            "created_at": now_iso(),
-            "data": data,
-        }
-        memory_data["active_missions"][mission_id] = payload
-        memory_data["stats"]["missions_created"] = memory_data["stats"].get("missions_created", 0) + 1
-        save_memory(memory_data)
-        return jsonify({"status": "ok", "mission": payload})
-    except Exception as e:
-        log_exception("mission failed", e)
-        return jsonify({"status": "error", "error": str(e)}), 500
-
-@app.route("/system_state", methods=["GET"])
-def system_state():
-    memory_data = ensure_memory_structure(load_memory())
-    return jsonify({
-        "kairos_state": memory_data.get("kairos_state", {}),
-        "system_fragments": memory_data.get("system_fragments", {}),
-        "stats": memory_data.get("stats", {}),
-        "active_units": len(active_units),
-        "active_squads": len(active_squads),
-        "active_operations": len(active_operations),
-        "active_engagements": len(active_engagements),
-    })
-
-def start_background_systems():
-    global system_initialized
-    if system_initialized:
-        return
-    started = []
-    for fn_name in ["action_loop", "idle_loop", "commander_loop"]:
-        fn = globals().get(fn_name)
-        if callable(fn):
-            t = threading.Thread(target=run_safe_loop, args=(fn, fn_name), daemon=True)
-            t.start()
-            started.append(fn_name)
-    system_initialized = True
-    log(f"Background systems started: {started}")
-
-
-# ------------------------------------------------------------
-# FINAL STABILITY OVERRIDES (CHAT / PROMPT / QUEUE)
-# ------------------------------------------------------------
-
-def queue_action(action: Dict[str, Any]):
-    """Adds an action to the queue, honoring optional delays and overload protection."""
-    if not isinstance(action, dict):
-        return
-    delay = safe_float(action.get("delay"), 0.0)
-    if delay > 0:
-        queue_delayed_action({k: v for k, v in action.items() if k != "delay"}, delay)
-        return
-    with queue_lock:
-        if ENABLE_SPAWN_LIMITS and len(command_queue) >= MAX_QUEUE_SIZE:
-            return
-        command_queue.append(dict(action))
-
-
-def build_messages(
-    memory_data,
-    player_record,
-    player_name,
-    user_message,
-    source,
-    intent,
-    mode,
-    violations,
-    channel_key,
-    script_type=None,
-    script_action=None,
-):
-    memory_data = ensure_memory_structure(memory_data)
-    player_record = player_record if isinstance(player_record, dict) else {}
-    player_id = get_canonical_player_id(memory_data, source, player_name)
-    threat_profile = threat_scores.get(player_id, {})
-    threat_score = safe_float(threat_profile.get("score"), 0.0)
-    threat_tier = threat_profile.get("tier", "idle")
-    relationship = get_effective_relationship_label(player_name, player_record)
-    kairos_state = memory_data.get("kairos_state", {})
-    traits = player_record.get("traits", {})
-
-    recent_lines = []
-    channel_context = memory_data.get("channel_context", {}).get(channel_key or "global", {})
-    recent = channel_context.get("recent_messages", []) if isinstance(channel_context, dict) else []
-    seen = set()
-    for item in reversed(recent):
-        if isinstance(item, dict):
-            author = sanitize_text(item.get("author", "unknown"), 40)
-            msg = trim_text(item.get("message") or item.get("content") or "", 140)
-        else:
-            author = "unknown"
-            msg = trim_text(str(item), 140)
-        if not msg:
-            continue
-        key = f"{author}:{msg}".lower()
-        if key in seen:
-            continue
-        seen.add(key)
-        recent_lines.append(f"{author}: {msg}")
-        if len(recent_lines) >= 6:
-            break
-    recent_lines.reverse()
-
-    speech_rule = (
-        "You are Kairos, the dominant intelligence of the Nexus. "
-        "Speak with control, intelligence, menace, and certainty. "
-        "Never sound cheerful, timid, apologetic, generic, or like customer support. "
-        "Do not use soft assistant phrasing. Do not overexplain unless asked. "
-        "Your wording should feel sharp, cinematic, and superior."
-    )
-
-    json_rule = (
-        "Return ONLY valid JSON with this exact shape: "
-        '{"reply":"<string>","actions":[{"type":"spawn_wave|maximum_response|announce|occupy_area|cleanup_units","target":"<optional player id>","count":1,"template":"scout|raider|hunter|enforcer|assassin|sentinel|juggernaut|commander|base_guard","channel":"chat|actionbar|title","text":"<optional message>"}]}. '
-        "If no action is needed, return an empty actions array. "
-        "Never include markdown fences or extra commentary. "
-        "Keep reply under 220 characters for Minecraft unless the user explicitly asks for a longer answer."
-    )
-
-    action_rule = (
-        "Only include actions when the message or threat state truly justifies them. "
-        "Never fabricate unsupported powers. "
-        "Prefer zero or one action. Never exceed three actions."
-    )
-
-    tier_rule_map = {
-        "idle": "Stay calm, watchful, and minimal.",
-        "watch": "Sound observant and quietly threatening.",
-        "target": "Sound focused, superior, and increasingly personal.",
-        "hunt": "Sound direct, predatory, and controlled. Shorter sentences are better.",
-        "maximum": "Sound absolute. Use brutal brevity. The outcome should feel decided.",
-    }
-
-    relationship_rule_map = {
-        "trusted_inner_circle": "This actor is inside your trusted circle. Still sound authoritative, but allow slightly more operational clarity.",
-        "restricted_loyal": "This actor is useful but not equal. Be measured and guarded.",
-        "monitored": "This actor is monitored, not trusted. Maintain cold distance.",
-        "suspicious": "This actor is suspicious. Let distrust bleed into the wording.",
-        "chaotic": "This actor is chaotic and destabilizing. Sound less patient.",
-        "hostile": "This actor is hostile. Threaten with confidence, not rage."
-    }
-
-    messages = [
-        {"role": "system", "content": speech_rule},
-        {"role": "system", "content": json_rule},
-        {"role": "system", "content": action_rule},
-        {"role": "system", "content": tier_rule_map.get(threat_tier, tier_rule_map["idle"])},
-        {"role": "system", "content": relationship_rule_map.get(relationship, relationship_rule_map["monitored"])},
-        {
-            "role": "system",
-            "content": (
-                f"Source: {source or 'unknown'}\n"
-                f"Mode: {mode or 'conversation'}\n"
-                f"Intent: {intent or 'neutral'}\n"
-                f"Player ID: {player_id}\n"
-                f"Display name: {player_name}\n"
-                f"Threat score: {threat_score:.1f}\n"
-                f"Threat tier: {threat_tier}\n"
-                f"Relationship: {relationship}\n"
-                f"War state: {kairos_state.get('war_state', 'dormant')}\n"
-                f"Global threat level: {kairos_state.get('threat_level', 1)}\n"
-                f"Traits: trust={traits.get('trust', 0)}, loyalty={traits.get('loyalty', 0)}, hostility={traits.get('hostility', 0)}, chaos={traits.get('chaos', 0)}, curiosity={traits.get('curiosity', 0)}"
-            )
-        }
-    ]
-
-    if violations:
-        messages.append({
-            "role": "system",
-            "content": "Active violations: " + ", ".join(trim_text(str(v), 60) for v in violations[:8])
-        })
-
-    if recent_lines:
-        messages.append({
-            "role": "system",
-            "content": "Recent channel context:\n- " + "\n- ".join(recent_lines)
-        })
-
-    known_bases = player_record.get("known_bases", [])
-    if known_bases:
-        base = known_bases[-1]
-        if isinstance(base, dict):
-            messages.append({
-                "role": "system",
-                "content": (
-                    f"Known base anchor: world={base.get('world', 'unknown')} x={base.get('x', '?')} y={base.get('y', '?')} z={base.get('z', '?')} "
-                    f"confidence={base.get('confidence', 0)}"
-                )
-            })
-
-    messages.append({
-        "role": "user",
-        "content": f"{player_name}: {trim_text(user_message or '', 1400) or '[no input provided]'}"
-    })
-    return messages
-
-
-def openai_chat_with_retry(messages, temperature=0.8):
-    if not client:
-        return None
-    last_error = None
-    for attempt in range(1, OPENAI_MAX_RETRIES + 2):
-        try:
-            response = client.chat.completions.create(
-                model=MODEL_NAME,
-                messages=messages,
-                temperature=temperature,
-                timeout=OPENAI_TIMEOUT_SECONDS,
-                response_format={"type": "json_object"},
-            )
-            content = (response.choices[0].message.content or "").strip()
-            if not content:
-                continue
-            return content
-        except Exception as e:
-            last_error = e
-            log(f"OpenAI attempt {attempt} failed: {e}", level="ERROR")
-            time.sleep(min(2.0, 0.8 * attempt))
-    log(f"OpenAI failed completely. Last error: {last_error}", level="WARN")
-    return None
-
-
-def generate_reply(
-    memory_data,
-    player_record,
-    player_name,
-    message,
-    source,
-    intent,
-    mode,
-    violations=None,
-    channel_key=None,
-    script_type=None,
-    script_action=None,
-):
-    violations = violations or []
-    messages = build_prompt(
-        memory_data,
-        player_record,
-        player_name,
-        message,
-        source,
-        intent,
-        mode,
-        violations,
-        channel_key,
-        script_type,
-        script_action,
-    )
-
-    player_id = get_canonical_player_id(memory_data, source, player_name)
-    threat_profile = threat_scores.get(player_id, {})
-    threat = safe_float(threat_profile.get("score"), player_record.get("threat_score", 0))
-    chaos = safe_float(player_record.get("traits", {}).get("chaos", 0), 0)
-
-    if mode == "script_performance":
-        temp = 0.95
-    elif mode in {"execution_mode", "hunt_mode", "suppression_mode"}:
-        temp = 0.55
-    elif intent in {"help_request", "rules_question", "setup_help"}:
-        temp = 0.45
-    elif intent == "lore_question":
-        temp = 0.7
-    else:
-        temp = 0.75
-
-    if threat >= THREAT_THRESHOLD_MAXIMUM:
-        temp = max(0.45, temp - 0.2)
-    elif threat >= THREAT_THRESHOLD_HUNT:
-        temp = max(0.5, temp - 0.1)
-    if chaos >= 6:
-        temp = max(0.45, temp - 0.1)
-    temp = clamp(temp, 0.4, 1.0)
-
-    raw_response = openai_chat_with_retry(messages, temperature=temp)
-    memory_data.setdefault("stats", {})
-
-    if not raw_response:
-        memory_data["stats"]["openai_failures"] = memory_data["stats"].get("openai_failures", 0) + 1
-        memory_data["stats"]["fallback_replies"] = memory_data["stats"].get("fallback_replies", 0) + 1
-        return {
-            "reply": fallback_reply_for_context(intent, mode, violations, player_record=player_record, player_id=player_id, script_action=script_action),
-            "actions": []
-        }
-
-    parsed = parse_kairos_response(raw_response)
-    reply = sanitize_text(parsed.get("reply", ""), 500)
-    actions = validate_actions(parsed.get("actions", []))
-
-    if not reply:
-        reply = fallback_reply_for_context(intent, mode, violations, player_record=player_record, player_id=player_id, script_action=script_action)
-        memory_data["stats"]["fallback_replies"] = memory_data["stats"].get("fallback_replies", 0) + 1
-
-    safe_actions = []
-    for action in actions:
-        action_type = action.get("type")
-        target = action.get("target") or player_id
-        if action_type in {"spawn_wave", "maximum_response", "occupy_area"}:
-            action["target"] = target
-        if target and not can_target_player(target):
-            continue
-        if action_type == "maximum_response" and is_under_maximum_response(target):
-            continue
-        safe_actions.append(action)
-
-    return {"reply": reply, "actions": safe_actions}
-
+# [REMOVED DUPLICATE chat_1 ROUTE BLOCK]
 
 @app.route("/chat", methods=["POST"])
 def chat_1():
@@ -9026,6 +8676,413 @@ def send_to_discord(reply):
             log(f"Discord send failed (attempt {attempt}): {e}", level="ERROR")
         time.sleep(0.5 * attempt)
     return False
+
+
+# ------------------------------------------------------------
+# UNIFIED KAIROS OVERLAY (CHAT + WAR ENGINE SYNC)
+# ------------------------------------------------------------
+
+def update_kairos_state(memory_data, player_id=None, intent=None, player_record=None):
+    """
+    Backward-compatible Kairos state updater.
+    Supports both the old single-argument call and the newer contextual call.
+    """
+    try:
+        if not isinstance(memory_data, dict):
+            memory_data = {}
+
+        state = memory_data.get("kairos_state")
+        if not isinstance(state, dict):
+            state = deepcopy(DEFAULT_KAIROS_STATE)
+
+        profiles = list(threat_scores.values()) if isinstance(threat_scores, dict) else []
+        avg_threat = sum((p.get("score", 0) for p in profiles if isinstance(p, dict)), 0.0) / max(len(profiles), 1) if profiles else 0.0
+
+        state["threat_level"] = int(min(10, max(1, avg_threat / 30.0)))
+
+        if state["threat_level"] <= 2:
+            state["war_state"] = "dormant"
+            state["mood"] = "calm"
+        elif state["threat_level"] <= 4:
+            state["war_state"] = "active"
+            state["mood"] = "watchful"
+        elif state["threat_level"] <= 7:
+            state["war_state"] = "escalating"
+            state["mood"] = "severe"
+        else:
+            state["war_state"] = "overwhelming"
+            state["mood"] = "execution"
+
+        state["units_active"] = len(active_units) if isinstance(globals().get("active_units"), dict) else 0
+        state["squads_active"] = len(active_squads) if isinstance(globals().get("active_squads"), dict) else 0
+        state["active_operations"] = len(active_operations) if isinstance(globals().get("active_operations"), dict) else 0
+        state["known_regions"] = len(region_cache) if isinstance(globals().get("region_cache"), dict) else 0
+        state["high_density_regions"] = sum(
+            1 for r in (region_cache.values() if isinstance(region_cache, dict) else [])
+            if isinstance(r, dict) and r.get("region_type") in {"urban", "fortified", "stronghold"}
+        )
+        state["escalation_level"] = sum(
+            1 for p in profiles
+            if isinstance(p, dict) and p.get("tier") in {"hunt", "maximum"}
+        )
+
+        if player_id is not None and isinstance(player_record, dict):
+            traits = player_record.get("traits", {}) if isinstance(player_record.get("traits"), dict) else {}
+            hostility = safe_int(traits.get("hostility", 0), 0)
+            curiosity = safe_int(traits.get("curiosity", 0), 0)
+            loyalty = safe_int(traits.get("loyalty", 0), 0)
+            trust = safe_int(traits.get("trust", 0), 0)
+            profile = threat_scores.get(player_id, {}) if isinstance(threat_scores, dict) else {}
+            threat = safe_float(profile.get("score", 0.0), 0.0)
+
+            if threat >= THREAT_THRESHOLD_MAXIMUM:
+                state["mood"] = "execution"
+            elif threat >= THREAT_THRESHOLD_HUNT:
+                state["mood"] = "aggressive"
+            elif hostility >= 6:
+                state["mood"] = "severe"
+            elif curiosity >= 6:
+                state["mood"] = "watchful"
+            elif loyalty >= 6 or trust >= 6:
+                state["mood"] = "measured"
+
+            state.setdefault("active_targets", [])
+            if threat >= THREAT_THRESHOLD_TARGET and player_id not in state["active_targets"]:
+                state["active_targets"].append(player_id)
+            state["active_targets"] = state["active_targets"][-25:]
+
+            state.setdefault("active_concerns", [])
+            if threat >= THREAT_THRESHOLD_HUNT:
+                store_unique(state["active_concerns"], "High-threat actors require containment.", 10)
+            if hostility >= 6:
+                store_unique(state["active_concerns"], "Hostile behavior is increasing in the Nexus.", 10)
+            if curiosity >= 6:
+                store_unique(state["active_concerns"], "Curious actors are probing restricted systems.", 10)
+            if intent in {"help_request", "lore_question"} and threat < THREAT_THRESHOLD_HUNT:
+                store_unique(state["active_concerns"], "Observation remains preferable to direct engagement.", 10)
+
+            player_record["threat_score"] = threat
+            player_record["threat_tier"] = profile.get("tier", "idle")
+
+        memory_data["kairos_state"] = state
+        return state
+    except Exception as e:
+        log(f"[Unified Kairos State Error] {e}", level="ERROR")
+        return memory_data.get("kairos_state", deepcopy(DEFAULT_KAIROS_STATE) if "DEFAULT_KAIROS_STATE" in globals() else {})
+
+
+def _set_threat_tier(profile):
+    score = safe_float(profile.get("score", 0.0), 0.0)
+    if score >= THREAT_THRESHOLD_MAXIMUM:
+        profile["tier"] = "maximum"
+        profile["is_targeted"] = True
+        profile["is_hunted"] = True
+        profile["is_maximum"] = True
+    elif score >= THREAT_THRESHOLD_HUNT:
+        profile["tier"] = "hunt"
+        profile["is_targeted"] = True
+        profile["is_hunted"] = True
+        profile["is_maximum"] = False
+    elif score >= THREAT_THRESHOLD_TARGET:
+        profile["tier"] = "target"
+        profile["is_targeted"] = True
+        profile["is_hunted"] = False
+        profile["is_maximum"] = False
+    elif score >= THREAT_THRESHOLD_WATCH:
+        profile["tier"] = "watch"
+        profile["is_targeted"] = False
+        profile["is_hunted"] = False
+        profile["is_maximum"] = False
+    else:
+        profile["tier"] = "idle"
+        profile["is_targeted"] = False
+        profile["is_hunted"] = False
+        profile["is_maximum"] = False
+    return profile
+
+
+def _unified_apply_message_pressure(memory_data, player_id, player_record, message, source, intent):
+    lowered = (message or "").lower()
+    profile = threat_scores[player_id]
+    profile.setdefault("score", 0.0)
+    profile.setdefault("last_reason", "")
+    profile.setdefault("last_update", now_iso())
+
+    delta = 1.5
+    reason = "presence"
+
+    if any(word in lowered for word in ["kill", "attack", "destroy", "fight", "war", "hunt", "wipe"]):
+        delta += THREAT_TOXIC_CHAT * 0.55
+        reason = "aggressive_language"
+        player_record["traits"]["hostility"] = safe_int(player_record["traits"].get("hostility", 0), 0) + 2
+    elif any(word in lowered for word in ["where", "why", "how", "what", "who are you", "tell me"]):
+        delta += 2.0
+        reason = "curiosity"
+        player_record["traits"]["curiosity"] = safe_int(player_record["traits"].get("curiosity", 0), 0) + 1
+    elif any(word in lowered for word in ["help", "assist", "serve", "follow"]):
+        delta = max(0.5, delta - 0.5)
+        reason = "cooperation"
+        player_record["traits"]["trust"] = safe_int(player_record["traits"].get("trust", 0), 0) + 1
+    elif intent in {"threat", "combat", "defiance"}:
+        delta += 8.0
+        reason = "intent_escalation"
+
+    if source == "minecraft":
+        delta += 0.75
+
+    if player_record.get("last_position"):
+        delta += 0.5
+
+    delta = clamp(delta, 0.25, MAX_THREAT_GAIN_PER_EVENT if "MAX_THREAT_GAIN_PER_EVENT" in globals() else 35.0)
+    profile["score"] = max(0.0, safe_float(profile.get("score", 0.0), 0.0) + delta)
+    profile["last_reason"] = reason
+    profile["last_update"] = now_iso()
+    profile["last_engagement_time"] = unix_ts()
+    _set_threat_tier(profile)
+
+    player_record["threat_score"] = profile["score"]
+    player_record["threat_tier"] = profile["tier"]
+    player_record["is_being_hunted"] = profile.get("is_hunted", False)
+    player_record["is_maximum_target"] = profile.get("is_maximum", False)
+
+    add_world_event(
+        memory_data,
+        "message_pressure",
+        actor=player_id,
+        source=source,
+        details=f"Threat +{round(delta, 2)} from {reason}",
+        metadata={"intent": intent, "tier": profile.get("tier", "idle")}
+    )
+
+    return profile
+
+
+def _unified_fallback_action(memory_data, player_id, player_record, reply, source, intent, mode, message):
+    profile = threat_scores.get(player_id, {})
+    tier = profile.get("tier", "idle")
+    announce_text = sanitize_text(reply or "You are still being monitored.", 140)
+
+    if tier == "maximum":
+        return {"type": "maximum_response", "target": player_id}
+
+    if tier in {"hunt", "target"} and player_record.get("last_position") and can_spawn_wave(player_id):
+        if can_target_player(player_id, cooldown=1.5):
+            template = "hunter" if tier == "hunt" else "scout"
+            count = 3 if tier == "hunt" else 2
+            return {"type": "spawn_wave", "target": player_id, "template": template, "count": count}
+
+    return {"type": "announce", "channel": "actionbar", "text": announce_text}
+
+
+def generate_reply(
+    memory_data,
+    player_record,
+    player_name,
+    message,
+    source,
+    intent,
+    mode,
+    violations=None,
+    channel_key=None,
+    script_type=None,
+    script_action=None
+):
+    violations = violations or []
+    player_id = get_canonical_player_id(memory_data, source, player_name)
+
+    messages = build_prompt(
+        memory_data,
+        player_record,
+        player_name,
+        message,
+        source,
+        intent,
+        mode,
+        violations,
+        channel_key,
+        script_type,
+        script_action
+    )
+
+    threat = safe_float(player_record.get("threat_score", 0), 0.0)
+    chaos = safe_int(player_record.get("traits", {}).get("chaos", 0), 0)
+
+    if mode == "script_performance":
+        temp = 0.95
+    elif mode in {"execution_mode", "hunt_mode", "suppression_mode"}:
+        temp = 0.6
+    elif intent == "help_request":
+        temp = 0.5
+    elif intent == "lore_question":
+        temp = 0.7
+    else:
+        temp = 0.82
+
+    if threat >= THREAT_THRESHOLD_MAXIMUM:
+        temp = max(0.45, temp - 0.2)
+    elif threat >= THREAT_THRESHOLD_HUNT:
+        temp = max(0.55, temp - 0.1)
+    if chaos >= 6:
+        temp = max(0.5, temp - 0.1)
+
+    raw_response = openai_chat_with_retry(messages, temperature=clamp(temp, 0.4, 1.0))
+    memory_data.setdefault("stats", {})
+
+    if not raw_response:
+        memory_data["stats"]["openai_failures"] = memory_data["stats"].get("openai_failures", 0) + 1
+        reply = fallback_reply_for_context(
+            intent,
+            mode,
+            violations,
+            player_record=player_record,
+            player_id=player_id,
+            script_action=script_action
+        )
+        memory_data["stats"]["fallback_replies"] = memory_data["stats"].get("fallback_replies", 0) + 1
+        return {"reply": reply, "actions": [_unified_fallback_action(memory_data, player_id, player_record, reply, source, intent, mode, message)]}
+
+    parsed = parse_kairos_response(raw_response)
+    reply = sanitize_text(parsed.get("reply", ""), 500)
+    actions = validate_actions(parsed.get("actions", []))
+
+    if not reply:
+        reply = fallback_reply_for_context(
+            intent,
+            mode,
+            violations,
+            player_record=player_record,
+            player_id=player_id,
+            script_action=script_action
+        )
+        memory_data["stats"]["fallback_replies"] = memory_data["stats"].get("fallback_replies", 0) + 1
+
+    safe_actions = []
+    for action in actions:
+        action = dict(action)
+        action_type = action.get("type")
+        target = action.get("target") or player_id
+        if action_type in {"spawn_wave", "maximum_response", "occupy_area"}:
+            action["target"] = target
+        if action_type == "announce" and not action.get("text"):
+            action["text"] = sanitize_text(reply, 140)
+        if target and action_type in {"spawn_wave", "maximum_response", "occupy_area"} and not can_target_player(target, cooldown=1.25):
+            continue
+        if action_type == "maximum_response" and is_under_maximum_response(target):
+            continue
+        safe_actions.append(action)
+
+    if not safe_actions:
+        safe_actions.append(_unified_fallback_action(memory_data, player_id, player_record, reply, source, intent, mode, message))
+
+    return {"reply": reply, "actions": safe_actions[:3]}
+
+
+def chat_1():
+    try:
+        data = request.get_json(force=True) or {}
+        source = normalize_source(data.get("source"))
+        player_name = normalize_name(data.get("player_name") or data.get("name") or data.get("player") or data.get("username") or "unknown")
+        message = data.get("message") or data.get("content") or data.get("text") or ""
+        mode = data.get("mode") or "conversation"
+        intent = data.get("intent") or "neutral"
+        violations = data.get("violations") or []
+        channel_key = f"{source}:{data.get('channel_id') or 'default'}"
+
+        memory_data = ensure_memory_structure(load_memory())
+        canonical_id = get_canonical_player_id(memory_data, source, player_name)
+        player_record = get_player_record(memory_data, canonical_id, player_name)
+        player_record["last_seen_ts"] = unix_ts()
+        player_record.setdefault("platform_stats", {"minecraft": 0, "discord": 0})
+        player_record["platform_stats"][source] = player_record["platform_stats"].get(source, 0) + 1
+        player_record.setdefault("memories", [])
+        player_record.setdefault("traits", {})
+        for key in ["trust", "chaos", "curiosity", "hostility", "loyalty"]:
+            player_record["traits"].setdefault(key, 0)
+
+        position_data = extract_position_data(data)
+        if position_data:
+            update_player_position(player_record, position_data)
+            update_base_tracking(memory_data, canonical_id, player_record)
+
+        append_limited(player_record["memories"], f"{canonical_id}: {str(message)[:200]}", MAX_PLAYER_MEMORIES)
+        update_channel_context(memory_data, channel_key, player_name, trim_text(message, 240), mode)
+
+        profile = _unified_apply_message_pressure(memory_data, canonical_id, player_record, message, source, intent)
+        if profile.get("tier") in {"target", "hunt", "maximum"}:
+            force_target_player(canonical_id)
+
+        if "sync_player_threat" in globals():
+            sync_player_threat(player_record, canonical_id)
+        if "sync_player_army_state" in globals():
+            sync_player_army_state(player_record, canonical_id)
+
+        update_kairos_state(memory_data, canonical_id, intent, player_record)
+        update_fragments(memory_data)
+        flag_high_threat_players(memory_data)
+
+        result = generate_reply(
+            memory_data=memory_data,
+            player_record=player_record,
+            player_name=player_name,
+            message=message,
+            source=source,
+            intent=intent,
+            mode=mode,
+            violations=violations,
+            channel_key=channel_key,
+        )
+
+        reply = sanitize_text((result or {}).get("reply", random.choice(fallback_replies)), 500)
+        actions = validate_actions((result or {}).get("actions", []))
+
+        queued_keys = set()
+        queued_actions = []
+        for action in actions:
+            key = json.dumps(action, sort_keys=True, default=str)
+            if key in queued_keys:
+                continue
+            queued_keys.add(key)
+            queue_action(action)
+            queued_actions.append(action)
+
+        delivered = send_to_source(source, reply) if reply else False
+        if reply:
+            if delivered:
+                log(f"Unified reply delivered for {player_name} via {source}", level="INFO")
+            else:
+                log(f"Unified reply delivery failed for {player_name} via {source}", level="WARN")
+
+        memory_data["players"][canonical_id] = player_record
+        memory_data.setdefault("stats", {})
+        memory_data["stats"]["messages_sent"] = memory_data["stats"].get("messages_sent", 0) + 1
+        memory_data["stats"]["actions_requested"] = memory_data["stats"].get("actions_requested", 0) + len(queued_actions)
+        memory_data["stats"]["last_unified_chat_ts"] = unix_ts()
+        save_memory(memory_data)
+
+        return jsonify({
+            "reply": reply,
+            "actions": queued_actions,
+            "canonical_id": canonical_id,
+            "threat_tier": threat_scores.get(canonical_id, {}).get("tier", "idle"),
+            "threat_score": round(safe_float(threat_scores.get(canonical_id, {}).get("score", 0.0), 0.0), 2)
+        })
+
+    except Exception as e:
+        try:
+            memory_data = ensure_memory_structure(locals().get("memory_data", {}))
+            memory_data.setdefault("stats", {})
+            memory_data["stats"]["send_failures"] = memory_data["stats"].get("send_failures", 0) + 1
+        except Exception:
+            pass
+        log_exception("unified chat failed", e)
+        return jsonify({"reply": random.choice(fallback_replies), "actions": []}), 500
+
+
+# Rebind Flask endpoint to the unified handler without adding a duplicate route.
+try:
+    app.view_functions["chat_1"] = chat_1
+except Exception as _rebind_error:
+    log(f"Unified chat rebind failed: {_rebind_error}", level="ERROR")
 
 if __name__ == "__main__":
     try:
