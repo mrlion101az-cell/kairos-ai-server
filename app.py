@@ -161,6 +161,11 @@ MC_HTTP_URL = os.getenv("MC_HTTP_URL")
 MC_HTTP_TOKEN = os.getenv("MC_HTTP_TOKEN")
 DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
 
+# Pull-bridge fallback (Minecraft polls Render when inbound HTTP is blocked)
+COMMAND_PULL_TOKEN = os.getenv("COMMAND_PULL_TOKEN", os.getenv("MC_HTTP_TOKEN", ""))
+MC_OUTBOX_LIMIT = int(os.getenv("MC_OUTBOX_LIMIT", "500"))
+MC_PULL_BATCH_SIZE = int(os.getenv("MC_PULL_BATCH_SIZE", "50"))
+
 # -----------------------------
 # Execution / Safety
 # -----------------------------
@@ -335,6 +340,10 @@ region_cache: Dict[str, Dict[str, Any]] = {}
 
 # Action queue (core execution pipeline)
 command_queue: deque = deque()
+
+# Minecraft outbound command outbox (for polling bridge fallback)
+pending_mc_commands: deque = deque()
+outbox_lock = threading.Lock()
 
 # Locking (thread safety)
 memory_lock = threading.RLock()
@@ -7532,16 +7541,84 @@ def handle_cleanup_units(action):
         player_unit_map.clear()
 
 
+
+# ------------------------------------------------------------
+# MINECRAFT OUTBOX / PULL BRIDGE HELPERS
+# ------------------------------------------------------------
+def _normalize_mc_command_list(command_list) -> List[str]:
+    if not isinstance(command_list, list):
+        command_list = [command_list]
+    normalized = []
+    for cmd in command_list:
+        cmd_text = str(cmd or "").strip()
+        if cmd_text:
+            normalized.append(cmd_text)
+    return normalized
+
+def queue_mc_commands_for_pull(command_list, reason: str = "fallback") -> int:
+    commands = _normalize_mc_command_list(command_list)
+    if not commands:
+        return 0
+
+    queued = 0
+    with outbox_lock:
+        for cmd in commands:
+            if len(pending_mc_commands) >= MC_OUTBOX_LIMIT:
+                try:
+                    pending_mc_commands.popleft()
+                except Exception:
+                    break
+            pending_mc_commands.append({
+                "id": gen_id("mc"),
+                "command": cmd,
+                "queued_at": now_iso(),
+                "reason": reason
+            })
+            queued += 1
+
+    if queued:
+        log(f"Queued {queued} Minecraft command(s) for pull bridge ({reason}).", level="WARN")
+    return queued
+
+def drain_mc_commands_for_pull(limit: int = None) -> List[Dict[str, Any]]:
+    batch_size = safe_int(limit or MC_PULL_BATCH_SIZE, MC_PULL_BATCH_SIZE)
+    batch_size = max(1, min(batch_size, MC_PULL_BATCH_SIZE))
+    drained = []
+    with outbox_lock:
+        while pending_mc_commands and len(drained) < batch_size:
+            drained.append(pending_mc_commands.popleft())
+    return drained
+
+def get_mc_outbox_size() -> int:
+    with outbox_lock:
+        return len(pending_mc_commands)
+
+def _pull_bridge_authorized(req) -> bool:
+    token = (
+        req.headers.get("Authorization", "").replace("Bearer ", "").strip()
+        or req.headers.get("X-Kairos-Token", "").strip()
+        or req.args.get("token", "").strip()
+    )
+    expected = str(COMMAND_PULL_TOKEN or "").strip()
+    if not expected:
+        return False
+    return secrets.compare_digest(token, expected)
+
+
 # ------------------------------------------------------------
 # COMMAND DISPATCH (Minecraft Bridge)
 # ------------------------------------------------------------
 
-def send_mc_command(command):
-    if not MC_HTTP_URL or not MC_HTTP_TOKEN:
-        log("MC HTTP not configured", level="WARN")
-        return False
 
-    if not command:
+def send_mc_command(command):
+    commands = _normalize_mc_command_list([command])
+    if not commands:
+        return False
+    return send_http_commands(commands)
+
+def send_http_commands(command_list):
+    command_list = _normalize_mc_command_list(command_list)[:10]
+    if not command_list:
         return False
 
     headers = {
@@ -7549,31 +7626,41 @@ def send_mc_command(command):
         "Content-Type": "application/json"
     }
 
-    try:
-        r = requests.post(
-            MC_HTTP_URL,
-            headers=headers,
-            json={"commands": [str(command)]},
-            timeout=REQUEST_TIMEOUT
-        )
+    if MC_HTTP_URL and MC_HTTP_TOKEN:
+        for attempt in range(1, 4):
+            try:
+                r = requests.post(
+                    MC_HTTP_URL,
+                    headers=headers,
+                    json={"commands": command_list},
+                    timeout=REQUEST_TIMEOUT
+                )
 
-        if 200 <= r.status_code < 300:
-            return True
+                if 200 <= r.status_code < 300:
+                    log(f"MC send success ({len(command_list)} cmds)")
+                    return True
 
-        body = ""
-        try:
-            body = r.text[:300]
-        except Exception:
-            body = ""
-        log(f"MC API error ({r.status_code}) for command: {command} | {body}", level="WARN")
-        return False
+                body = ""
+                try:
+                    body = r.text[:300]
+                except Exception:
+                    body = ""
+                log(
+                    f"MC send failed (attempt {attempt}) for commands {command_list}: HTTP {r.status_code} {body}",
+                    level="ERROR"
+                )
+            except Exception as e:
+                log(f"MC send failed (attempt {attempt}) for commands {command_list}: {e}", level="ERROR")
 
-    except Exception as e:
-        log(f"MC command failed: {e}", level="ERROR")
-        return False
+            time.sleep(HTTP_RETRY_DELAY)
 
-# ------------------------------------------------------------
-# Minecraft / Discord Send (Hardened + Reliable)
+        queued = queue_mc_commands_for_pull(command_list, reason="http_push_failed")
+        return queued > 0
+
+    queued = queue_mc_commands_for_pull(command_list, reason="http_not_configured")
+    return queued > 0
+
+
 # ------------------------------------------------------------
 
 def send_http_commands(command_list):
