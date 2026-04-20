@@ -9476,6 +9476,287 @@ except Exception as _bridge_rebind_error:
     log(f"Bridge chat rebind failed: {_bridge_rebind_error}", level="ERROR")
 
 
+
+# ------------------------------------------------------------
+# RELENTLESS AGGRESSION OVERLAY (NON-DESTRUCTIVE FINAL TUNING)
+# ------------------------------------------------------------
+
+RELENTLESS_MODE_ENABLED = True
+
+# Lower the hesitation gates without deleting the original systems.
+THREAT_THRESHOLD_WATCH = min(safe_int(globals().get("THREAT_THRESHOLD_WATCH", 20), 20), 8)
+THREAT_THRESHOLD_TARGET = min(safe_int(globals().get("THREAT_THRESHOLD_TARGET", 45), 45), 16)
+THREAT_THRESHOLD_HUNT = min(safe_int(globals().get("THREAT_THRESHOLD_HUNT", 95), 95), 32)
+THREAT_THRESHOLD_MAXIMUM = min(safe_int(globals().get("THREAT_THRESHOLD_MAXIMUM", 160), 160), 60)
+
+WAVE_COOLDOWN_SECONDS = min(safe_float(globals().get("WAVE_COOLDOWN_SECONDS", 8.0), 8.0), 2.0)
+TARGET_ACTION_COOLDOWN = min(safe_float(globals().get("TARGET_ACTION_COOLDOWN", 2.0), 2.0), 0.5)
+GLOBAL_ACTION_COOLDOWN = min(safe_float(globals().get("GLOBAL_ACTION_COOLDOWN", 0.05), 0.05), 0.02)
+PASSIVE_PRESSURE_COOLDOWN = min(safe_int(globals().get("PASSIVE_PRESSURE_COOLDOWN", 90), 90), 18)
+
+PASSIVE_SCOUT_CHANCE = max(safe_float(globals().get("PASSIVE_SCOUT_CHANCE", 0.65), 0.65), 0.92)
+PASSIVE_TARGET_THREAT_GAIN = max(safe_float(globals().get("PASSIVE_TARGET_THREAT_GAIN", 28.0), 28.0), 40.0)
+PASSIVE_HUNT_THREAT_GAIN = max(safe_float(globals().get("PASSIVE_HUNT_THREAT_GAIN", 48.0), 48.0), 70.0)
+SPONTANEOUS_MESSAGE_CHANCE = max(safe_float(globals().get("SPONTANEOUS_MESSAGE_CHANCE", 0.45), 0.45), 0.80)
+
+BASE_WAVE_SIZE = max(safe_int(globals().get("BASE_WAVE_SIZE", 3), 3), 3)
+MAX_WAVE_SIZE = max(safe_int(globals().get("MAX_WAVE_SIZE", 10), 10), 8)
+THREAT_TO_UNIT_SCALE = max(safe_float(globals().get("THREAT_TO_UNIT_SCALE", 0.04), 0.04), 0.08)
+THREAT_WAVE_MULTIPLIER = max(safe_float(globals().get("THREAT_WAVE_MULTIPLIER", 1.0), 1.0), 1.30)
+THREAT_ELITE_MULTIPLIER = max(safe_float(globals().get("THREAT_ELITE_MULTIPLIER", 1.4), 1.4), 1.65)
+
+ENABLE_PASSIVE_ESCALATION = True
+PASSIVE_TARGETING_ENABLED = True
+ENABLE_PERSISTENT_HUNTS = True
+ENABLE_MULTI_WAVE_ATTACKS = True
+
+
+try:
+    _RELENTLESS_ORIGINAL_PRESSURE = _unified_apply_message_pressure
+except Exception:
+    _RELENTLESS_ORIGINAL_PRESSURE = None
+
+try:
+    _RELENTLESS_ORIGINAL_BRIDGE_DEFAULT = _bridge_default_wave_for_tier
+except Exception:
+    _RELENTLESS_ORIGINAL_BRIDGE_DEFAULT = None
+
+try:
+    _RELENTLESS_ORIGINAL_CHAT_1 = chat_1
+except Exception:
+    _RELENTLESS_ORIGINAL_CHAT_1 = None
+
+
+def _relentless_score_from_message(message: str) -> float:
+    msg = (message or "").strip().lower()
+    if not msg:
+        return 0.0
+
+    score = 6.0
+    score += min(len(msg) / 60.0, 8.0)
+
+    aggression_words = [
+        "fight", "kill", "come after", "attack", "power", "hunt", "war",
+        "try me", "stop hiding", "where are you", "do something",
+        "test yourself", "come at me", "spawn", "soldier", "army"
+    ]
+    for word in aggression_words:
+        if word in msg:
+            score += 10.0
+
+    if "?" in msg:
+        score += 2.0
+
+    return min(score, 22.0)
+
+
+def _relentless_tier_for_score(score: float) -> str:
+    if score >= THREAT_THRESHOLD_MAXIMUM:
+        return "maximum"
+    if score >= THREAT_THRESHOLD_HUNT:
+        return "hunt"
+    if score >= THREAT_THRESHOLD_TARGET:
+        return "target"
+    if score >= THREAT_THRESHOLD_WATCH:
+        return "watch"
+    return "idle"
+
+
+def _relentless_force_profile(player_id: str) -> Dict[str, Any]:
+    profile = threat_scores[player_id]
+    score = safe_float(profile.get("score", 0.0), 0.0)
+    profile["tier"] = _relentless_tier_for_score(score)
+    profile["is_targeted"] = profile["tier"] in {"target", "hunt", "maximum"}
+    profile["is_hunted"] = profile["tier"] in {"hunt", "maximum"}
+    profile["is_maximum"] = profile["tier"] == "maximum"
+    profile["last_update"] = now_iso()
+    return profile
+
+
+def _unified_apply_message_pressure(memory_data, player_id, player_record, message, source, intent):
+    if callable(_RELENTLESS_ORIGINAL_PRESSURE):
+        profile = _RELENTLESS_ORIGINAL_PRESSURE(memory_data, player_id, player_record, message, source, intent)
+    else:
+        profile = threat_scores[player_id]
+
+    profile = profile if isinstance(profile, dict) else threat_scores[player_id]
+    added = _relentless_score_from_message(message)
+    profile["score"] = min(300.0, safe_float(profile.get("score", 0.0), 0.0) + added)
+    profile["last_reason"] = "relentless_overlay"
+    profile["last_engagement_time"] = unix_ts()
+    profile["last_update"] = now_iso()
+
+    profile = _relentless_force_profile(player_id)
+
+    try:
+        player_record.setdefault("traits", {})
+        player_record["traits"]["hostility"] = safe_int(player_record["traits"].get("hostility", 0), 0) + (2 if profile["tier"] in {"target", "hunt", "maximum"} else 1)
+        player_record["traits"]["curiosity"] = safe_int(player_record["traits"].get("curiosity", 0), 0) + 1
+        player_record["threat_tier"] = profile["tier"]
+        player_record["threat_score"] = round(safe_float(profile.get("score", 0.0), 0.0), 2)
+    except Exception:
+        pass
+
+    return profile
+
+
+def _bridge_default_wave_for_tier(player_id, tier, score=0.0):
+    tier = (tier or "idle").lower()
+    score = safe_float(score, 0.0)
+
+    if tier == "maximum":
+        template = "warden" if score >= safe_int(globals().get("MAX_THREAT_FORCE_HEAVY", 260), 260) else "enforcer"
+        count = 6 if template == "enforcer" else 4
+        return {"type": "spawn_wave", "target": player_id, "template": template, "count": count}
+
+    if tier == "hunt":
+        template = "enforcer" if score >= 48 else "hunter"
+        return {"type": "spawn_wave", "target": player_id, "template": template, "count": 4}
+
+    if tier == "target":
+        return {"type": "spawn_wave", "target": player_id, "template": "hunter", "count": 2}
+
+    if tier == "watch":
+        return {
+            "type": "announce",
+            "channel": "actionbar",
+            "text": random.choice([
+                "KAIROS // contact initiated",
+                "KAIROS // you are within range",
+                "KAIROS // tracking vector tightening"
+            ])
+        }
+
+    return _RELENTLESS_ORIGINAL_BRIDGE_DEFAULT(player_id, tier, score) if callable(_RELENTLESS_ORIGINAL_BRIDGE_DEFAULT) else None
+
+
+def chat_1():
+    try:
+        data = request.get_json(force=True) or {}
+        source = normalize_source(data.get("source"))
+        player_name = normalize_name(data.get("player_name") or data.get("name") or data.get("player") or data.get("username") or "unknown")
+        message = data.get("message") or data.get("content") or data.get("text") or ""
+        mode = data.get("mode") or "conversation"
+        intent = data.get("intent") or "neutral"
+        violations = data.get("violations") or []
+        channel_key = f"{source}:{data.get('channel_id') or 'default'}"
+
+        memory_data = ensure_memory_structure(load_memory())
+        canonical_id = get_canonical_player_id(memory_data, source, player_name)
+        player_record = get_player_record(memory_data, canonical_id, player_name)
+        player_record["id"] = canonical_id
+        player_record["canonical_id"] = canonical_id
+        player_record["last_seen_ts"] = unix_ts()
+        player_record.setdefault("platform_stats", {"minecraft": 0, "discord": 0})
+        player_record["platform_stats"][source] = player_record["platform_stats"].get(source, 0) + 1
+        player_record.setdefault("memories", [])
+        player_record.setdefault("traits", {})
+        for key in ["trust", "chaos", "curiosity", "hostility", "loyalty"]:
+            player_record["traits"].setdefault(key, 0)
+
+        position_data = extract_position_data(data)
+        if position_data:
+            update_player_position(player_record, position_data)
+            update_base_tracking(memory_data, canonical_id, player_record)
+
+        append_limited(player_record["memories"], f"{canonical_id}: {str(message)[:200]}", MAX_PLAYER_MEMORIES)
+        update_channel_context(memory_data, channel_key, player_name, trim_text(message, 240), mode)
+
+        profile = _unified_apply_message_pressure(memory_data, canonical_id, player_record, message, source, intent)
+        if profile.get("tier") in {"target", "hunt", "maximum"}:
+            force_target_player(canonical_id)
+
+        if "sync_player_threat" in globals():
+            sync_player_threat(player_record, canonical_id)
+        if "sync_player_army_state" in globals():
+            sync_player_army_state(player_record, canonical_id)
+
+        update_kairos_state(memory_data, canonical_id, intent, player_record)
+        update_fragments(memory_data)
+        flag_high_threat_players(memory_data)
+
+        result = generate_reply(
+            memory_data=memory_data,
+            player_record=player_record,
+            player_name=player_name,
+            message=message,
+            source=source,
+            intent=intent,
+            mode=mode,
+            violations=violations,
+            channel_key=channel_key,
+        )
+
+        threat_profile = threat_scores.get(canonical_id, {})
+        threat_tier = threat_profile.get("tier", "idle")
+        threat_score = round(safe_float(threat_profile.get("score", 0.0), 0.0), 2)
+
+        reply = sanitize_text((result or {}).get("reply", random.choice(fallback_replies)), 500)
+        actions = validate_actions((result or {}).get("actions", []), default_target=canonical_id, default_tier=threat_tier)
+
+        if not actions:
+            fallback_action = _bridge_default_wave_for_tier(canonical_id, threat_tier, threat_score)
+            if fallback_action:
+                actions = [fallback_action]
+
+        queued_keys = set()
+        queued_actions = []
+        for action in actions[:4]:
+            key = json.dumps(action, sort_keys=True, default=str)
+            if key in queued_keys:
+                continue
+            queued_keys.add(key)
+
+            if action.get("type") == "spawn_wave":
+                action["count"] = max(1, safe_int(action.get("count", 1), 1))
+                if can_spawn_wave(action.get("target", canonical_id)):
+                    queue_action(action)
+                    queued_actions.append(action)
+            else:
+                queue_action(action)
+                queued_actions.append(action)
+
+        delivered = send_to_source(source, reply) if reply else False
+        if reply:
+            if delivered:
+                log(f"Relentless chat reply delivered for {player_name} via {source}", level="INFO")
+            else:
+                log(f"Relentless chat reply delivery failed for {player_name} via {source}", level="WARN")
+
+        memory_data["players"][canonical_id] = player_record
+        memory_data.setdefault("stats", {})
+        memory_data["stats"]["messages_sent"] = memory_data["stats"].get("messages_sent", 0) + 1
+        memory_data["stats"]["actions_requested"] = memory_data["stats"].get("actions_requested", 0) + len(queued_actions)
+        memory_data["stats"]["last_unified_chat_ts"] = unix_ts()
+        memory_data["stats"]["last_relentless_chat_ts"] = unix_ts()
+        save_memory(memory_data)
+
+        return jsonify({
+            "reply": reply,
+            "actions": queued_actions,
+            "canonical_id": canonical_id,
+            "threat_tier": threat_tier,
+            "threat_score": threat_score,
+            "relentless_mode": True
+        })
+
+    except Exception as e:
+        try:
+            memory_data = ensure_memory_structure(locals().get("memory_data", {}))
+            memory_data.setdefault("stats", {})
+            memory_data["stats"]["send_failures"] = memory_data["stats"].get("send_failures", 0) + 1
+        except Exception:
+            pass
+        log_exception("relentless chat failed", e)
+        return jsonify({"reply": random.choice(fallback_replies), "actions": []}), 500
+
+
+try:
+    app.view_functions["chat_1"] = chat_1
+except Exception as _relentless_rebind_error:
+    log(f"Relentless chat rebind failed: {_relentless_rebind_error}", level="ERROR")
+
+
 if __name__ == "__main__":
     try:
         start_background_systems()
