@@ -9109,6 +9109,373 @@ def start_background_systems():
         log(f"Background system startup error: {e}", level="ERROR")
 
 
+
+# ------------------------------------------------------------
+# CITIZENS / SENTINEL EXECUTION BRIDGE (NON-DESTRUCTIVE OVERLAY)
+# ------------------------------------------------------------
+
+try:
+    _ORIGINAL_EXECUTE_ACTION = execute_action
+except Exception:
+    _ORIGINAL_EXECUTE_ACTION = None
+
+try:
+    _ORIGINAL_GENERATE_REPLY = generate_reply
+except Exception:
+    _ORIGINAL_GENERATE_REPLY = None
+
+
+BRIDGE_ALLOWED_ACTION_TYPES = {
+    "spawn_wave",
+    "maximum_response",
+    "announce",
+    "occupy_area",
+    "cleanup_units",
+    "deploy_unit",
+    "deploy_squad",
+    "fortify_base",
+    "dismiss_units",
+    "citizens_wave",
+    "citizens_unit",
+    "sentinel_squad"
+}
+
+BRIDGE_TEMPLATE_ALIASES = {
+    "scout": "scout",
+    "raider": "hunter",
+    "hunter": "hunter",
+    "assassin": "hunter",
+    "enforcer": "enforcer",
+    "juggernaut": "enforcer",
+    "commander": "warden",
+    "sentinel": "base_guard",
+    "guard": "base_guard",
+    "base_guard": "base_guard",
+    "warden": "warden"
+}
+
+
+def _bridge_normalize_template(template_name, default_template="scout"):
+    raw = sanitize_text(template_name or default_template, 40).lower().strip()
+    return BRIDGE_TEMPLATE_ALIASES.get(raw, default_template)
+
+
+def _bridge_default_wave_for_tier(player_id, tier, score=0.0):
+    tier = (tier or "idle").lower()
+
+    if tier == "maximum":
+        template = "warden" if safe_float(score, 0.0) >= safe_int(globals().get("MAX_THREAT_FORCE_HEAVY", 260), 260) else "enforcer"
+        count = 3 if template == "warden" else 5
+        return {"type": "spawn_wave", "target": player_id, "template": template, "count": count}
+
+    if tier == "hunt":
+        return {"type": "spawn_wave", "target": player_id, "template": "enforcer", "count": 3}
+
+    if tier == "target":
+        return {"type": "spawn_wave", "target": player_id, "template": "hunter", "count": 2}
+
+    if tier == "watch":
+        return {
+            "type": "announce",
+            "channel": "actionbar",
+            "text": random.choice([
+                "KAIROS // target lock forming",
+                "KAIROS // tracking vector initialized",
+                "KAIROS // containment pressure rising"
+            ])
+        }
+
+    return None
+
+
+def _bridge_coerce_action(action, default_target=None, default_tier="idle"):
+    if not isinstance(action, dict):
+        return None
+
+    action_type = sanitize_text(action.get("type", ""), 40).lower()
+    if not action_type:
+        return None
+
+    target = sanitize_text(action.get("target") or default_target or "", 80)
+    count = clamp(safe_int(action.get("count", 1), 1), 1, 8)
+    template = _bridge_normalize_template(action.get("template"), "scout")
+
+    if action_type in {"deploy_unit", "citizens_unit"}:
+        if not target:
+            return None
+        return {
+            "type": "spawn_wave",
+            "target": target,
+            "template": template,
+            "count": 1
+        }
+
+    if action_type in {"deploy_squad", "citizens_wave", "sentinel_squad"}:
+        if not target:
+            return None
+        return {
+            "type": "spawn_wave",
+            "target": target,
+            "template": template,
+            "count": count if count > 1 else 3
+        }
+
+    if action_type == "fortify_base":
+        if not target:
+            return None
+        return {
+            "type": "occupy_area",
+            "target": target,
+            "count": clamp(count if count > 1 else 4, 2, 8)
+        }
+
+    if action_type == "dismiss_units":
+        coerced = {"type": "cleanup_units"}
+        if target:
+            coerced["target"] = target
+        return coerced
+
+    if action_type in {"spawn_wave", "maximum_response", "announce", "occupy_area", "cleanup_units"}:
+        safe_action = {"type": action_type}
+
+        if target and action_type in {"spawn_wave", "maximum_response", "occupy_area", "cleanup_units"}:
+            safe_action["target"] = target
+
+        if action_type == "spawn_wave":
+            safe_action["template"] = template
+            safe_action["count"] = count
+
+        if action_type == "occupy_area":
+            safe_action["count"] = clamp(count if count > 1 else 4, 2, 8)
+
+        if action_type == "announce":
+            safe_action["channel"] = sanitize_text(action.get("channel", "actionbar"), 20).lower() or "actionbar"
+            safe_action["text"] = sanitize_text(action.get("text", ""), 200)
+
+        return safe_action
+
+    return None
+
+
+def validate_actions(actions, default_target=None, default_tier="idle"):
+    if not isinstance(actions, list):
+        return []
+
+    safe_actions = []
+    seen = set()
+
+    for raw_action in actions[:5]:
+        coerced = _bridge_coerce_action(raw_action, default_target=default_target, default_tier=default_tier)
+        if not coerced:
+            continue
+
+        key = (
+            coerced.get("type"),
+            coerced.get("target"),
+            coerced.get("template"),
+            coerced.get("count"),
+            coerced.get("channel"),
+            coerced.get("text"),
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        safe_actions.append(coerced)
+
+    return safe_actions
+
+
+def execute_action(action):
+    normalized = _bridge_coerce_action(action, default_target=action.get("target") if isinstance(action, dict) else None)
+    if not normalized:
+        log(f"Bridge dropped invalid action: {action}", level="WARN")
+        return
+
+    if _ORIGINAL_EXECUTE_ACTION and callable(_ORIGINAL_EXECUTE_ACTION):
+        return _ORIGINAL_EXECUTE_ACTION(normalized)
+
+    action_type = normalized.get("type")
+    if action_type == "announce":
+        return handle_announce(normalized)
+    if action_type == "spawn_wave":
+        return handle_spawn_wave(normalized)
+    if action_type == "maximum_response":
+        return handle_maximum_response(normalized)
+    if action_type == "occupy_area":
+        return handle_occupy_area(normalized)
+    if action_type == "cleanup_units":
+        return handle_cleanup_units(normalized)
+
+    log(f"Bridge could not execute action: {normalized}", level="WARN")
+
+
+def generate_reply(*args, **kwargs):
+    if not _ORIGINAL_GENERATE_REPLY or not callable(_ORIGINAL_GENERATE_REPLY):
+        return {"reply": random.choice(fallback_replies), "actions": []}
+
+    result = _ORIGINAL_GENERATE_REPLY(*args, **kwargs)
+
+    if isinstance(result, str):
+        result = {"reply": sanitize_text(result, 500), "actions": []}
+    elif not isinstance(result, dict):
+        result = {"reply": random.choice(fallback_replies), "actions": []}
+
+    player_record = kwargs.get("player_record") if isinstance(kwargs, dict) else {}
+    memory_data = kwargs.get("memory_data") if isinstance(kwargs, dict) else {}
+    source = kwargs.get("source", "minecraft") if isinstance(kwargs, dict) else "minecraft"
+
+    player_id = None
+    if isinstance(player_record, dict):
+        player_id = player_record.get("id") or player_record.get("canonical_id")
+        if not player_id:
+            display_name = player_record.get("display_name")
+            if display_name:
+                player_id = f"{source}:{display_name}"
+
+    threat_tier = "idle"
+    threat_score = 0.0
+    if player_id and isinstance(globals().get("threat_scores"), dict):
+        threat_profile = threat_scores.get(player_id, {})
+        if isinstance(threat_profile, dict):
+            threat_tier = threat_profile.get("tier", "idle")
+            threat_score = safe_float(threat_profile.get("score", 0.0), 0.0)
+
+    actions = validate_actions(result.get("actions", []), default_target=player_id, default_tier=threat_tier)
+
+    if not actions and player_id:
+        if threat_tier in {"watch", "target", "hunt", "maximum"}:
+            fallback_action = _bridge_default_wave_for_tier(player_id, threat_tier, threat_score)
+            if fallback_action:
+                if fallback_action.get("type") != "spawn_wave" or can_spawn_wave(player_id):
+                    actions = [fallback_action]
+
+    result["actions"] = actions
+    result["reply"] = sanitize_text(result.get("reply", random.choice(fallback_replies)), 500)
+    return result
+
+
+def chat_1():
+    try:
+        data = request.get_json(force=True) or {}
+        source = normalize_source(data.get("source"))
+        player_name = normalize_name(data.get("player_name") or data.get("name") or data.get("player") or data.get("username") or "unknown")
+        message = data.get("message") or data.get("content") or data.get("text") or ""
+        mode = data.get("mode") or "conversation"
+        intent = data.get("intent") or "neutral"
+        violations = data.get("violations") or []
+        channel_key = f"{source}:{data.get('channel_id') or 'default'}"
+
+        memory_data = ensure_memory_structure(load_memory())
+        canonical_id = get_canonical_player_id(memory_data, source, player_name)
+        player_record = get_player_record(memory_data, canonical_id, player_name)
+        player_record["id"] = canonical_id
+        player_record["canonical_id"] = canonical_id
+        player_record["last_seen_ts"] = unix_ts()
+        player_record.setdefault("platform_stats", {"minecraft": 0, "discord": 0})
+        player_record["platform_stats"][source] = player_record["platform_stats"].get(source, 0) + 1
+        player_record.setdefault("memories", [])
+        player_record.setdefault("traits", {})
+        for key in ["trust", "chaos", "curiosity", "hostility", "loyalty"]:
+            player_record["traits"].setdefault(key, 0)
+
+        position_data = extract_position_data(data)
+        if position_data:
+            update_player_position(player_record, position_data)
+            update_base_tracking(memory_data, canonical_id, player_record)
+
+        append_limited(player_record["memories"], f"{canonical_id}: {str(message)[:200]}", MAX_PLAYER_MEMORIES)
+        update_channel_context(memory_data, channel_key, player_name, trim_text(message, 240), mode)
+
+        profile = _unified_apply_message_pressure(memory_data, canonical_id, player_record, message, source, intent)
+        if profile.get("tier") in {"target", "hunt", "maximum"}:
+            force_target_player(canonical_id)
+
+        if "sync_player_threat" in globals():
+            sync_player_threat(player_record, canonical_id)
+        if "sync_player_army_state" in globals():
+            sync_player_army_state(player_record, canonical_id)
+
+        update_kairos_state(memory_data, canonical_id, intent, player_record)
+        update_fragments(memory_data)
+        flag_high_threat_players(memory_data)
+
+        result = generate_reply(
+            memory_data=memory_data,
+            player_record=player_record,
+            player_name=player_name,
+            message=message,
+            source=source,
+            intent=intent,
+            mode=mode,
+            violations=violations,
+            channel_key=channel_key,
+        )
+
+        threat_profile = threat_scores.get(canonical_id, {})
+        threat_tier = threat_profile.get("tier", "idle")
+        threat_score = round(safe_float(threat_profile.get("score", 0.0), 0.0), 2)
+
+        reply = sanitize_text((result or {}).get("reply", random.choice(fallback_replies)), 500)
+        actions = validate_actions((result or {}).get("actions", []), default_target=canonical_id, default_tier=threat_tier)
+
+        if not actions and threat_tier in {"watch", "target", "hunt", "maximum"}:
+            fallback_action = _bridge_default_wave_for_tier(canonical_id, threat_tier, threat_score)
+            if fallback_action:
+                if fallback_action.get("type") != "spawn_wave" or can_spawn_wave(canonical_id):
+                    actions = [fallback_action]
+
+        queued_keys = set()
+        queued_actions = []
+        for action in actions:
+            key = json.dumps(action, sort_keys=True, default=str)
+            if key in queued_keys:
+                continue
+            queued_keys.add(key)
+            if action.get("type") == "spawn_wave" and not can_spawn_wave(action.get("target", canonical_id)):
+                continue
+            queue_action(action)
+            queued_actions.append(action)
+
+        delivered = send_to_source(source, reply) if reply else False
+        if reply:
+            if delivered:
+                log(f"Unified bridge reply delivered for {player_name} via {source}", level="INFO")
+            else:
+                log(f"Unified bridge reply delivery failed for {player_name} via {source}", level="WARN")
+
+        memory_data["players"][canonical_id] = player_record
+        memory_data.setdefault("stats", {})
+        memory_data["stats"]["messages_sent"] = memory_data["stats"].get("messages_sent", 0) + 1
+        memory_data["stats"]["actions_requested"] = memory_data["stats"].get("actions_requested", 0) + len(queued_actions)
+        memory_data["stats"]["last_unified_chat_ts"] = unix_ts()
+        memory_data["stats"]["last_bridge_chat_ts"] = unix_ts()
+        save_memory(memory_data)
+
+        return jsonify({
+            "reply": reply,
+            "actions": queued_actions,
+            "canonical_id": canonical_id,
+            "threat_tier": threat_tier,
+            "threat_score": threat_score
+        })
+
+    except Exception as e:
+        try:
+            memory_data = ensure_memory_structure(locals().get("memory_data", {}))
+            memory_data.setdefault("stats", {})
+            memory_data["stats"]["send_failures"] = memory_data["stats"].get("send_failures", 0) + 1
+        except Exception:
+            pass
+        log_exception("unified bridge chat failed", e)
+        return jsonify({"reply": random.choice(fallback_replies), "actions": []}), 500
+
+
+try:
+    app.view_functions["chat_1"] = chat_1
+except Exception as _bridge_rebind_error:
+    log(f"Bridge chat rebind failed: {_bridge_rebind_error}", level="ERROR")
+
+
 if __name__ == "__main__":
     try:
         start_background_systems()
