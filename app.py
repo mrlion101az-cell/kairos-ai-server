@@ -1,17 +1,4 @@
 
-# -----------------------------
-# FORCE PLAYER-RELATIVE NPC SPAWN (PATCH)
-# -----------------------------
-def _force_spawn_near_player(commands, target):
-    fixed = []
-    for cmd in commands:
-        if "npc spawn" in cmd:
-            fixed.append(f"execute at {target} run {cmd}")
-        else:
-            fixed.append(cmd)
-    return fixed
-
-
 import os
 import json
 import re
@@ -7334,6 +7321,31 @@ def execute_action(action):
         log(f"Action execution failed: {action_type} | {e}", level="ERROR")
 
 
+
+# ------------------------------------------------------------
+# FORCE PLAYER-RELATIVE NPC SPAWN (CORRECTED OVERLAY)
+# ------------------------------------------------------------
+def _target_player_name(player_id: str) -> str:
+    return (player_id or "").split(":")[-1].strip()
+
+def _force_spawn_commands_near_target(commands, player_id: str):
+    target_name = _target_player_name(player_id)
+    if not target_name:
+        return commands
+
+    fixed = []
+    for cmd in commands:
+        cmd_text = str(cmd or "")
+        stripped = cmd_text.strip().lower()
+
+        if stripped.startswith("npc spawn"):
+            fixed.append(f"execute at {target_name} run {cmd_text}")
+        elif " npc spawn " in f" {stripped} ":
+            fixed.append(re.sub(r"\bnpc spawn\b", f"execute at {target_name} run npc spawn", cmd_text, count=1, flags=re.IGNORECASE))
+        else:
+            fixed.append(cmd_text)
+    return fixed
+
 # ------------------------------------------------------------
 # ACTION HANDLERS
 # ------------------------------------------------------------
@@ -7354,6 +7366,7 @@ def handle_spawn_wave(action):
         log(f"Spawn wave bypassed cooldown for {player_id}", level="INFO")
 
     commands, unit_records = build_custom_npc_commands(memory_data, player_id, template, clamp(count, 1, 6))
+    commands = _force_spawn_commands_near_target(commands, player_id)
     if not commands:
         log(f"Spawn wave skipped: no commands generated for {player_id}", level="WARN")
         return
@@ -7418,6 +7431,7 @@ def handle_occupy_area(action):
 
     cleanup_player_units(player_id, include_guards=False)
     commands, unit_records = build_custom_npc_commands(memory_data, player_id, "base_guard", clamp(count, 2, 8), occupy=True)
+    commands = _force_spawn_commands_near_target(commands, player_id)
     if not commands:
         log(f"Occupy area skipped: no base anchor for {player_id}", level="WARN")
         return
