@@ -4366,15 +4366,25 @@ def _wrap_player_context_command(command: str, player_id: str) -> str:
     if not cmd or not target_name:
         return cmd
 
-    # Only wrap the Citizens/Sentinel commands that need player/world context
+    lower = cmd.lower()
+
+    # Preserve already-namespaced execute commands.
+    if lower.startswith("minecraft:execute "):
+        return cmd
+
+    # Normalize bare execute commands to the fully-qualified minecraft namespace.
+    if lower.startswith("execute "):
+        return f"minecraft:{cmd}"
+
+    # Wrap Citizens/Sentinel commands with an explicit minecraft execute context
+    # so the command runs with a real player/world location.
     prefixes = (
         "npc ",
         "sentinel ",
     )
 
-    lower = cmd.lower()
     if lower.startswith(prefixes):
-        return f"execute as {target_name} at {target_name} run {cmd}"
+        return f"minecraft:execute as {target_name} at {target_name} run {cmd}"
 
     return cmd
 
