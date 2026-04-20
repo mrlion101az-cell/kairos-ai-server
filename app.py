@@ -1,4 +1,17 @@
 
+# -----------------------------
+# FORCE PLAYER-RELATIVE NPC SPAWN (PATCH)
+# -----------------------------
+def _force_spawn_near_player(commands, target):
+    fixed = []
+    for cmd in commands:
+        if "npc spawn" in cmd:
+            fixed.append(f"execute at {target} run {cmd}")
+        else:
+            fixed.append(cmd)
+    return fixed
+
+
 import os
 import json
 import re
