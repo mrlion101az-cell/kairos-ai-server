@@ -1,3 +1,4 @@
+
 import os
 import json
 import re
@@ -9083,6 +9084,30 @@ try:
     app.view_functions["chat_1"] = chat_1
 except Exception as _rebind_error:
     log(f"Unified chat rebind failed: {_rebind_error}", level="ERROR")
+
+
+# ------------------------------------------------------------
+# BACKGROUND SYSTEM STARTER (RESTORED)
+# ------------------------------------------------------------
+def start_background_systems():
+    try:
+        log("Starting background systems...")
+
+        if "action_loop" in globals() and callable(action_loop):
+            threading.Thread(target=action_loop, daemon=True).start()
+            log("Action loop started.")
+
+        if "idle_loop" in globals() and callable(idle_loop):
+            threading.Thread(target=idle_loop, daemon=True).start()
+            log("Idle loop started.")
+
+        if "commander_loop" in globals() and callable(commander_loop):
+            threading.Thread(target=commander_loop, daemon=True).start()
+            log("Commander loop started.")
+
+    except Exception as e:
+        log(f"Background system startup error: {e}", level="ERROR")
+
 
 if __name__ == "__main__":
     try:
