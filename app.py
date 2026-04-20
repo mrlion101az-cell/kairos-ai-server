@@ -3159,6 +3159,12 @@ def apply_relationship_threat_effect(player_id, player_record):
     if player_id not in threat_scores:
         return
 
+    player_record = player_record or {}
+    if player_record is None:
+        player_record = {}
+    if isinstance(player_id, dict) and not player_record:
+        player_record = player_id
+        player_id = player_record.get("id") or player_record.get("canonical_id") or player_record.get("player_id") or player_record.get("display_name", "")
     label = player_record.get("relationship_label", DISTRUST_DEFAULT_LABEL)
 
     threat_delta = 0.0
@@ -3231,12 +3237,18 @@ def relationship_style(label):
 # Relationship → Targeting Priority (Synced + Weighted)
 # ------------------------------------------------------------
 
-def get_targeting_priority(player_id, player_record):
+def get_targeting_priority(player_id=None, player_record=None):
     """
     Determines how aggressively Kairos targets a player.
     Higher = more likely to be hunted.
     """
 
+    player_record = player_record or {}
+    if player_record is None:
+        player_record = {}
+    if isinstance(player_id, dict) and not player_record:
+        player_record = player_id
+        player_id = player_record.get("id") or player_record.get("canonical_id") or player_record.get("player_id") or player_record.get("display_name", "")
     label = player_record.get("relationship_label", DISTRUST_DEFAULT_LABEL)
 
     # Pull REAL threat from global system
@@ -3506,6 +3518,12 @@ def detect_behavioral_intent(player_id, player_record):
     threat = profile.get("score", 0.0)
     tier = profile.get("tier", "idle")
 
+    player_record = player_record or {}
+    if player_record is None:
+        player_record = {}
+    if isinstance(player_id, dict) and not player_record:
+        player_record = player_id
+        player_id = player_record.get("id") or player_record.get("canonical_id") or player_record.get("player_id") or player_record.get("display_name", "")
     label = player_record.get("relationship_label", DISTRUST_DEFAULT_LABEL)
 
     # -----------------------------
@@ -4332,6 +4350,37 @@ def _npc_equipment_commands(npc_name: str, weapon: str = None, offhand: str = No
     return cmds
 
 
+
+# ------------------------------------------------------------
+# PLAYER-CONTEXT COMMAND HELPERS (FULL INTEGRATION)
+# ------------------------------------------------------------
+def _extract_target_name(player_id: str) -> str:
+    try:
+        return str(player_id or "").split(":")[-1].strip()
+    except Exception:
+        return ""
+
+def _wrap_player_context_command(command: str, player_id: str) -> str:
+    cmd = str(command or "").strip()
+    target_name = _extract_target_name(player_id)
+    if not cmd or not target_name:
+        return cmd
+
+    # Only wrap the Citizens/Sentinel commands that need player/world context
+    prefixes = (
+        "npc ",
+        "sentinel ",
+    )
+
+    lower = cmd.lower()
+    if lower.startswith(prefixes):
+        return f"execute as {target_name} at {target_name} run {cmd}"
+
+    return cmd
+
+def _apply_player_context_to_commands(commands, player_id: str):
+    return [_wrap_player_context_command(cmd, player_id) for cmd in (commands or [])]
+
 def build_custom_npc_commands(memory_data: Dict[str, Any], player_id: str, template_key: str, count: int, *, occupy: bool = False) -> Tuple[List[str], List[Dict[str, Any]]]:
     template = dict(NPC_CLASS_TEMPLATES.get(template_key, NPC_CLASS_TEMPLATES['scout']))
     player = memory_data.get('players', {}).get(player_id, {})
@@ -4361,6 +4410,7 @@ def build_custom_npc_commands(memory_data: Dict[str, Any], player_id: str, templ
         commands.append(f'npc create "{npc_name}" --type {entity_type} --at {x},{y},{z},{world} --trait {traits}')
         commands.append(f'npc select "{npc_name}"')
         commands.append('npc respawn -1')
+        commands.append('npc spawn')
         commands.append(f'sentinel health {template.get("health", 20)}')
         commands.append(f'sentinel damage {template.get("damage", 4)}')
         commands.append(f'sentinel armor {template.get("armor", 0.0)}')
@@ -4403,6 +4453,8 @@ def build_custom_npc_commands(memory_data: Dict[str, Any], player_id: str, templ
             'location': {'world': world, 'x': x, 'y': y, 'z': z}
         }
         units.append(unit_record)
+    commands = _apply_player_context_to_commands(commands, player_id)
+
 
     return commands, units
 
