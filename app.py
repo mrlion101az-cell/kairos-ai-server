@@ -6962,7 +6962,14 @@ ALLOWED_ACTION_TYPES = {
     "maximum_response",
     "announce",
     "occupy_area",
-    "cleanup_units"
+    "cleanup_units",
+    "deploy_unit",
+    "deploy_squad",
+    "fortify_base",
+    "dismiss_units",
+    "citizens_wave",
+    "citizens_unit",
+    "sentinel_squad"
 }
 
 MAX_ACTIONS_PER_RESPONSE = 3
@@ -6984,9 +6991,11 @@ def parse_kairos_response(raw_text):
     # -----------------------------
     # Structured Response
     # -----------------------------
-    if isinstance(parsed, dict) and "reply" in parsed:
+    if isinstance(parsed, dict) and ("reply" in parsed or "actions" in parsed):
         reply = sanitize_text(parsed.get("reply", ""), 500)
         raw_actions = parsed.get("actions", [])
+        if isinstance(parsed.get("action"), dict):
+            raw_actions = [parsed.get("action")] + (raw_actions if isinstance(raw_actions, list) else [])
 
         safe_actions = []
 
