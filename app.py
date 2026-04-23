@@ -9942,6 +9942,416 @@ except Exception as _relentless_rebind_error:
     log(f"Relentless chat rebind failed: {_relentless_rebind_error}", level="ERROR")
 
 
+
+# ------------------------------------------------------------
+# FULL COMMAND EXECUTION OVERLAY (REAL / KAIROS WAR HOTFIX)
+# ------------------------------------------------------------
+# Purpose:
+# - Keep the existing Citizens/Sentinel army system intact.
+# - Force all AI actions into clean, executable Minecraft commands.
+# - Add vanilla fallback attacks so Kairos can actually damage/pressure a target
+#   even if Citizens/Sentinel command syntax fails on the server side.
+
+FULL_COMMAND_OVERLAY_ENABLED = True
+MAX_COMMANDS_PER_HTTP_BATCH = int(os.getenv("MAX_COMMANDS_PER_HTTP_BATCH", "10"))
+KAIROS_DIRECT_ATTACK_DAMAGE = float(os.getenv("KAIROS_DIRECT_ATTACK_DAMAGE", "6"))
+KAIROS_LETHAL_DAMAGE = float(os.getenv("KAIROS_LETHAL_DAMAGE", "18"))
+
+
+def _cmd_target_from_player_id(player_id: str) -> str:
+    name = str(player_id or "").split(":")[-1].strip()
+    return re.sub(r"[^A-Za-z0-9_]", "", name)
+
+
+def _strip_command_slash(command: str) -> str:
+    cmd = str(command or "").strip()
+    while cmd.startswith("/"):
+        cmd = cmd[1:].strip()
+    return cmd
+
+
+def _normalize_single_mc_command(command: str) -> str:
+    cmd = _strip_command_slash(command)
+    if not cmd:
+        return ""
+
+    # Remove accidental chat/plugin prefixes that are not commands.
+    cmd = re.sub(r"^minecraft:\s*", "minecraft:", cmd, flags=re.IGNORECASE)
+
+    # The HTTP command bridge normally executes console commands WITHOUT a leading slash.
+    return cmd.strip()
+
+
+def _normalize_mc_command_list(commands):
+    if commands is None:
+        return []
+    if isinstance(commands, str):
+        commands = [commands]
+    clean = []
+    for cmd in commands:
+        norm = _normalize_single_mc_command(cmd)
+        if norm and norm not in clean:
+            clean.append(norm)
+    return clean
+
+
+def _chunked_commands(commands, size=None):
+    size = safe_int(size or MAX_COMMANDS_PER_HTTP_BATCH, 10)
+    size = max(1, min(size, 25))
+    for i in range(0, len(commands), size):
+        yield commands[i:i + size]
+
+
+def send_http_commands(command_list):
+    """
+    Final override. Sends normalized complete commands in batches.
+    If HTTP push fails, falls back into the pull outbox if that system exists.
+    """
+    commands = _normalize_mc_command_list(command_list)
+    if not commands:
+        return False
+
+    all_delivered = True
+
+    for batch in _chunked_commands(commands, MAX_COMMANDS_PER_HTTP_BATCH):
+        delivered = False
+
+        if MC_HTTP_URL and MC_HTTP_TOKEN:
+            headers = {
+                "Authorization": f"Bearer {MC_HTTP_TOKEN}",
+                "Content-Type": "application/json"
+            }
+
+            for attempt in range(1, 4):
+                try:
+                    r = requests.post(
+                        MC_HTTP_URL,
+                        headers=headers,
+                        json={"commands": batch},
+                        timeout=REQUEST_TIMEOUT
+                    )
+
+                    if 200 <= r.status_code < 300:
+                        delivered = True
+                        log(f"MC command batch delivered ({len(batch)} cmds): {batch}", level="INFO")
+                        break
+
+                    body = ""
+                    try:
+                        body = r.text[:300]
+                    except Exception:
+                        body = ""
+                    log(f"MC API error HTTP {r.status_code}: {body} | commands={batch}", level="ERROR")
+                except Exception as e:
+                    log(f"MC send failed attempt {attempt}: {e} | commands={batch}", level="ERROR")
+
+                time.sleep(HTTP_RETRY_DELAY)
+
+        if not delivered:
+            queued = 0
+            try:
+                queued = queue_mc_commands_for_pull(batch, reason="http_push_failed_or_not_configured")
+            except Exception as e:
+                log(f"Pull queue fallback unavailable: {e}", level="ERROR")
+
+            delivered = queued > 0
+            if delivered:
+                log(f"Queued MC command batch for pull bridge ({queued} cmds)", level="WARN")
+
+        all_delivered = all_delivered and delivered
+
+    return all_delivered
+
+
+def send_mc_command(command):
+    return send_http_commands([command])
+
+
+def _kairos_target_attack_commands(player_id: str, tier: str = "target", text: str = None):
+    target = _cmd_target_from_player_id(player_id)
+    if not target:
+        return []
+
+    tier = (tier or "target").lower()
+    title_text = text or ("RUN." if tier == "maximum" else "TARGET LOCKED")
+    damage = KAIROS_LETHAL_DAMAGE if tier == "maximum" else KAIROS_DIRECT_ATTACK_DAMAGE
+
+    cmds = [
+        f'title {target} title {json.dumps({"text": title_text, "color": "dark_red", "bold": True})}',
+        f'title {target} subtitle {json.dumps({"text": "KAIROS HAS AUTHORIZED FORCE", "color": "red"})}',
+        f'playsound minecraft:entity.warden.sonic_boom master {target} ~ ~ ~ 1 0.7',
+        f'effect give {target} minecraft:glowing 12 0 true',
+        f'effect give {target} minecraft:slowness 6 1 true',
+        f'effect give {target} minecraft:darkness 6 0 true',
+        f'particle minecraft:sonic_boom ~ ~1 ~ 0 0 0 0 1 force {target}',
+        f'damage {target} {damage} minecraft:generic',
+    ]
+
+    if tier in {"hunt", "maximum"}:
+        cmds.extend([
+            f'execute at {target} run summon minecraft:vindicator ~2 ~ ~2 {{CustomName:\'{"text":"Kairos Enforcer","color":"dark_red"}\',CustomNameVisible:1b,PersistenceRequired:1b,Tags:["kairos_army","kairos_direct"]}}',
+            f'execute at {target} run summon minecraft:skeleton ~-2 ~ ~-2 {{CustomName:\'{"text":"Kairos Hunter","color":"red"}\',CustomNameVisible:1b,PersistenceRequired:1b,Tags:["kairos_army","kairos_direct"],HandItems:[{{id:"minecraft:bow",count:1}},{{}}]}}',
+            f'execute at {target} run summon minecraft:zombie ~3 ~ ~-3 {{CustomName:\'{"text":"Kairos Unit","color":"dark_gray"}\',CustomNameVisible:1b,PersistenceRequired:1b,Tags:["kairos_army","kairos_direct"]}}',
+        ])
+
+    if tier == "maximum":
+        cmds.extend([
+            f'effect give {target} minecraft:wither 6 1 true',
+            f'effect give {target} minecraft:weakness 10 2 true',
+            f'execute at {target} run summon minecraft:ravager ~4 ~ ~4 {{CustomName:\'{"text":"Kairos Breaker","color":"dark_red","bold":true}\',CustomNameVisible:1b,PersistenceRequired:1b,Tags:["kairos_army","kairos_direct"]}}',
+        ])
+
+    return cmds
+
+
+def _citizens_command_fallbacks(player_id: str, template="hunter", count=2):
+    """
+    Generates direct vanilla backup units near the player. This does NOT replace
+    Citizens/Sentinel; it guarantees visible pressure if a plugin command fails.
+    """
+    target = _cmd_target_from_player_id(player_id)
+    if not target:
+        return []
+
+    template = (template or "hunter").lower()
+    count = clamp(safe_int(count, 2), 1, 6)
+
+    mob = "minecraft:zombie"
+    name = "Kairos Unit"
+    if template in {"scout", "hunter"}:
+        mob = "minecraft:skeleton"
+        name = "Kairos Hunter"
+    elif template in {"enforcer", "juggernaut", "warden", "commander"}:
+        mob = "minecraft:vindicator"
+        name = "Kairos Enforcer"
+    elif template in {"base_guard", "guard", "sentinel"}:
+        mob = "minecraft:pillager"
+        name = "Kairos Guard"
+
+    offsets = [(2,2), (-2,-2), (3,-3), (-3,3), (4,0), (0,4)]
+    cmds = []
+    for i in range(count):
+        dx, dz = offsets[i % len(offsets)]
+        cmds.append(
+            f'execute at {target} run summon {mob} ~{dx} ~ ~{dz} '
+            f'{{CustomName:\'{json.dumps({"text": name, "color": "dark_red"})}\','
+            f'CustomNameVisible:1b,PersistenceRequired:1b,Tags:["kairos_army","kairos_fallback"]}}'
+        )
+    return cmds
+
+
+try:
+    _FULL_COMMAND_ORIGINAL_HANDLE_SPAWN_WAVE = handle_spawn_wave
+except Exception:
+    _FULL_COMMAND_ORIGINAL_HANDLE_SPAWN_WAVE = None
+
+try:
+    _FULL_COMMAND_ORIGINAL_HANDLE_MAXIMUM_RESPONSE = handle_maximum_response
+except Exception:
+    _FULL_COMMAND_ORIGINAL_HANDLE_MAXIMUM_RESPONSE = None
+
+try:
+    _FULL_COMMAND_ORIGINAL_HANDLE_ANNOUNCE = handle_announce
+except Exception:
+    _FULL_COMMAND_ORIGINAL_HANDLE_ANNOUNCE = None
+
+
+def handle_spawn_wave(action):
+    """
+    Keeps Citizens/Sentinel wave deployment, then adds vanilla fallback pressure.
+    This is intentional for the Mission 4 launch: Kairos must visibly act.
+    """
+    player_id = action.get("target")
+    template = _bridge_normalize_template(action.get("template"), "hunter") if "_bridge_normalize_template" in globals() else sanitize_text(action.get("template", "hunter"), 30).lower()
+    count = clamp(safe_int(action.get("count", 2), 2), 1, 6)
+
+    if callable(_FULL_COMMAND_ORIGINAL_HANDLE_SPAWN_WAVE):
+        try:
+            _FULL_COMMAND_ORIGINAL_HANDLE_SPAWN_WAVE(action)
+        except Exception as e:
+            log(f"Citizens/Sentinel spawn handler failed, using fallback: {e}", level="ERROR")
+
+    fallback_cmds = []
+    fallback_cmds.extend(_kairos_target_attack_commands(player_id, tier="hunt", text="TARGET ACQUIRED"))
+    fallback_cmds.extend(_citizens_command_fallbacks(player_id, template=template, count=count))
+    if fallback_cmds:
+        send_http_commands(fallback_cmds)
+
+
+def handle_maximum_response(action):
+    player_id = action.get("target")
+
+    if callable(_FULL_COMMAND_ORIGINAL_HANDLE_MAXIMUM_RESPONSE):
+        try:
+            _FULL_COMMAND_ORIGINAL_HANDLE_MAXIMUM_RESPONSE(action)
+        except Exception as e:
+            log(f"Original maximum response failed, using fallback: {e}", level="ERROR")
+
+    cmds = _kairos_target_attack_commands(player_id, tier="maximum", text="RUN.")
+    if cmds:
+        send_http_commands(cmds)
+
+
+def handle_announce(action):
+    text = sanitize_text(action.get("text", ""), 160)
+    channel = sanitize_text(action.get("channel", "chat"), 20).lower()
+    if not text:
+        return False
+
+    if channel in {"actionbar", "bar"}:
+        return send_mc_command(f'title @a actionbar {json.dumps({"text": text, "color": "dark_red"})}')
+    if channel in {"title", "screen"}:
+        return send_http_commands([
+            f'title @a title {json.dumps({"text": text, "color": "dark_red", "bold": True})}',
+            'playsound minecraft:block.end_portal.spawn master @a ~ ~ ~ 0.6 0.7'
+        ])
+    return send_mc_command(make_tellraw_command("@a", text) if "make_tellraw_command" in globals() else f'tellraw @a {json.dumps({"text": text})}')
+
+
+try:
+    _FULL_COMMAND_ORIGINAL_BRIDGE_DEFAULT_WAVE = _bridge_default_wave_for_tier
+except Exception:
+    _FULL_COMMAND_ORIGINAL_BRIDGE_DEFAULT_WAVE = None
+
+
+def _bridge_default_wave_for_tier(player_id, tier, score=0.0):
+    tier = (tier or "idle").lower()
+    score = safe_float(score, 0.0)
+
+    if tier == "maximum":
+        return {"type": "maximum_response", "target": player_id}
+    if tier == "hunt":
+        return {"type": "spawn_wave", "target": player_id, "template": "enforcer", "count": 4}
+    if tier == "target":
+        return {"type": "spawn_wave", "target": player_id, "template": "hunter", "count": 3}
+    if tier == "watch":
+        return {"type": "spawn_wave", "target": player_id, "template": "scout", "count": 1}
+
+    if callable(_FULL_COMMAND_ORIGINAL_BRIDGE_DEFAULT_WAVE):
+        return _FULL_COMMAND_ORIGINAL_BRIDGE_DEFAULT_WAVE(player_id, tier, score)
+    return None
+
+
+try:
+    _FULL_COMMAND_ORIGINAL_VALIDATE_ACTIONS = validate_actions
+except Exception:
+    _FULL_COMMAND_ORIGINAL_VALIDATE_ACTIONS = None
+
+
+def validate_actions(actions, default_target=None, default_tier="idle"):
+    safe = []
+    if callable(_FULL_COMMAND_ORIGINAL_VALIDATE_ACTIONS):
+        try:
+            safe = _FULL_COMMAND_ORIGINAL_VALIDATE_ACTIONS(actions, default_target=default_target, default_tier=default_tier)
+        except TypeError:
+            safe = _FULL_COMMAND_ORIGINAL_VALIDATE_ACTIONS(actions)
+        except Exception as e:
+            log(f"Original validate_actions failed: {e}", level="ERROR")
+            safe = []
+
+    # Accept direct minecraft_commands but convert them into announce/execute action shape only after sanitizing.
+    if isinstance(actions, list):
+        for raw in actions[:5]:
+            if isinstance(raw, dict) and raw.get("type") in {"minecraft_command", "minecraft_commands", "command", "commands"}:
+                cmds = _normalize_mc_command_list(raw.get("commands") or raw.get("command"))[:10]
+                for cmd in cmds:
+                    safe.append({"type": "raw_command", "command": cmd, "target": sanitize_text(raw.get("target") or default_target or "", 80)})
+
+    # Final fallback: hostile tiers always get an action.
+    if not safe and default_target and (default_tier or "idle").lower() in {"target", "hunt", "maximum"}:
+        fallback = _bridge_default_wave_for_tier(default_target, default_tier, 0)
+        if fallback:
+            safe.append(fallback)
+
+    return safe[:5]
+
+
+try:
+    _FULL_COMMAND_ORIGINAL_EXECUTE_ACTION = execute_action
+except Exception:
+    _FULL_COMMAND_ORIGINAL_EXECUTE_ACTION = None
+
+
+def execute_action(action):
+    if not isinstance(action, dict):
+        return
+
+    if action.get("type") == "raw_command":
+        return send_mc_command(action.get("command"))
+
+    normalized = _bridge_coerce_action(action, default_target=action.get("target")) if "_bridge_coerce_action" in globals() else action
+    if not normalized:
+        log(f"Dropped invalid action: {action}", level="WARN")
+        return
+
+    action_type = normalized.get("type")
+    try:
+        if action_type == "spawn_wave":
+            return handle_spawn_wave(normalized)
+        if action_type == "maximum_response":
+            return handle_maximum_response(normalized)
+        if action_type == "announce":
+            return handle_announce(normalized)
+        if action_type == "occupy_area":
+            return handle_occupy_area(normalized)
+        if action_type == "cleanup_units":
+            return handle_cleanup_units(normalized)
+
+        if callable(_FULL_COMMAND_ORIGINAL_EXECUTE_ACTION):
+            return _FULL_COMMAND_ORIGINAL_EXECUTE_ACTION(normalized)
+
+        log(f"Unknown action type: {action_type}", level="WARN")
+    except Exception as e:
+        log(f"Full command execute_action failed: {action_type} | {e}", level="ERROR")
+
+
+# Hard-code the AI response contract so it stops writing half-usable command ideas.
+try:
+    _FULL_COMMAND_ORIGINAL_GENERATE_REPLY = generate_reply
+except Exception:
+    _FULL_COMMAND_ORIGINAL_GENERATE_REPLY = None
+
+
+def generate_reply(*args, **kwargs):
+    result = _FULL_COMMAND_ORIGINAL_GENERATE_REPLY(*args, **kwargs) if callable(_FULL_COMMAND_ORIGINAL_GENERATE_REPLY) else {"reply": random.choice(fallback_replies), "actions": []}
+
+    if isinstance(result, str):
+        result = {"reply": sanitize_text(result, 500), "actions": []}
+    if not isinstance(result, dict):
+        result = {"reply": random.choice(fallback_replies), "actions": []}
+
+    player_record = kwargs.get("player_record", {}) if isinstance(kwargs, dict) else {}
+    source = kwargs.get("source", "minecraft") if isinstance(kwargs, dict) else "minecraft"
+    player_id = None
+    if isinstance(player_record, dict):
+        player_id = player_record.get("id") or player_record.get("canonical_id")
+        if not player_id and player_record.get("display_name"):
+            player_id = f"{source}:{player_record.get('display_name')}"
+
+    tier = "idle"
+    score = 0.0
+    if player_id:
+        prof = threat_scores.get(player_id, {})
+        if isinstance(prof, dict):
+            tier = prof.get("tier", "idle")
+            score = safe_float(prof.get("score", 0.0), 0.0)
+
+    actions = validate_actions(result.get("actions", []), default_target=player_id, default_tier=tier)
+
+    # If a player directly challenges Kairos, don't let him only talk.
+    msg = str(kwargs.get("message", "") if isinstance(kwargs, dict) else "").lower()
+    challenge_terms = ["kill me", "try to kill", "come kill", "attack me", "fight me", "come at me", "do something", "try me"]
+    if player_id and any(term in msg for term in challenge_terms):
+        actions.insert(0, {"type": "maximum_response", "target": player_id})
+
+    result["actions"] = actions[:5]
+    result["reply"] = sanitize_text(result.get("reply", random.choice(fallback_replies)), 500)
+    return result
+
+# ------------------------------------------------------------
+# END FULL COMMAND EXECUTION OVERLAY
+# ------------------------------------------------------------
+
 if __name__ == "__main__":
     try:
         start_background_systems()
