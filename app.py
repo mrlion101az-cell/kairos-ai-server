@@ -26,6 +26,22 @@ from openai import OpenAI
 
 app = Flask(__name__)
 
+# ================================
+# COMMAND CLEAN FIX (AUTO)
+# ================================
+def _clean_mc_command(cmd):
+    try:
+        cmd = str(cmd).strip()
+        if cmd.startswith("minecraft:execute"):
+            if " run " in cmd:
+                cmd = cmd.split(" run ",1)[1]
+        if cmd.startswith("minecraft:"):
+            cmd = cmd.replace("minecraft:","",1)
+        return cmd
+    except:
+        return cmd
+
+
 # ------------------------------------------------------------
 # SAFE LOOP WRAPPER (FIXED - PREVENTS BACKGROUND CRASHES)
 # ------------------------------------------------------------
@@ -4492,7 +4508,7 @@ def cleanup_player_units(player_id: str, include_guards: bool = True) -> bool:
         npc_name = unit.get('npc_name') or unit.get('name')
         if npc_name:
             commands.append(f'npc remove "{npc_name}"')
-    success = send_http_commands(commands) if commands else False
+    success = send_http_commands([_clean_mc_command(c) for c in commands]) if commands else False
     if success:
         for unit_id in units:
             unit = active_units.get(unit_id)
@@ -7451,7 +7467,7 @@ def handle_spawn_wave(action):
         log(f"Spawn wave skipped: no commands generated for {player_id}", level="WARN")
         return
 
-    success = send_http_commands(commands)
+    success = send_http_commands([_clean_mc_command(c) for c in commands])
     if not success:
         log(f"Spawn wave failed: {template} x{count} → {player_id}", level="ERROR")
         return
@@ -7487,7 +7503,7 @@ def handle_maximum_response(action):
         f'title {player_id.split(":")[-1]} title {json.dumps({"text": "RUN.", "color": "dark_red"})}',
         f'playsound minecraft:entity.warden.emerge master {player_id.split(":")[-1]} ~ ~ ~ 1 0.5'
     ]
-    send_http_commands(commands)
+    send_http_commands([_clean_mc_command(c) for c in commands])
     log(f"MAX RESPONSE triggered → {player_id}", level="WARN")
 
 
@@ -7516,7 +7532,7 @@ def handle_occupy_area(action):
         log(f"Occupy area skipped: no base anchor for {player_id}", level="WARN")
         return
 
-    success = send_http_commands(commands)
+    success = send_http_commands([_clean_mc_command(c) for c in commands])
     if not success:
         log(f"Occupy area failed → {player_id}", level="ERROR")
         return
@@ -7544,7 +7560,7 @@ def handle_cleanup_units(action):
         npc_name = unit.get("npc_name") or unit.get("name")
         if npc_name:
             commands.append(f'npc remove "{npc_name}"')
-    if commands and send_http_commands(commands):
+    if commands and send_http_commands([_clean_mc_command(c) for c in commands]):
         active_units.clear()
         active_squads.clear()
         player_unit_map.clear()
@@ -7572,7 +7588,7 @@ def queue_mc_commands_for_pull(command_list, reason: str = "fallback") -> int:
     queued = 0
     with outbox_lock:
         for cmd in commands:
-            if len(pending_mc_commands) >= MC_OUTBOX_LIMIT:
+            if len(pending_mc_[_clean_mc_command(c) for c in commands]) >= MC_OUTBOX_LIMIT:
                 try:
                     pending_mc_commands.popleft()
                 except Exception:
@@ -7600,7 +7616,7 @@ def drain_mc_commands_for_pull(limit: int = None) -> List[Dict[str, Any]]:
 
 def get_mc_outbox_size() -> int:
     with outbox_lock:
-        return len(pending_mc_commands)
+        return len(pending_mc_[_clean_mc_command(c) for c in commands])
 
 def _pull_bridge_authorized(req) -> bool:
     token = (
@@ -7623,7 +7639,7 @@ def send_mc_command(command):
     commands = _normalize_mc_command_list([command])
     if not commands:
         return False
-    return send_http_commands(commands)
+    return send_http_commands([_clean_mc_command(c) for c in commands])
 
 def send_http_commands(command_list):
     command_list = _normalize_mc_command_list(command_list)[:10]
@@ -7738,7 +7754,7 @@ def send_to_minecraft(reply):
     if ENABLE_ACTIONBAR_MESSAGES:
         commands.append(f'title @a actionbar {json.dumps({"text": commandify_text(safe_text, 120)})}')
 
-    return send_http_commands(commands)
+    return send_http_commands([_clean_mc_command(c) for c in commands])
 
 
 # ------------------------------------------------------------
@@ -9982,7 +9998,7 @@ def _normalize_single_mc_command(command: str) -> str:
     return cmd.strip()
 
 
-def _normalize_mc_command_list(commands):
+def _normalize_mc_command_list([_clean_mc_command(c) for c in commands]):
     if commands is None:
         return []
     if isinstance(commands, str):
@@ -9998,7 +10014,7 @@ def _normalize_mc_command_list(commands):
 def _chunked_commands(commands, size=None):
     size = safe_int(size or MAX_COMMANDS_PER_HTTP_BATCH, 10)
     size = max(1, min(size, 25))
-    for i in range(0, len(commands), size):
+    for i in range(0, len([_clean_mc_command(c) for c in commands]), size):
         yield commands[i:i + size]
 
 
