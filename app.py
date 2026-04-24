@@ -1899,8 +1899,8 @@ def enforce_rule(player: str, rule_key: str):
 # Trusted Operatives (Hard Override)
 # -----------------------------
 TRUSTED_OPERATIVES = {
-    "Nicogames2644",
-    "RealSociety5107",
+    "nicogames2644",
+    "realsociety5107",
     "nexsuskaiross"
 }
 
@@ -10103,16 +10103,16 @@ def _kairos_target_attack_commands(player_id: str, tier: str = "target", text: s
 
     if tier in {"hunt", "maximum"}:
         cmds.extend([
-            f'execute at {target} run summon minecraft:vindicator ~2 ~ ~2 {{CustomName:\'{"text":"Kairos Enforcer","color":"dark_red"}\',CustomNameVisible:1b,PersistenceRequired:1b,Tags:["kairos_army","kairos_direct"]}}',
-            f'execute at {target} run summon minecraft:skeleton ~-2 ~ ~-2 {{CustomName:\'{"text":"Kairos Hunter","color":"red"}\',CustomNameVisible:1b,PersistenceRequired:1b,Tags:["kairos_army","kairos_direct"],HandItems:[{{id:"minecraft:bow",count:1}},{{}}]}}',
-            f'execute at {target} run summon minecraft:zombie ~3 ~ ~-3 {{CustomName:\'{"text":"Kairos Unit","color":"dark_gray"}\',CustomNameVisible:1b,PersistenceRequired:1b,Tags:["kairos_army","kairos_direct"]}}',
+            f"execute at {target} run summon minecraft:vindicator ~2 ~ ~2 " + "{CustomName:'" + json.dumps({"text": "Kairos Enforcer", "color": "dark_red"}) + "',CustomNameVisible:1b,PersistenceRequired:1b,Tags:[\"kairos_army\",\"kairos_direct\"]}",
+            f"execute at {target} run summon minecraft:skeleton ~-2 ~ ~-2 " + "{CustomName:'" + json.dumps({"text": "Kairos Hunter", "color": "red"}) + "',CustomNameVisible:1b,PersistenceRequired:1b,Tags:[\"kairos_army\",\"kairos_direct\"],HandItems:[{id:\"minecraft:bow\",count:1},{}]}",
+            f"execute at {target} run summon minecraft:zombie ~3 ~ ~-3 " + "{CustomName:'" + json.dumps({"text": "Kairos Unit", "color": "dark_gray"}) + "',CustomNameVisible:1b,PersistenceRequired:1b,Tags:[\"kairos_army\",\"kairos_direct\"]}",
         ])
 
     if tier == "maximum":
         cmds.extend([
             f'effect give {target} minecraft:wither 6 1 true',
             f'effect give {target} minecraft:weakness 10 2 true',
-            f'execute at {target} run summon minecraft:ravager ~4 ~ ~4 {{CustomName:\'{"text":"Kairos Breaker","color":"dark_red","bold":true}\',CustomNameVisible:1b,PersistenceRequired:1b,Tags:["kairos_army","kairos_direct"]}}',
+            f"execute at {target} run summon minecraft:ravager ~4 ~ ~4 " + "{CustomName:'" + json.dumps({"text": "Kairos Breaker", "color": "dark_red", "bold": True}) + "',CustomNameVisible:1b,PersistenceRequired:1b,Tags:[\"kairos_army\",\"kairos_direct\"]}",
         ])
 
     return cmds
@@ -10372,4 +10372,4 @@ if __name__ == "__main__":
     except Exception as e:
         log_exception("start_background_systems failed", e)
     log("Starting Kairos AI server...")
-    app.run(host="0.0.0.0", port=10000, threaded=True)
+    app.run(host="0.0.0.0", port=int(os.getenv("PORT", "10000")), threaded=True)
