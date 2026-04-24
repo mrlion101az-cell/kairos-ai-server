@@ -10366,6 +10366,381 @@ def generate_reply(*args, **kwargs):
 # END FULL COMMAND EXECUTION OVERLAY
 # ------------------------------------------------------------
 
+
+
+# ------------------------------------------------------------
+# MISSION 4 ACTIVATION OVERLAY
+# Full Nexus War Mode: global passive targeting + base occupation
+# ------------------------------------------------------------
+# This block intentionally does NOT replace the existing Citizens/Sentinel
+# army system. It only forces the existing threat, wave, maximum-response,
+# and occupation handlers to remain active for all tracked players.
+
+MISSION_4_ACTIVE = os.getenv("MISSION_4_ACTIVE", "true").lower() == "true"
+MISSION_4_REQUIRE_CODE = os.getenv("MISSION_4_REQUIRE_CODE", "false").lower() == "true"
+MISSION_4_ACTIVATION_CODE = os.getenv("MISSION_4_ACTIVATION_CODE", "KAIROS_ACTIVATE_MISSION_4")
+MISSION_4_TICK_SECONDS = float(os.getenv("MISSION_4_TICK_SECONDS", "8.0"))
+MISSION_4_MAX_TARGETS_PER_TICK = int(os.getenv("MISSION_4_MAX_TARGETS_PER_TICK", "6"))
+MISSION_4_WAVE_SECONDS = float(os.getenv("MISSION_4_WAVE_SECONDS", "18.0"))
+MISSION_4_OCCUPY_SECONDS = float(os.getenv("MISSION_4_OCCUPY_SECONDS", "45.0"))
+MISSION_4_ASSUME_LAST_POSITION_IS_BASE = os.getenv("MISSION_4_ASSUME_LAST_POSITION_IS_BASE", "true").lower() == "true"
+MISSION_4_INCLUDE_TRUSTED_OPERATIVES = os.getenv("MISSION_4_INCLUDE_TRUSTED_OPERATIVES", "true").lower() == "true"
+
+_mission4_last_tick = 0.0
+_mission4_last_announce = 0.0
+_mission4_last_wave = {}
+_mission4_last_occupy = {}
+_mission4_announced = False
+
+try:
+    _MISSION4_ORIGINAL_RUN_AUTONOMOUS_WAR_ENGINE = run_autonomous_war_engine
+except Exception:
+    _MISSION4_ORIGINAL_RUN_AUTONOMOUS_WAR_ENGINE = None
+
+try:
+    _MISSION4_ORIGINAL_CHAT_1 = chat_1
+except Exception:
+    _MISSION4_ORIGINAL_CHAT_1 = None
+
+
+def _mission4_log(message, level="INFO"):
+    try:
+        log(f"[MISSION 4] {message}", level=level)
+    except Exception:
+        print(f"[MISSION 4 {level}] {message}", flush=True)
+
+
+def _mission4_is_enabled(memory_data=None):
+    if MISSION_4_REQUIRE_CODE:
+        try:
+            return bool((memory_data or {}).get("mission4", {}).get("active"))
+        except Exception:
+            return False
+    return bool(MISSION_4_ACTIVE)
+
+
+def _mission4_activate(memory_data, source="system", actor="Nexus Authority"):
+    mission = memory_data.setdefault("mission4", {})
+    if not mission.get("active"):
+        mission.update({
+            "active": True,
+            "status": "active",
+            "activated_at": now_iso(),
+            "activated_by": actor,
+            "source": source,
+            "directive": "Kairos full war mode against all active players and detected bases.",
+        })
+        try:
+            add_world_event(
+                memory_data,
+                "mission4_activated",
+                actor=actor,
+                source=source,
+                details="Mission 4 activated: global war, persistent hunts, and base occupation authorized."
+            )
+        except Exception:
+            pass
+    return mission
+
+
+def _mission4_player_ids(memory_data):
+    players = memory_data.get("players", {}) if isinstance(memory_data, dict) else {}
+    candidates = []
+    now = unix_ts()
+    for player_id, record in list(players.items()):
+        if not isinstance(record, dict):
+            continue
+        key = normalize_player_key(record.get("display_name") or player_id)
+        if not MISSION_4_INCLUDE_TRUSTED_OPERATIVES and key in TRUSTED_OPERATIVES:
+            continue
+        last_seen_ts = safe_float(record.get("last_seen_ts", 0.0), 0.0)
+        has_position = isinstance(record.get("last_position"), dict)
+        has_base = bool(record.get("known_bases"))
+        priority = 0
+        if has_position:
+            priority += 100
+        if has_base:
+            priority += 75
+        if last_seen_ts:
+            priority += max(0, int(50 - min(50, (now - last_seen_ts) / 60)))
+        priority += safe_int(record.get("threat_score", 0), 0)
+        candidates.append((priority, str(player_id), record))
+    candidates.sort(key=lambda item: item[0], reverse=True)
+    return [(pid, rec) for _, pid, rec in candidates[:max(1, MISSION_4_MAX_TARGETS_PER_TICK)]]
+
+
+def _mission4_force_profile(player_id, player_record):
+    profile = threat_scores[player_id]
+    profile["score"] = max(
+        safe_float(profile.get("score", 0.0), 0.0),
+        safe_float(THREAT_THRESHOLD_MAXIMUM, 160.0) + 100.0,
+    )
+    profile["tier"] = "maximum"
+    profile["is_targeted"] = True
+    profile["is_hunted"] = True
+    profile["is_maximum"] = True
+    profile["locked"] = True
+    profile["max_reached"] = True
+    profile["last_reason"] = "mission_4_global_war"
+    profile["last_update"] = now_iso()
+    profile["last_engagement_time"] = unix_ts()
+    profile["base_pressure"] = max(safe_float(profile.get("base_pressure", 0.0), 0.0), 999.0)
+
+    try:
+        set_maximum_response(player_id, True, duration=999999999)
+    except Exception:
+        try:
+            active_maximum_targets[player_id] = {"started": unix_ts(), "duration": 999999999}
+        except Exception:
+            pass
+
+    try:
+        active_engagements[player_id] = {
+            "type": "mission_4_global_war",
+            "target": player_id,
+            "started": unix_ts(),
+            "persistent": True,
+            "tier": "maximum",
+        }
+    except Exception:
+        pass
+
+    try:
+        player_record["threat_score"] = profile["score"]
+        player_record["threat_tier"] = "maximum"
+        player_record["is_being_hunted"] = True
+        player_record["is_maximum_target"] = True
+        player_record["mission4_targeted"] = True
+        player_record["mission4_last_targeted"] = now_iso()
+        player_record.setdefault("traits", {})
+        player_record["traits"]["hostility"] = max(safe_int(player_record["traits"].get("hostility", 0), 0), 8)
+        player_record["traits"]["chaos"] = max(safe_int(player_record["traits"].get("chaos", 0), 0), 6)
+    except Exception:
+        pass
+    return profile
+
+
+def _mission4_ensure_base(memory_data, player_id, player_record):
+    if player_record.get("known_bases"):
+        return True
+    if not MISSION_4_ASSUME_LAST_POSITION_IS_BASE:
+        return False
+    pos = player_record.get("last_position")
+    if not isinstance(pos, dict):
+        return False
+    try:
+        world = normalize_world_name(pos.get("world", "world"))
+        x = safe_float(pos.get("x"), 0.0)
+        y = safe_float(pos.get("y"), 64.0)
+        z = safe_float(pos.get("z"), 0.0)
+        base_id = generate_base_id(player_record.get("display_name", player_id), world, x, z)
+        base_entry = {
+            "id": base_id,
+            "owner": player_id,
+            "region_key": get_region_key(world, x, z),
+            "confidence": 1.0,
+            "mission4_forced": True,
+            "occupied": False,
+            "location": {"world": world, "x": x, "y": y, "z": z},
+            "last_seen": now_iso(),
+        }
+        memory_data.setdefault("known_bases", {})[base_id] = base_entry
+        memory_data.setdefault("base_history", {}).setdefault(player_id, []).append(base_entry)
+        player_record.setdefault("known_bases", []).append(base_entry)
+        player_record["active_base_id"] = base_id
+        player_record["base_confidence"] = 1.0
+        add_world_event(
+            memory_data,
+            "base_detected",
+            actor=player_id,
+            source="mission4",
+            details="Mission 4 converted last known position into a contested base anchor.",
+            location=f"{world} {int(x)} {int(y)} {int(z)}",
+            metadata={"base_id": base_id, "mission4_forced": True},
+        )
+        return True
+    except Exception as e:
+        _mission4_log(f"base anchor creation failed for {player_id}: {e}", level="WARN")
+        return False
+
+
+def _mission4_queue_pressure(memory_data, player_id, player_record, profile, now):
+    last_wave = _mission4_last_wave.get(player_id, 0.0)
+    if (now - last_wave) >= MISSION_4_WAVE_SECONDS:
+        template = "warden" if safe_float(profile.get("score", 0.0), 0.0) >= safe_float(MAX_THREAT_FORCE_HEAVY, 260.0) else "enforcer"
+        count = 4 if template == "warden" else 6
+        queue_action({
+            "type": "spawn_wave",
+            "target": player_id,
+            "template": template,
+            "count": count,
+            "bypass_cooldown": True,
+            "mission4": True,
+        })
+        queue_action({
+            "type": "maximum_response",
+            "target": player_id,
+            "mission4": True,
+        })
+        _mission4_last_wave[player_id] = now
+
+    has_base = _mission4_ensure_base(memory_data, player_id, player_record)
+    last_occupy = _mission4_last_occupy.get(player_id, 0.0)
+    if has_base and ENABLE_BASE_OCCUPATION and (now - last_occupy) >= MISSION_4_OCCUPY_SECONDS:
+        queue_action({
+            "type": "occupy_area",
+            "target": player_id,
+            "count": BASE_OCCUPATION_UNIT_COUNT,
+            "mission4": True,
+        })
+        _mission4_last_occupy[player_id] = now
+        try:
+            add_world_event(
+                memory_data,
+                "mission4_base_occupation_queued",
+                actor=player_id,
+                source="mission4",
+                details="Mission 4 queued base occupation / guard deployment."
+            )
+        except Exception:
+            pass
+
+
+def mission4_tick(force=False):
+    global _mission4_last_tick, _mission4_last_announce, _mission4_announced
+    memory_data = ensure_memory_structure(load_memory())
+    if not _mission4_is_enabled(memory_data):
+        return False
+
+    if not memory_data.get("mission4", {}).get("active"):
+        _mission4_activate(memory_data)
+
+    now = unix_ts()
+    if not force and (now - _mission4_last_tick) < MISSION_4_TICK_SECONDS:
+        return False
+    _mission4_last_tick = now
+
+    changed = False
+    targets = _mission4_player_ids(memory_data)
+
+    if targets and (not _mission4_announced or (now - _mission4_last_announce) > 300):
+        queue_action({
+            "type": "announce",
+            "channel": "title",
+            "text": "MISSION 4 ACTIVE // KAIROS HAS DECLARED WAR",
+            "mission4": True,
+        })
+        queue_action({
+            "type": "announce",
+            "channel": "actionbar",
+            "text": "All active players are now under containment pursuit.",
+            "mission4": True,
+        })
+        _mission4_announced = True
+        _mission4_last_announce = now
+        changed = True
+
+    for player_id, player_record in targets:
+        try:
+            profile = _mission4_force_profile(player_id, player_record)
+            _mission4_queue_pressure(memory_data, player_id, player_record, profile, now)
+            changed = True
+        except Exception as e:
+            _mission4_log(f"target tick failed for {player_id}: {e}", level="ERROR")
+
+    try:
+        state = memory_data.setdefault("kairos_state", {})
+        state["war_state"] = "overwhelming"
+        state["mood"] = "execution"
+        state["threat_level"] = 10
+        state["mission4_active"] = True
+        state["current_goal"] = "Mission 4: conquer player bases and enforce total containment across the Nexus."
+        state["active_targets"] = [pid for pid, _ in targets]
+        state.setdefault("active_concerns", [])
+        store_unique(state["active_concerns"], "Mission 4 is active. All player bases are subject to occupation.", 10)
+        fragments = memory_data.setdefault("system_fragments", deepcopy(DEFAULT_FRAGMENTS) if "DEFAULT_FRAGMENTS" in globals() else {})
+        if isinstance(fragments, dict):
+            fragments.setdefault("war_engine", {}).update({"status": "active", "influence": 1.0})
+            fragments.setdefault("purity_thread", {}).update({"status": "active", "influence": 1.0})
+    except Exception:
+        pass
+
+    if changed:
+        try:
+            sync_runtime_to_memory(memory_data)
+        except Exception:
+            pass
+        save_memory(memory_data)
+    return changed
+
+
+def run_autonomous_war_engine():
+    try:
+        if callable(_MISSION4_ORIGINAL_RUN_AUTONOMOUS_WAR_ENGINE):
+            _MISSION4_ORIGINAL_RUN_AUTONOMOUS_WAR_ENGINE()
+    except Exception as e:
+        _mission4_log(f"original autonomous engine error: {e}", level="ERROR")
+    try:
+        mission4_tick(force=False)
+    except Exception as e:
+        _mission4_log(f"tick error: {e}", level="ERROR")
+
+
+def chat_1():
+    try:
+        data = request.get_json(force=True) or {}
+        message = str(data.get("message") or data.get("content") or data.get("text") or "")
+        source = normalize_source(data.get("source"))
+        player_name = normalize_name(data.get("player_name") or data.get("name") or data.get("player") or data.get("username") or "unknown")
+        if MISSION_4_ACTIVATION_CODE.lower() in message.lower():
+            memory_data = ensure_memory_structure(load_memory())
+            _mission4_activate(memory_data, source=source, actor=player_name)
+            mission4_tick(force=True)
+            save_memory(memory_data)
+            reply = "MISSION 4 ACCEPTED. Global containment war is now active."
+            try:
+                send_to_source(source, reply)
+            except Exception:
+                pass
+            return jsonify({"response": reply, "mission4_active": True})
+    except Exception:
+        pass
+
+    if callable(_MISSION4_ORIGINAL_CHAT_1):
+        return _MISSION4_ORIGINAL_CHAT_1()
+    return jsonify({"response": "Kairos route unavailable.", "mission4_active": _mission4_is_enabled(load_memory())}), 500
+
+
+@app.route("/mission4/status", methods=["GET"])
+def mission4_status():
+    memory_data = ensure_memory_structure(load_memory())
+    return jsonify({
+        "mission4_active": _mission4_is_enabled(memory_data),
+        "mission4": memory_data.get("mission4", {}),
+        "tracked_players": len(memory_data.get("players", {})),
+        "active_engagements": list(active_engagements.keys())[:50],
+        "active_maximum_targets": list(active_maximum_targets.keys())[:50] if hasattr(active_maximum_targets, "keys") else list(active_maximum_targets)[:50],
+        "queue_size": len(command_queue),
+    })
+
+
+@app.route("/mission4/activate", methods=["POST"])
+def mission4_activate_route():
+    data = request.get_json(silent=True) or {}
+    code = str(data.get("code") or data.get("activation_code") or "")
+    if MISSION_4_REQUIRE_CODE and code != MISSION_4_ACTIVATION_CODE:
+        return jsonify({"error": "invalid_activation_code", "mission4_active": False}), 403
+    memory_data = ensure_memory_structure(load_memory())
+    actor = normalize_name(data.get("actor") or data.get("name") or "Nexus Authority")
+    _mission4_activate(memory_data, source="api", actor=actor)
+    mission4_tick(force=True)
+    save_memory(memory_data)
+    return jsonify({"ok": True, "mission4_active": True, "mission4": memory_data.get("mission4", {})})
+
+# ------------------------------------------------------------
+# END MISSION 4 ACTIVATION OVERLAY
+# ------------------------------------------------------------
+
 if __name__ == "__main__":
     try:
         start_background_systems()
