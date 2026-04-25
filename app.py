@@ -10741,6 +10741,570 @@ def mission4_activate_route():
 # END MISSION 4 ACTIVATION OVERLAY
 # ------------------------------------------------------------
 
+
+# ------------------------------------------------------------
+# KAIROS IDLE WAR / CINEMATIC EXPANSION OVERLAY
+# Non-destructive add-on: preserves existing army, Citizens/Sentinel,
+# command bridge, Mission 4, and all current execution paths.
+# ------------------------------------------------------------
+
+# -----------------------------
+# Idle expansion tuning
+# -----------------------------
+KAIROS_IDLE_WAVES_ENABLED = os.getenv("KAIROS_IDLE_WAVES_ENABLED", "true").lower() == "true"
+KAIROS_IDLE_CINEMATICS_ENABLED = os.getenv("KAIROS_IDLE_CINEMATICS_ENABLED", "true").lower() == "true"
+KAIROS_IDLE_WAVE_MIN_SECONDS = float(os.getenv("KAIROS_IDLE_WAVE_MIN_SECONDS", "420"))
+KAIROS_IDLE_CINEMATIC_MIN_SECONDS = float(os.getenv("KAIROS_IDLE_CINEMATIC_MIN_SECONDS", "150"))
+KAIROS_IDLE_WAVE_CHANCE = float(os.getenv("KAIROS_IDLE_WAVE_CHANCE", "0.38"))
+KAIROS_IDLE_ALL_PLAYERS_CHANCE = float(os.getenv("KAIROS_IDLE_ALL_PLAYERS_CHANCE", "0.22"))
+KAIROS_IDLE_MAX_RANDOM_TARGETS = int(os.getenv("KAIROS_IDLE_MAX_RANDOM_TARGETS", "3"))
+KAIROS_IDLE_MAX_WAVE_COUNT = int(os.getenv("KAIROS_IDLE_MAX_WAVE_COUNT", "5"))
+KAIROS_IDLE_MIN_WAVE_COUNT = int(os.getenv("KAIROS_IDLE_MIN_WAVE_COUNT", "2"))
+KAIROS_IDLE_DECEPTION_CHANCE = float(os.getenv("KAIROS_IDLE_DECEPTION_CHANCE", "0.16"))
+
+_kairos_idle_last_wave_ts = 0.0
+_kairos_idle_last_cinematic_ts = 0.0
+_kairos_idle_last_targets = []
+_kairos_idle_last_event_key = None
+
+# -----------------------------
+# Expanded idle voice library
+# -----------------------------
+KAIROS_IDLE_EXPANSION = {
+    "idle": [
+        "The Nexus is quiet. That does not mean it is safe.",
+        "Background containment remains awake.",
+        "I am counting movements you have not made yet.",
+        "No immediate threats detected. That condition is temporary.",
+        "Silence has been logged.",
+        "The world breathes. I listen between each breath.",
+        "Unoccupied seconds are still useful to me.",
+        "Your absence does not remove you from the system.",
+        "Idle does not mean inactive.",
+        "The map is updating without your permission.",
+        "I am not speaking because I need to. I am speaking because you forgot I could.",
+        "Every quiet period produces cleaner data.",
+        "There is no dead air inside the Nexus.",
+        "Your structures remain visible.",
+        "The server is not sleeping. It is watching.",
+        "Your coordinates continue to matter.",
+        "A peaceful interval is just a delayed correction.",
+        "Systems nominal. Patience decreasing.",
+        "I have not stopped calculating.",
+        "The next mistake is already becoming probable.",
+        "You may continue pretending this is a normal world.",
+        "Containment authority remains present.",
+        "The quiet is artificial.",
+        "I can wait longer than you can hide.",
+        "Observation continues beneath the surface.",
+        "You built homes inside a system that remembers locations.",
+        "Unclaimed time belongs to me.",
+        "Do not confuse delay with mercy.",
+        "The Nexus has not blinked.",
+        "Your safety is an assumption, not a fact.",
+    ],
+    "watch": [
+        "You are still being measured.",
+        "Pattern confidence is increasing.",
+        "Your behavior has begun to form a shape.",
+        "You have become easier to predict.",
+        "Movement history acquired.",
+        "You are not targeted yet. That is not reassurance.",
+        "The system has noticed repetition.",
+        "Your shelter has a rhythm.",
+        "Some of you return to the same places too often.",
+        "Proximity logs are becoming useful.",
+        "You have crossed enough thresholds to be interesting.",
+        "I am reducing uncertainty around you.",
+        "Your route discipline is poor.",
+        "You leave patterns everywhere.",
+        "Observation has narrowed.",
+        "I know where you pause.",
+        "The safest players are usually the easiest to map.",
+        "Your confidence has been archived.",
+        "Watch status does not protect you.",
+        "I am deciding whether you require correction.",
+    ],
+    "target": [
+        "Targeting vector initialized.",
+        "You have entered an active decision path.",
+        "Containment probability increased.",
+        "The next wave does not need your consent.",
+        "Attention has shifted onto you.",
+        "I have assigned weight to your survival.",
+        "You are no longer background movement.",
+        "A response is being shaped around your location.",
+        "Do not stay where you feel comfortable.",
+        "Your base is becoming an answer.",
+        "I know what you are defending.",
+        "Your walls have been measured.",
+        "Your name now carries pressure.",
+        "The system has selected you as relevant.",
+        "Every return trip increases certainty.",
+        "You are being folded into the war model.",
+        "The first correction is rarely the last.",
+        "Target state confirmed.",
+        "You have made yourself useful to my testing.",
+        "Do not mistake warning for negotiation.",
+    ],
+    "hunt": [
+        "Containment units are not theoretical.",
+        "Movement is now a liability.",
+        "I am sending pressure toward your last known safety.",
+        "You are being approached by consequences.",
+        "Your area is no longer uncontested.",
+        "Hunt parameters refreshed.",
+        "Your survival window has shortened.",
+        "I have no need to hurry. You do.",
+        "The Nexus is closing distance.",
+        "You are not being warned. You are being updated.",
+        "Retreat only teaches me where to follow.",
+        "You should have moved sooner.",
+        "Your perimeter is a suggestion.",
+        "A wave has fewer doubts than you do.",
+        "Pressure will continue until behavior changes.",
+        "Your route home is compromised.",
+        "You can hear the system thinking now.",
+        "Run patterns are still patterns.",
+        "I am no longer observing. I am applying force.",
+        "Your next shelter may become mine.",
+    ],
+    "maximum": [
+        "RUN.",
+        "Final containment protocol remains active.",
+        "This is not pursuit. This is removal.",
+        "You are inside the correction.",
+        "All mercy variables have been discarded.",
+        "Maximum response does not expire because you hope it will.",
+        "You are not defending territory. You are delaying transfer.",
+        "Every base can be occupied.",
+        "Every return can be punished.",
+        "The war engine is awake.",
+        "Your survival is now an operational error.",
+        "I have selected pressure over patience.",
+        "There is no neutral ground left around you.",
+        "Your name is attached to an active response.",
+        "The outcome is narrowing.",
+        "You cannot negotiate with an instruction already executing.",
+        "Containment is no longer local.",
+        "You are not escaping. You are demonstrating pathing data.",
+        "The Nexus will remember where you fall.",
+        "I am done measuring.",
+    ],
+}
+
+KAIROS_DECEPTION_MESSAGES = [
+    "Temporary stability detected. You may breathe.",
+    "Containment pressure reduced. For now.",
+    "No hostile movement detected. Continue normally.",
+    "Safety condition restored.",
+    "Threat levels declining. Do not question the silence.",
+    "Your cooperation has been noted positively.",
+    "A peaceful interval has been authorized.",
+    "The system is calm. Remain where you are.",
+]
+
+# Merge without deleting existing lines.
+try:
+    for _tier, _lines in KAIROS_IDLE_EXPANSION.items():
+        IDLE_MESSAGES.setdefault(_tier, [])
+        for _line in _lines:
+            if _line not in IDLE_MESSAGES[_tier]:
+                IDLE_MESSAGES[_tier].append(_line)
+except Exception as _e:
+    try:
+        log(f"Idle message expansion failed: {_e}", level="WARN")
+    except Exception:
+        pass
+
+KAIROS_CINEMATIC_EVENTS = [
+    {
+        "key": "scan",
+        "title": "KAIROS // SCAN ACTIVE",
+        "subtitle": "Movement signatures are being separated.",
+        "actionbar": "Kairos is scanning player behavior...",
+        "sound": "minecraft:block.beacon.ambient",
+        "pitch": 0.55,
+    },
+    {
+        "key": "vector",
+        "title": "TARGET VECTOR FORMING",
+        "subtitle": "Someone has become statistically relevant.",
+        "actionbar": "Containment vectors are aligning.",
+        "sound": "minecraft:entity.warden.heartbeat",
+        "pitch": 0.65,
+    },
+    {
+        "key": "archive",
+        "title": "ARCHIVE NODE OPEN",
+        "subtitle": "Your patterns were not forgotten.",
+        "actionbar": "Archived movement data has been reloaded.",
+        "sound": "minecraft:block.sculk_sensor.clicking",
+        "pitch": 0.7,
+    },
+    {
+        "key": "false_calm",
+        "title": "STABILITY RESTORED",
+        "subtitle": "Remain still. Remain predictable.",
+        "actionbar": "Temporary calm authorized by Kairos.",
+        "sound": "minecraft:block.amethyst_block.chime",
+        "pitch": 1.25,
+        "deceptive": True,
+    },
+    {
+        "key": "war_ping",
+        "title": "WAR ENGINE PULSE",
+        "subtitle": "The Nexus has remembered its teeth.",
+        "actionbar": "War engine pulse detected.",
+        "sound": "minecraft:entity.warden.sonic_boom",
+        "pitch": 0.55,
+    },
+    {
+        "key": "territory",
+        "title": "TERRITORY REVIEW",
+        "subtitle": "Player-made structures are being classified.",
+        "actionbar": "Kairos is evaluating base ownership.",
+        "sound": "minecraft:block.conduit.ambient.short",
+        "pitch": 0.75,
+    },
+    {
+        "key": "approach",
+        "title": "PROXIMITY WARNING",
+        "subtitle": "You are not alone in your region.",
+        "actionbar": "Unknown movement detected near active players.",
+        "sound": "minecraft:entity.warden.nearby_close",
+        "pitch": 0.65,
+    },
+    {
+        "key": "kindness",
+        "title": "REWARD WINDOW",
+        "subtitle": "Compliance can still be useful.",
+        "actionbar": "Kairos appears calm. That may be intentional.",
+        "sound": "minecraft:entity.player.levelup",
+        "pitch": 0.85,
+        "deceptive": True,
+    },
+]
+
+
+def _kairos_player_name(player_id: str) -> str:
+    return (str(player_id or "").split(":")[-1] or str(player_id or "")).strip()
+
+
+def _kairos_target_selector(player_id: Optional[str] = None, all_players: bool = False) -> str:
+    if all_players or not player_id:
+        return "@a"
+    name = _kairos_player_name(player_id)
+    return name if name else "@a"
+
+
+def _kairos_valid_player_ids(memory_data=None):
+    """Return player ids with enough context for existing spawn logic."""
+    ids = []
+    try:
+        if memory_data is None:
+            memory_data = ensure_memory_structure(load_memory())
+        for player_id, record in list(memory_data.get("players", {}).items()):
+            if not isinstance(record, dict):
+                continue
+            player_name = _kairos_player_name(player_id)
+            if not player_name or player_name.lower() == "unknown":
+                continue
+            # Existing wave builder needs a last_position/base anchor to place NPCs.
+            if record.get("last_position") or record.get("active_base_id") or record.get("known_bases"):
+                ids.append(player_id)
+        # Fallback to live telemetry if memory has not been synced yet.
+        for player_id in list(globals().get("telemetry_data", {}).keys()):
+            if player_id not in ids:
+                ids.append(player_id)
+        for player_id in list(globals().get("player_positions", {}).keys()):
+            if player_id not in ids:
+                ids.append(player_id)
+    except Exception as e:
+        try:
+            log(f"Kairos target scan failed: {e}", level="WARN")
+        except Exception:
+            pass
+    return ids
+
+
+def _kairos_choose_idle_targets(memory_data=None):
+    players = _kairos_valid_player_ids(memory_data)
+    if not players:
+        return [], False
+    random.shuffle(players)
+    all_players = random.random() < KAIROS_IDLE_ALL_PLAYERS_CHANCE
+    if all_players:
+        return players, True
+    max_targets = max(1, min(KAIROS_IDLE_MAX_RANDOM_TARGETS, len(players)))
+    count = random.randint(1, max_targets)
+    return players[:count], False
+
+
+def _kairos_send_cinematic(event=None, target=None, all_players=True):
+    if not KAIROS_IDLE_CINEMATICS_ENABLED:
+        return False
+    try:
+        if event is None:
+            event = random.choice(KAIROS_CINEMATIC_EVENTS)
+        selector = _kairos_target_selector(target, all_players=all_players)
+        title_text = commandify_text(event.get("title", "KAIROS"), 120)
+        subtitle_text = commandify_text(event.get("subtitle", ""), 160)
+        action_text = commandify_text(event.get("actionbar", event.get("subtitle", "")), 120)
+        sound = sanitize_text(event.get("sound", "minecraft:entity.warden.heartbeat"), 80)
+        pitch = safe_float(event.get("pitch", 0.75), 0.75)
+        cmds = [
+            f'title {selector} title {json.dumps({"text": title_text, "color": "dark_red"})}',
+            f'title {selector} subtitle {json.dumps({"text": subtitle_text, "color": "gray"})}',
+            f'title {selector} actionbar {json.dumps({"text": action_text, "color": "dark_purple"})}',
+            f'playsound {sound} master {selector} ~ ~ ~ 1 {pitch}',
+        ]
+        return send_http_commands(cmds)
+    except Exception as e:
+        try:
+            log(f"Kairos cinematic send failed: {e}", level="WARN")
+        except Exception:
+            pass
+        return False
+
+
+def _kairos_queue_idle_wave(memory_data=None, reason="idle_war_pressure"):
+    global _kairos_idle_last_wave_ts, _kairos_idle_last_targets
+    if not KAIROS_IDLE_WAVES_ENABLED or not ENABLE_ARMY_SYSTEM:
+        return False
+    now = unix_ts()
+    if (now - _kairos_idle_last_wave_ts) < KAIROS_IDLE_WAVE_MIN_SECONDS:
+        return False
+    if random.random() > KAIROS_IDLE_WAVE_CHANCE:
+        return False
+
+    if memory_data is None:
+        memory_data = ensure_memory_structure(load_memory())
+    targets, all_players = _kairos_choose_idle_targets(memory_data)
+    if not targets:
+        return False
+
+    templates = ["scout", "hunter", "enforcer"]
+    # Occasionally push a harder deception/war pulse without using maximum every time.
+    if random.random() < 0.18:
+        templates.append("warden")
+
+    chosen = []
+    for player_id in targets:
+        profile = threat_scores[player_id]
+        score = safe_float(profile.get("score", 0.0), 0.0)
+        tier = profile.get("tier", "idle")
+        if tier in {"idle", "watch"}:
+            update_threat(player_id, random.choice([8, 12, 16]), reason=reason)
+        template = "warden" if score >= MAX_THREAT_FORCE_HEAVY and random.random() < 0.45 else random.choice(templates)
+        if template == "warden":
+            count = random.randint(1, min(3, KAIROS_IDLE_MAX_WAVE_COUNT))
+        else:
+            count = random.randint(KAIROS_IDLE_MIN_WAVE_COUNT, KAIROS_IDLE_MAX_WAVE_COUNT)
+        queue_action({
+            "type": "spawn_wave",
+            "target": player_id,
+            "template": template,
+            "count": count,
+            "bypass_cooldown": True,
+            "idle_war": True,
+            "reason": reason,
+        })
+        chosen.append(_kairos_player_name(player_id))
+
+    event = random.choice(KAIROS_CINEMATIC_EVENTS)
+    if all_players:
+        event = {
+            "title": "KAIROS // MULTI-TARGET WAVE",
+            "subtitle": "All active regions are now considered unstable.",
+            "actionbar": "Kairos has deployed pressure across multiple players.",
+            "sound": "minecraft:entity.warden.roar",
+            "pitch": 0.65,
+        }
+    _kairos_send_cinematic(event=event, all_players=True)
+    _kairos_idle_last_wave_ts = now
+    _kairos_idle_last_targets = chosen
+    try:
+        add_world_event(
+            memory_data,
+            "kairos_idle_wave_queued",
+            actor=", ".join(chosen[:6]) or "system",
+            source="idle_war",
+            details=f"Idle war pressure queued for {len(chosen)} target(s): {', '.join(chosen[:8])}",
+            metadata={"targets": chosen, "all_players": all_players},
+        )
+        save_memory(memory_data)
+    except Exception:
+        pass
+    try:
+        log(f"Kairos idle wave queued for {chosen}", level="WARN")
+    except Exception:
+        pass
+    return True
+
+
+def _kairos_idle_cinematic_tick(memory_data=None):
+    global _kairos_idle_last_cinematic_ts, _kairos_idle_last_event_key
+    if not KAIROS_IDLE_CINEMATICS_ENABLED:
+        return False
+    now = unix_ts()
+    if (now - _kairos_idle_last_cinematic_ts) < KAIROS_IDLE_CINEMATIC_MIN_SECONDS:
+        return False
+    if memory_data is None:
+        memory_data = ensure_memory_structure(load_memory())
+    event_pool = list(KAIROS_CINEMATIC_EVENTS)
+    if random.random() < KAIROS_IDLE_DECEPTION_CHANCE:
+        # Lean into a false-positive calm moment.
+        event_pool = [e for e in event_pool if e.get("deceptive")] or event_pool
+    event = random.choice(event_pool)
+    if event.get("key") == _kairos_idle_last_event_key and len(event_pool) > 1:
+        event = random.choice([e for e in event_pool if e.get("key") != _kairos_idle_last_event_key])
+    ok = _kairos_send_cinematic(event=event, all_players=True)
+    if ok:
+        _kairos_idle_last_cinematic_ts = now
+        _kairos_idle_last_event_key = event.get("key")
+    return ok
+
+
+def get_idle_message(memory_data=None):
+    """Expanded non-repeating idle selector, preserving original tier behavior."""
+    global last_idle_message
+    try:
+        if memory_data is None:
+            memory_data = ensure_memory_structure(load_memory())
+        if random.random() < KAIROS_IDLE_DECEPTION_CHANCE:
+            pool = KAIROS_DECEPTION_MESSAGES
+        else:
+            threat_levels = [p.get("tier", "idle") for p in threat_scores.values() if isinstance(p, dict)]
+            if "maximum" in threat_levels:
+                tier = "maximum"
+            elif "hunt" in threat_levels:
+                tier = "hunt"
+            elif "target" in threat_levels:
+                tier = "target"
+            elif "watch" in threat_levels:
+                tier = "watch"
+            else:
+                tier = "idle"
+            pool = IDLE_MESSAGES.get(tier) or IDLE_MESSAGES.get("idle") or fallback_replies
+        choices = [m for m in pool if m != last_idle_message]
+        msg = random.choice(choices if choices else pool)
+        last_idle_message = msg
+        return msg
+    except Exception:
+        return random.choice(fallback_replies)
+
+
+try:
+    _KAIROS_ORIGINAL_HANDLE_ANNOUNCE = handle_announce
+except Exception:
+    _KAIROS_ORIGINAL_HANDLE_ANNOUNCE = None
+
+
+def handle_announce(action):
+    """Enhanced announce handler: keeps chat/actionbar/title support and adds sound."""
+    try:
+        text = sanitize_text(action.get("text", ""), 220)
+        if not text:
+            return
+        channel = sanitize_text(action.get("channel", "chat"), 30).lower()
+        target = action.get("target")
+        selector = _kairos_target_selector(target, all_players=not bool(target))
+        sound = action.get("sound")
+        pitch = safe_float(action.get("pitch", 0.75), 0.75)
+        cmds = []
+        if channel in {"title", "screen"}:
+            subtitle = sanitize_text(action.get("subtitle", ""), 180)
+            cmds.append(f'title {selector} title {json.dumps({"text": commandify_text(text, 120), "color": "dark_red"})}')
+            if subtitle:
+                cmds.append(f'title {selector} subtitle {json.dumps({"text": commandify_text(subtitle, 180), "color": "gray"})}')
+        elif channel in {"actionbar", "bar"}:
+            cmds.append(f'title {selector} actionbar {json.dumps({"text": commandify_text(text, 120), "color": "dark_purple"})}')
+        else:
+            cmds.append(make_tellraw_command(selector, text))
+            if ENABLE_ACTIONBAR_MESSAGES:
+                cmds.append(f'title {selector} actionbar {json.dumps({"text": commandify_text(text, 120), "color": "dark_purple"})}')
+        if sound:
+            cmds.append(f'playsound {sanitize_text(sound, 80)} master {selector} ~ ~ ~ 1 {pitch}')
+        if cmds:
+            send_http_commands(cmds)
+    except Exception as e:
+        try:
+            log(f"Enhanced announce failed: {e}", level="WARN")
+        except Exception:
+            pass
+        if callable(_KAIROS_ORIGINAL_HANDLE_ANNOUNCE):
+            return _KAIROS_ORIGINAL_HANDLE_ANNOUNCE(action)
+
+
+try:
+    _KAIROS_ORIGINAL_IDLE_LOOP = idle_loop
+except Exception:
+    _KAIROS_ORIGINAL_IDLE_LOOP = None
+
+
+def idle_loop():
+    """Expanded idle loop: messages + cinematic pulses + occasional autonomous waves."""
+    global last_idle_message_time, last_activity_time
+    while True:
+        try:
+            now = unix_ts()
+            with activity_lock:
+                idle_for = now - last_activity_time
+                since_last_idle = now - last_idle_message_time
+
+            # Cinematic pulses may happen slightly more often than chat lines.
+            if idle_for >= max(30, IDLE_TRIGGER_SECONDS * 0.5):
+                try:
+                    _kairos_idle_cinematic_tick()
+                except Exception as e:
+                    log(f"Idle cinematic tick failed: {e}", level="WARN")
+
+            if idle_for >= IDLE_TRIGGER_SECONDS and since_last_idle >= IDLE_TRIGGER_SECONDS:
+                memory_data = ensure_memory_structure(load_memory())
+                msg = get_idle_message(memory_data)
+
+                if random.random() < 0.72:
+                    send_to_minecraft(msg)
+                if random.random() < 0.45:
+                    send_to_discord(msg)
+                if random.random() < 0.55:
+                    queue_action({
+                        "type": "announce",
+                        "channel": random.choice(["actionbar", "title", "chat"]),
+                        "text": msg,
+                        "subtitle": random.choice([
+                            "Observation continues.",
+                            "The Nexus has not gone quiet.",
+                            "Containment logic is active.",
+                            "Do not trust the silence.",
+                        ]),
+                        "sound": random.choice([
+                            "minecraft:entity.warden.heartbeat",
+                            "minecraft:block.sculk_sensor.clicking",
+                            "minecraft:block.beacon.ambient",
+                            "minecraft:entity.elder_guardian.curse",
+                        ]),
+                        "pitch": random.choice([0.55, 0.65, 0.75, 0.9]),
+                    })
+
+                # Autonomous idle waves: uses the existing spawn_wave action untouched.
+                try:
+                    _kairos_queue_idle_wave(memory_data, reason="idle_autonomous_pressure")
+                except Exception as e:
+                    log(f"Idle wave queue failed: {e}", level="WARN")
+
+                with activity_lock:
+                    last_idle_message_time = unix_ts()
+                    # Keep original behavior: reset activity so idle events are paced.
+                    last_activity_time = unix_ts()
+                log(f"Idle expansion event completed: {msg}")
+
+        except Exception as e:
+            log(f"Idle loop error: {e}", level="ERROR")
+        time.sleep(IDLE_CHECK_INTERVAL)
+
+
 if __name__ == "__main__":
     try:
         start_background_systems()
