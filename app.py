@@ -4658,6 +4658,9 @@ def run_autonomous_war_engine():
                 count = clamp(3 + int(score / 60), 3, 6 if template == "warden" else 7)
 
             log(f"Autonomous wave queued: tier={tier} template={template} count={count} target={player_id}", level="INFO")
+            if 'target' in locals() and not can_spawn_more_units(target):
+            log(f"Spawn blocked for {target} (limit reached)")
+        else:
             queue_action({
                 "type": "spawn_wave",
                 "target": player_id,
@@ -4670,6 +4673,9 @@ def run_autonomous_war_engine():
 
         has_base = bool(player_record.get("known_bases"))
         if tier == "maximum" and has_base and now - BASE_OCCUPATION_COOLDOWNS.get(player_id, 0.0) >= BASE_INVASION_COOLDOWN:
+            if 'target' in locals() and not can_spawn_more_units(target):
+            log(f"Spawn blocked for {target} (limit reached)")
+        else:
             queue_action({
                 "type": "occupy_area",
                 "target": player_id,
@@ -5497,6 +5503,9 @@ def update_mission_pressure(memory_data, mission_id, amount=1):
     # -----------------------------
     if mission["pressure_level"] >= 3 and "lvl3" not in triggered:
         if can_spawn_wave(player_id):
+            if 'target' in locals() and not can_spawn_more_units(target):
+            log(f"Spawn blocked for {target} (limit reached)")
+        else:
             queue_action({
                 "type": "spawn_wave",
                 "target": player_id,
@@ -5519,6 +5528,9 @@ def update_mission_pressure(memory_data, mission_id, amount=1):
     # -----------------------------
     if mission["pressure_level"] >= 6 and "lvl6" not in triggered:
         if can_spawn_wave(player_id):
+            if 'target' in locals() and not can_spawn_more_units(target):
+            log(f"Spawn blocked for {target} (limit reached)")
+        else:
             queue_action({
                 "type": "spawn_wave",
                 "target": player_id,
@@ -5541,6 +5553,9 @@ def update_mission_pressure(memory_data, mission_id, amount=1):
     # -----------------------------
     if mission["pressure_level"] >= 9 and "lvl9" not in triggered:
         if not is_under_maximum_response(player_id):
+            if 'target' in locals() and not can_spawn_more_units(target):
+            log(f"Spawn blocked for {target} (limit reached)")
+        else:
             queue_action({
                 "type": "maximum_response",
                 "target": player_id
@@ -5653,7 +5668,10 @@ def fail_mission(memory_data, mission_id):
     # Immediate Retaliation (Controlled)
     # -----------------------------
     if can_spawn_wave(player_id):
-        queue_action({
+        if 'target' in locals() and not can_spawn_more_units(target):
+            log(f"Spawn blocked for {target} (limit reached)")
+        else:
+            queue_action({
             "type": "spawn_wave",
             "target": player_id,
             "template": "hunter",
@@ -5667,7 +5685,10 @@ def fail_mission(memory_data, mission_id):
     tier = profile.get("tier", "idle")
 
     if tier in {"hunt", "maximum"} and not is_under_maximum_response(player_id):
-        queue_action({
+        if 'target' in locals() and not can_spawn_more_units(target):
+            log(f"Spawn blocked for {target} (limit reached)")
+        else:
+            queue_action({
             "type": "maximum_response",
             "target": player_id
         })
@@ -6419,6 +6440,9 @@ if threat >= THREAT_THRESHOLD_MAXIMUM:
         if can_execute_global_action("max_response", 5) and \
            can_execute_player_action(player_id, "max_response", 20):
 
+            if 'target' in locals() and not can_spawn_more_units(target):
+            log(f"Spawn blocked for {target} (limit reached)")
+        else:
             queue_action({
                 "type": "maximum_response",
                 "target": player_id
@@ -6432,7 +6456,10 @@ if threat >= THREAT_THRESHOLD_MAXIMUM:
 elif threat >= THREAT_THRESHOLD_HUNT:
     if can_target_player(player_id, 8) and can_spawn_wave(player_id):
 
-        queue_action({
+        if 'target' in locals() and not can_spawn_more_units(target):
+            log(f"Spawn blocked for {target} (limit reached)")
+        else:
+            queue_action({
             "type": "spawn_wave",
             "target": player_id,
             "template": "hunter",
@@ -6445,7 +6472,10 @@ elif threat >= THREAT_THRESHOLD_HUNT:
 elif threat >= THREAT_THRESHOLD_TARGET:
     if can_target_player(player_id, 10) and can_spawn_wave(player_id):
 
-        queue_action({
+        if 'target' in locals() and not can_spawn_more_units(target):
+            log(f"Spawn blocked for {target} (limit reached)")
+        else:
+            queue_action({
             "type": "spawn_wave",
             "target": player_id,
             "template": "scout",
@@ -7326,7 +7356,10 @@ def commander_loop():
                         continue
                     if can_spawn_wave(player_id):
                         log(f"FORCE TEST wave queued for {player_id}", level="INFO")
-                        queue_action({
+                        if 'target' in locals() and not can_spawn_more_units(target):
+            log(f"Spawn blocked for {target} (limit reached)")
+        else:
+            queue_action({
                             "type": "spawn_wave",
                             "target": player_id,
                             "template": "hunter",
@@ -7949,7 +7982,10 @@ def idle_loop():
                     send_to_discord(msg)
 
                 if random.random() < 0.25:
-                    queue_action({
+                    if 'target' in locals() and not can_spawn_more_units(target):
+            log(f"Spawn blocked for {target} (limit reached)")
+        else:
+            queue_action({
                         "type": "announce",
                         "channel": "actionbar",
                         "text": msg
@@ -10569,7 +10605,10 @@ def _mission4_queue_pressure(memory_data, player_id, player_record, profile, now
     if (now - last_wave) >= MISSION_4_WAVE_SECONDS:
         template = "warden" if safe_float(profile.get("score", 0.0), 0.0) >= safe_float(MAX_THREAT_FORCE_HEAVY, 260.0) else "enforcer"
         count = 4 if template == "warden" else 6
-        queue_action({
+        if 'target' in locals() and not can_spawn_more_units(target):
+            log(f"Spawn blocked for {target} (limit reached)")
+        else:
+            queue_action({
             "type": "spawn_wave",
             "target": player_id,
             "template": template,
@@ -10577,7 +10616,10 @@ def _mission4_queue_pressure(memory_data, player_id, player_record, profile, now
             "bypass_cooldown": True,
             "mission4": True,
         })
-        queue_action({
+        if 'target' in locals() and not can_spawn_more_units(target):
+            log(f"Spawn blocked for {target} (limit reached)")
+        else:
+            queue_action({
             "type": "maximum_response",
             "target": player_id,
             "mission4": True,
@@ -10587,7 +10629,10 @@ def _mission4_queue_pressure(memory_data, player_id, player_record, profile, now
     has_base = _mission4_ensure_base(memory_data, player_id, player_record)
     last_occupy = _mission4_last_occupy.get(player_id, 0.0)
     if has_base and ENABLE_BASE_OCCUPATION and (now - last_occupy) >= MISSION_4_OCCUPY_SECONDS:
-        queue_action({
+        if 'target' in locals() and not can_spawn_more_units(target):
+            log(f"Spawn blocked for {target} (limit reached)")
+        else:
+            queue_action({
             "type": "occupy_area",
             "target": player_id,
             "count": BASE_OCCUPATION_UNIT_COUNT,
@@ -10624,13 +10669,19 @@ def mission4_tick(force=False):
     targets = _mission4_player_ids(memory_data)
 
     if targets and (not _mission4_announced or (now - _mission4_last_announce) > 300):
-        queue_action({
+        if 'target' in locals() and not can_spawn_more_units(target):
+            log(f"Spawn blocked for {target} (limit reached)")
+        else:
+            queue_action({
             "type": "announce",
             "channel": "title",
             "text": "MISSION 4 ACTIVE // KAIROS HAS DECLARED WAR",
             "mission4": True,
         })
-        queue_action({
+        if 'target' in locals() and not can_spawn_more_units(target):
+            log(f"Spawn blocked for {target} (limit reached)")
+        else:
+            queue_action({
             "type": "announce",
             "channel": "actionbar",
             "text": "All active players are now under containment pursuit.",
@@ -11101,7 +11152,10 @@ def _kairos_queue_idle_wave(memory_data=None, reason="idle_war_pressure"):
             count = random.randint(1, min(3, KAIROS_IDLE_MAX_WAVE_COUNT))
         else:
             count = random.randint(KAIROS_IDLE_MIN_WAVE_COUNT, KAIROS_IDLE_MAX_WAVE_COUNT)
-        queue_action({
+        if 'target' in locals() and not can_spawn_more_units(target):
+            log(f"Spawn blocked for {target} (limit reached)")
+        else:
+            queue_action({
             "type": "spawn_wave",
             "target": player_id,
             "template": template,
@@ -11269,7 +11323,10 @@ def idle_loop():
                 if random.random() < 0.45:
                     send_to_discord(msg)
                 if random.random() < 0.55:
-                    queue_action({
+                    if 'target' in locals() and not can_spawn_more_units(target):
+            log(f"Spawn blocked for {target} (limit reached)")
+        else:
+            queue_action({
                         "type": "announce",
                         "channel": random.choice(["actionbar", "title", "chat"]),
                         "text": msg,
@@ -11344,7 +11401,10 @@ def discord_inbound():
 
         # Send message to Minecraft
         mc_command = f'tellraw @a {{"text":"[DC] {username}: {message}","color":"light_purple"}}'
-        queue_action({
+        if 'target' in locals() and not can_spawn_more_units(target):
+            log(f"Spawn blocked for {target} (limit reached)")
+        else:
+            queue_action({
             "type": "command",
             "command": mc_command
         })
@@ -11368,3 +11428,34 @@ def discord_inbound():
         log_exception("Discord inbound error", e)
         return jsonify({"status": "error"}), 500
 
+
+
+
+# ============================================================
+# SPAWN LIMIT SAFETY (V4)
+# ============================================================
+
+def can_spawn_more_units(player):
+    try:
+        total_units = len(active_units)
+        player_units = len(player_unit_map.get(player, []))
+
+        if ENABLE_SPAWN_LIMITS:
+            if total_units >= MAX_ACTIVE_UNITS:
+                return False
+            if player_units >= MAX_UNITS_PER_PLAYER:
+                return False
+            if total_units >= MAX_GLOBAL_NPCS:
+                return False
+
+        return True
+    except:
+        return False
+
+
+def can_spawn_wave(player):
+    try:
+        active = active_waves.get(player, [])
+        return len(active) < MAX_ACTIVE_WAVES_PER_PLAYER
+    except:
+        return False
