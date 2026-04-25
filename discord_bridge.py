@@ -1,11 +1,19 @@
+```python
 import os
 import requests
 import discord
 
+# =============================
+# ENV CONFIG
+# =============================
 DISCORD_BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN", "").strip()
 DISCORD_CHANNEL_ID_RAW = os.getenv("DISCORD_CHANNEL_ID", "").strip()
+
 KAIROS_API_URL = os.getenv("KAIROS_API_URL", "").strip()
 KAIROS_SHARED_SECRET = os.getenv("KAIROS_SHARED_SECRET", "").strip()
+
+# 🔥 NEW: Minecraft bridge endpoint
+MC_BRIDGE_API = os.getenv("MC_BRIDGE_API", "https://kairos-ai-server.onrender.com/discord_inbound")
 
 DISCORD_CHANNEL_ID = int(DISCORD_CHANNEL_ID_RAW) if DISCORD_CHANNEL_ID_RAW.isdigit() else 0
 
@@ -15,6 +23,9 @@ intents.message_content = True
 client = discord.Client(intents=intents)
 
 
+# =============================
+# FILTER
+# =============================
 def should_process_message(message: discord.Message) -> bool:
     if message.author.bot:
         return False
@@ -28,6 +39,9 @@ def should_process_message(message: discord.Message) -> bool:
     return True
 
 
+# =============================
+# DISCORD ➜ KAIROS
+# =============================
 def forward_to_kairos(message: discord.Message):
     headers = {"Content-Type": "application/json"}
 
@@ -35,8 +49,8 @@ def forward_to_kairos(message: discord.Message):
         headers["X-Kairos-Secret"] = KAIROS_SHARED_SECRET
 
     payload = {
-        "message": message.content,                  # ✅ FIXED
-        "player_name": message.author.display_name,  # ✅ FIXED
+        "message": message.content,
+        "player_name": message.author.display_name,
         "source": "discord",
         "discord_user_id": str(message.author.id),
         "discord_channel_id": str(message.channel.id)
@@ -53,6 +67,26 @@ def forward_to_kairos(message: discord.Message):
     return response.json()
 
 
+# =============================
+# 🔥 DISCORD ➜ MINECRAFT (NEW)
+# =============================
+def forward_to_minecraft(message: discord.Message):
+    try:
+        requests.post(
+            MC_BRIDGE_API,
+            json={
+                "username": message.author.display_name,
+                "content": message.content
+            },
+            timeout=5
+        )
+    except Exception as e:
+        print(f"[Bridge Error] {e}")
+
+
+# =============================
+# EVENTS
+# =============================
 @client.event
 async def on_ready():
     print("=" * 60)
@@ -67,10 +101,14 @@ async def on_message(message: discord.Message):
         return
 
     try:
+        # 🔥 SEND TO MINECRAFT FIRST (ALWAYS)
+        forward_to_minecraft(message)
+
+        # 🔥 THEN SEND TO KAIROS
         async with message.channel.typing():
             data = forward_to_kairos(message)
 
-        # 🔥 THIS WAS MISSING — SEND REPLY BACK
+        # 🔥 SEND KAIROS RESPONSE BACK
         reply = data.get("reply", None)
 
         if reply:
@@ -85,3 +123,4 @@ if not DISCORD_BOT_TOKEN:
     raise RuntimeError("DISCORD_BOT_TOKEN is not set")
 
 client.run(DISCORD_BOT_TOKEN)
+```
