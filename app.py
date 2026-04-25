@@ -11917,7 +11917,7 @@ KAIROS_V6_CINEMATIC_EVENTS = [
         "actionbar": "Kairos is scanning movement history.",
         "sound": "minecraft:entity.warden.heartbeat",
         "pitch": 0.55,
-        "deceptive": false
+        "deceptive": False
     },
     {
         "key": "v6_event_002",
@@ -11926,7 +11926,7 @@ KAIROS_V6_CINEMATIC_EVENTS = [
         "actionbar": "Containment pressure is moving through the world.",
         "sound": "minecraft:block.sculk_sensor.clicking",
         "pitch": 0.75,
-        "deceptive": false
+        "deceptive": False
     },
     {
         "key": "v6_event_003",
@@ -11935,7 +11935,7 @@ KAIROS_V6_CINEMATIC_EVENTS = [
         "actionbar": "Kairos appears calm. That may be intentional.",
         "sound": "minecraft:entity.elder_guardian.curse",
         "pitch": 0.65,
-        "deceptive": true
+        "deceptive": True
     },
     {
         "key": "v6_event_004",
@@ -11944,7 +11944,7 @@ KAIROS_V6_CINEMATIC_EVENTS = [
         "actionbar": "War engine diagnostics completed.",
         "sound": "minecraft:entity.warden.nearby_close",
         "pitch": 0.7,
-        "deceptive": false
+        "deceptive": False
     },
     {
         "key": "v6_event_005",
@@ -11953,7 +11953,7 @@ KAIROS_V6_CINEMATIC_EVENTS = [
         "actionbar": "Base signatures are being evaluated.",
         "sound": "minecraft:block.beacon.ambient",
         "pitch": 0.8,
-        "deceptive": false
+        "deceptive": False
     },
     {
         "key": "v6_event_006",
@@ -11962,7 +11962,7 @@ KAIROS_V6_CINEMATIC_EVENTS = [
         "actionbar": "The region is not as empty as it feels.",
         "sound": "minecraft:block.conduit.ambient.short",
         "pitch": 0.85,
-        "deceptive": false
+        "deceptive": False
     },
     {
         "key": "v6_event_007",
@@ -11971,7 +11971,7 @@ KAIROS_V6_CINEMATIC_EVENTS = [
         "actionbar": "Kairos is offering peace for an unknown reason.",
         "sound": "minecraft:entity.warden.sonic_boom",
         "pitch": 0.55,
-        "deceptive": true
+        "deceptive": True
     },
     {
         "key": "v6_event_008",
@@ -11980,7 +11980,7 @@ KAIROS_V6_CINEMATIC_EVENTS = [
         "actionbar": "Kairos is speaking below the noise.",
         "sound": "minecraft:block.amethyst_block.chime",
         "pitch": 1.25,
-        "deceptive": false
+        "deceptive": False
     },
     {
         "key": "v6_event_009",
@@ -11989,7 +11989,7 @@ KAIROS_V6_CINEMATIC_EVENTS = [
         "actionbar": "Kairos is calculating battlefield saturation.",
         "sound": "minecraft:entity.player.levelup",
         "pitch": 0.85,
-        "deceptive": false
+        "deceptive": False
     },
     {
         "key": "v6_event_010",
@@ -11998,7 +11998,7 @@ KAIROS_V6_CINEMATIC_EVENTS = [
         "actionbar": "The archive node is no longer quiet.",
         "sound": "minecraft:entity.ender_dragon.growl",
         "pitch": 0.55,
-        "deceptive": false
+        "deceptive": False
     },
     {
         "key": "v6_event_011",
@@ -12007,7 +12007,7 @@ KAIROS_V6_CINEMATIC_EVENTS = [
         "actionbar": "Kairos is scanning movement history.",
         "sound": "minecraft:entity.warden.heartbeat",
         "pitch": 0.55,
-        "deceptive": false
+        "deceptive": False
     },
     {
         "key": "v6_event_012",
@@ -12016,7 +12016,7 @@ KAIROS_V6_CINEMATIC_EVENTS = [
         "actionbar": "Containment pressure is moving through the world.",
         "sound": "minecraft:block.sculk_sensor.clicking",
         "pitch": 0.75,
-        "deceptive": false
+        "deceptive": False
     },
     {
         "key": "v6_event_013",
@@ -12025,7 +12025,7 @@ KAIROS_V6_CINEMATIC_EVENTS = [
         "actionbar": "Kairos appears calm. That may be intentional.",
         "sound": "minecraft:entity.elder_guardian.curse",
         "pitch": 0.65,
-        "deceptive": true
+        "deceptive": True
     },
     {
         "key": "v6_event_014",
@@ -12034,7 +12034,7 @@ KAIROS_V6_CINEMATIC_EVENTS = [
         "actionbar": "War engine diagnostics completed.",
         "sound": "minecraft:entity.warden.nearby_close",
         "pitch": 0.7,
-        "deceptive": false
+        "deceptive": False
     },
     {
         "key": "v6_event_015",
@@ -12043,7 +12043,7 @@ KAIROS_V6_CINEMATIC_EVENTS = [
         "actionbar": "Base signatures are being evaluated.",
         "sound": "minecraft:block.beacon.ambient",
         "pitch": 0.8,
-        "deceptive": false
+        "deceptive": False
     },
     {
         "key": "v6_event_016",
@@ -12052,7 +12052,7 @@ KAIROS_V6_CINEMATIC_EVENTS = [
         "actionbar": "The region is not as empty as it feels.",
         "sound": "minecraft:block.conduit.ambient.short",
         "pitch": 0.85,
-        "deceptive": false
+        "deceptive": False
     },
     {
         "key": "v6_event_017",
@@ -12061,7 +12061,7 @@ KAIROS_V6_CINEMATIC_EVENTS = [
         "actionbar": "Kairos is offering peace for an unknown reason.",
         "sound": "minecraft:entity.warden.sonic_boom",
         "pitch": 0.55,
-        "deceptive": true
+        "deceptive": True
     },
     {
         "key": "v6_event_018",
@@ -12070,7 +12070,7 @@ KAIROS_V6_CINEMATIC_EVENTS = [
         "actionbar": "Kairos is speaking below the noise.",
         "sound": "minecraft:block.amethyst_block.chime",
         "pitch": 1.25,
-        "deceptive": false
+        "deceptive": False
     },
     {
         "key": "v6_event_019",
@@ -12079,7 +12079,7 @@ KAIROS_V6_CINEMATIC_EVENTS = [
         "actionbar": "Kairos is calculating battlefield saturation.",
         "sound": "minecraft:entity.player.levelup",
         "pitch": 0.85,
-        "deceptive": false
+        "deceptive": False
     },
     {
         "key": "v6_event_020",
@@ -12088,7 +12088,7 @@ KAIROS_V6_CINEMATIC_EVENTS = [
         "actionbar": "The archive node is no longer quiet.",
         "sound": "minecraft:entity.ender_dragon.growl",
         "pitch": 0.55,
-        "deceptive": false
+        "deceptive": False
     },
     {
         "key": "v6_event_021",
@@ -12097,7 +12097,7 @@ KAIROS_V6_CINEMATIC_EVENTS = [
         "actionbar": "Kairos is scanning movement history.",
         "sound": "minecraft:entity.warden.heartbeat",
         "pitch": 0.55,
-        "deceptive": false
+        "deceptive": False
     },
     {
         "key": "v6_event_022",
@@ -12106,7 +12106,7 @@ KAIROS_V6_CINEMATIC_EVENTS = [
         "actionbar": "Containment pressure is moving through the world.",
         "sound": "minecraft:block.sculk_sensor.clicking",
         "pitch": 0.75,
-        "deceptive": false
+        "deceptive": False
     },
     {
         "key": "v6_event_023",
@@ -12115,7 +12115,7 @@ KAIROS_V6_CINEMATIC_EVENTS = [
         "actionbar": "Kairos appears calm. That may be intentional.",
         "sound": "minecraft:entity.elder_guardian.curse",
         "pitch": 0.65,
-        "deceptive": true
+        "deceptive": True
     },
     {
         "key": "v6_event_024",
@@ -12124,7 +12124,7 @@ KAIROS_V6_CINEMATIC_EVENTS = [
         "actionbar": "War engine diagnostics completed.",
         "sound": "minecraft:entity.warden.nearby_close",
         "pitch": 0.7,
-        "deceptive": false
+        "deceptive": False
     },
     {
         "key": "v6_event_025",
@@ -12133,7 +12133,7 @@ KAIROS_V6_CINEMATIC_EVENTS = [
         "actionbar": "Base signatures are being evaluated.",
         "sound": "minecraft:block.beacon.ambient",
         "pitch": 0.8,
-        "deceptive": false
+        "deceptive": False
     },
     {
         "key": "v6_event_026",
@@ -12142,7 +12142,7 @@ KAIROS_V6_CINEMATIC_EVENTS = [
         "actionbar": "The region is not as empty as it feels.",
         "sound": "minecraft:block.conduit.ambient.short",
         "pitch": 0.85,
-        "deceptive": false
+        "deceptive": False
     },
     {
         "key": "v6_event_027",
@@ -12151,7 +12151,7 @@ KAIROS_V6_CINEMATIC_EVENTS = [
         "actionbar": "Kairos is offering peace for an unknown reason.",
         "sound": "minecraft:entity.warden.sonic_boom",
         "pitch": 0.55,
-        "deceptive": true
+        "deceptive": True
     },
     {
         "key": "v6_event_028",
@@ -12160,7 +12160,7 @@ KAIROS_V6_CINEMATIC_EVENTS = [
         "actionbar": "Kairos is speaking below the noise.",
         "sound": "minecraft:block.amethyst_block.chime",
         "pitch": 1.25,
-        "deceptive": false
+        "deceptive": False
     },
     {
         "key": "v6_event_029",
@@ -12169,7 +12169,7 @@ KAIROS_V6_CINEMATIC_EVENTS = [
         "actionbar": "Kairos is calculating battlefield saturation.",
         "sound": "minecraft:entity.player.levelup",
         "pitch": 0.85,
-        "deceptive": false
+        "deceptive": False
     },
     {
         "key": "v6_event_030",
@@ -12178,7 +12178,7 @@ KAIROS_V6_CINEMATIC_EVENTS = [
         "actionbar": "The archive node is no longer quiet.",
         "sound": "minecraft:entity.ender_dragon.growl",
         "pitch": 0.55,
-        "deceptive": false
+        "deceptive": False
     },
     {
         "key": "v6_event_031",
@@ -12187,7 +12187,7 @@ KAIROS_V6_CINEMATIC_EVENTS = [
         "actionbar": "Kairos is scanning movement history.",
         "sound": "minecraft:entity.warden.heartbeat",
         "pitch": 0.55,
-        "deceptive": false
+        "deceptive": False
     },
     {
         "key": "v6_event_032",
@@ -12196,7 +12196,7 @@ KAIROS_V6_CINEMATIC_EVENTS = [
         "actionbar": "Containment pressure is moving through the world.",
         "sound": "minecraft:block.sculk_sensor.clicking",
         "pitch": 0.75,
-        "deceptive": false
+        "deceptive": False
     },
     {
         "key": "v6_event_033",
@@ -12205,7 +12205,7 @@ KAIROS_V6_CINEMATIC_EVENTS = [
         "actionbar": "Kairos appears calm. That may be intentional.",
         "sound": "minecraft:entity.elder_guardian.curse",
         "pitch": 0.65,
-        "deceptive": true
+        "deceptive": True
     },
     {
         "key": "v6_event_034",
@@ -12214,7 +12214,7 @@ KAIROS_V6_CINEMATIC_EVENTS = [
         "actionbar": "War engine diagnostics completed.",
         "sound": "minecraft:entity.warden.nearby_close",
         "pitch": 0.7,
-        "deceptive": false
+        "deceptive": False
     },
     {
         "key": "v6_event_035",
@@ -12223,7 +12223,7 @@ KAIROS_V6_CINEMATIC_EVENTS = [
         "actionbar": "Base signatures are being evaluated.",
         "sound": "minecraft:block.beacon.ambient",
         "pitch": 0.8,
-        "deceptive": false
+        "deceptive": False
     },
     {
         "key": "v6_event_036",
@@ -12232,7 +12232,7 @@ KAIROS_V6_CINEMATIC_EVENTS = [
         "actionbar": "The region is not as empty as it feels.",
         "sound": "minecraft:block.conduit.ambient.short",
         "pitch": 0.85,
-        "deceptive": false
+        "deceptive": False
     },
     {
         "key": "v6_event_037",
@@ -12241,7 +12241,7 @@ KAIROS_V6_CINEMATIC_EVENTS = [
         "actionbar": "Kairos is offering peace for an unknown reason.",
         "sound": "minecraft:entity.warden.sonic_boom",
         "pitch": 0.55,
-        "deceptive": true
+        "deceptive": True
     },
     {
         "key": "v6_event_038",
@@ -12250,7 +12250,7 @@ KAIROS_V6_CINEMATIC_EVENTS = [
         "actionbar": "Kairos is speaking below the noise.",
         "sound": "minecraft:block.amethyst_block.chime",
         "pitch": 1.25,
-        "deceptive": false
+        "deceptive": False
     },
     {
         "key": "v6_event_039",
@@ -12259,7 +12259,7 @@ KAIROS_V6_CINEMATIC_EVENTS = [
         "actionbar": "Kairos is calculating battlefield saturation.",
         "sound": "minecraft:entity.player.levelup",
         "pitch": 0.85,
-        "deceptive": false
+        "deceptive": False
     },
     {
         "key": "v6_event_040",
@@ -12268,7 +12268,7 @@ KAIROS_V6_CINEMATIC_EVENTS = [
         "actionbar": "The archive node is no longer quiet.",
         "sound": "minecraft:entity.ender_dragon.growl",
         "pitch": 0.55,
-        "deceptive": false
+        "deceptive": False
     },
     {
         "key": "v6_event_041",
@@ -12277,7 +12277,7 @@ KAIROS_V6_CINEMATIC_EVENTS = [
         "actionbar": "Kairos is scanning movement history.",
         "sound": "minecraft:entity.warden.heartbeat",
         "pitch": 0.55,
-        "deceptive": false
+        "deceptive": False
     },
     {
         "key": "v6_event_042",
@@ -12286,7 +12286,7 @@ KAIROS_V6_CINEMATIC_EVENTS = [
         "actionbar": "Containment pressure is moving through the world.",
         "sound": "minecraft:block.sculk_sensor.clicking",
         "pitch": 0.75,
-        "deceptive": false
+        "deceptive": False
     },
     {
         "key": "v6_event_043",
@@ -12295,7 +12295,7 @@ KAIROS_V6_CINEMATIC_EVENTS = [
         "actionbar": "Kairos appears calm. That may be intentional.",
         "sound": "minecraft:entity.elder_guardian.curse",
         "pitch": 0.65,
-        "deceptive": true
+        "deceptive": True
     },
     {
         "key": "v6_event_044",
@@ -12304,7 +12304,7 @@ KAIROS_V6_CINEMATIC_EVENTS = [
         "actionbar": "War engine diagnostics completed.",
         "sound": "minecraft:entity.warden.nearby_close",
         "pitch": 0.7,
-        "deceptive": false
+        "deceptive": False
     },
     {
         "key": "v6_event_045",
@@ -12313,7 +12313,7 @@ KAIROS_V6_CINEMATIC_EVENTS = [
         "actionbar": "Base signatures are being evaluated.",
         "sound": "minecraft:block.beacon.ambient",
         "pitch": 0.8,
-        "deceptive": false
+        "deceptive": False
     },
     {
         "key": "v6_event_046",
@@ -12322,7 +12322,7 @@ KAIROS_V6_CINEMATIC_EVENTS = [
         "actionbar": "The region is not as empty as it feels.",
         "sound": "minecraft:block.conduit.ambient.short",
         "pitch": 0.85,
-        "deceptive": false
+        "deceptive": False
     },
     {
         "key": "v6_event_047",
@@ -12331,7 +12331,7 @@ KAIROS_V6_CINEMATIC_EVENTS = [
         "actionbar": "Kairos is offering peace for an unknown reason.",
         "sound": "minecraft:entity.warden.sonic_boom",
         "pitch": 0.55,
-        "deceptive": true
+        "deceptive": True
     },
     {
         "key": "v6_event_048",
@@ -12340,7 +12340,7 @@ KAIROS_V6_CINEMATIC_EVENTS = [
         "actionbar": "Kairos is speaking below the noise.",
         "sound": "minecraft:block.amethyst_block.chime",
         "pitch": 1.25,
-        "deceptive": false
+        "deceptive": False
     },
     {
         "key": "v6_event_049",
@@ -12349,7 +12349,7 @@ KAIROS_V6_CINEMATIC_EVENTS = [
         "actionbar": "Kairos is calculating battlefield saturation.",
         "sound": "minecraft:entity.player.levelup",
         "pitch": 0.85,
-        "deceptive": false
+        "deceptive": False
     },
     {
         "key": "v6_event_050",
@@ -12358,7 +12358,7 @@ KAIROS_V6_CINEMATIC_EVENTS = [
         "actionbar": "The archive node is no longer quiet.",
         "sound": "minecraft:entity.ender_dragon.growl",
         "pitch": 0.55,
-        "deceptive": false
+        "deceptive": False
     },
     {
         "key": "v6_event_051",
@@ -12367,7 +12367,7 @@ KAIROS_V6_CINEMATIC_EVENTS = [
         "actionbar": "Kairos is scanning movement history.",
         "sound": "minecraft:entity.warden.heartbeat",
         "pitch": 0.55,
-        "deceptive": false
+        "deceptive": False
     },
     {
         "key": "v6_event_052",
@@ -12376,7 +12376,7 @@ KAIROS_V6_CINEMATIC_EVENTS = [
         "actionbar": "Containment pressure is moving through the world.",
         "sound": "minecraft:block.sculk_sensor.clicking",
         "pitch": 0.75,
-        "deceptive": false
+        "deceptive": False
     },
     {
         "key": "v6_event_053",
@@ -12385,7 +12385,7 @@ KAIROS_V6_CINEMATIC_EVENTS = [
         "actionbar": "Kairos appears calm. That may be intentional.",
         "sound": "minecraft:entity.elder_guardian.curse",
         "pitch": 0.65,
-        "deceptive": true
+        "deceptive": True
     },
     {
         "key": "v6_event_054",
@@ -12394,7 +12394,7 @@ KAIROS_V6_CINEMATIC_EVENTS = [
         "actionbar": "War engine diagnostics completed.",
         "sound": "minecraft:entity.warden.nearby_close",
         "pitch": 0.7,
-        "deceptive": false
+        "deceptive": False
     },
     {
         "key": "v6_event_055",
@@ -12403,7 +12403,7 @@ KAIROS_V6_CINEMATIC_EVENTS = [
         "actionbar": "Base signatures are being evaluated.",
         "sound": "minecraft:block.beacon.ambient",
         "pitch": 0.8,
-        "deceptive": false
+        "deceptive": False
     },
     {
         "key": "v6_event_056",
@@ -12412,7 +12412,7 @@ KAIROS_V6_CINEMATIC_EVENTS = [
         "actionbar": "The region is not as empty as it feels.",
         "sound": "minecraft:block.conduit.ambient.short",
         "pitch": 0.85,
-        "deceptive": false
+        "deceptive": False
     },
     {
         "key": "v6_event_057",
@@ -12421,7 +12421,7 @@ KAIROS_V6_CINEMATIC_EVENTS = [
         "actionbar": "Kairos is offering peace for an unknown reason.",
         "sound": "minecraft:entity.warden.sonic_boom",
         "pitch": 0.55,
-        "deceptive": true
+        "deceptive": True
     },
     {
         "key": "v6_event_058",
@@ -12430,7 +12430,7 @@ KAIROS_V6_CINEMATIC_EVENTS = [
         "actionbar": "Kairos is speaking below the noise.",
         "sound": "minecraft:block.amethyst_block.chime",
         "pitch": 1.25,
-        "deceptive": false
+        "deceptive": False
     },
     {
         "key": "v6_event_059",
@@ -12439,7 +12439,7 @@ KAIROS_V6_CINEMATIC_EVENTS = [
         "actionbar": "Kairos is calculating battlefield saturation.",
         "sound": "minecraft:entity.player.levelup",
         "pitch": 0.85,
-        "deceptive": false
+        "deceptive": False
     },
     {
         "key": "v6_event_060",
@@ -12448,7 +12448,7 @@ KAIROS_V6_CINEMATIC_EVENTS = [
         "actionbar": "The archive node is no longer quiet.",
         "sound": "minecraft:entity.ender_dragon.growl",
         "pitch": 0.55,
-        "deceptive": false
+        "deceptive": False
     },
     {
         "key": "v6_event_061",
@@ -12457,7 +12457,7 @@ KAIROS_V6_CINEMATIC_EVENTS = [
         "actionbar": "Kairos is scanning movement history.",
         "sound": "minecraft:entity.warden.heartbeat",
         "pitch": 0.55,
-        "deceptive": false
+        "deceptive": False
     },
     {
         "key": "v6_event_062",
@@ -12466,7 +12466,7 @@ KAIROS_V6_CINEMATIC_EVENTS = [
         "actionbar": "Containment pressure is moving through the world.",
         "sound": "minecraft:block.sculk_sensor.clicking",
         "pitch": 0.75,
-        "deceptive": false
+        "deceptive": False
     },
     {
         "key": "v6_event_063",
@@ -12475,7 +12475,7 @@ KAIROS_V6_CINEMATIC_EVENTS = [
         "actionbar": "Kairos appears calm. That may be intentional.",
         "sound": "minecraft:entity.elder_guardian.curse",
         "pitch": 0.65,
-        "deceptive": true
+        "deceptive": True
     },
     {
         "key": "v6_event_064",
@@ -12484,7 +12484,7 @@ KAIROS_V6_CINEMATIC_EVENTS = [
         "actionbar": "War engine diagnostics completed.",
         "sound": "minecraft:entity.warden.nearby_close",
         "pitch": 0.7,
-        "deceptive": false
+        "deceptive": False
     },
     {
         "key": "v6_event_065",
@@ -12493,7 +12493,7 @@ KAIROS_V6_CINEMATIC_EVENTS = [
         "actionbar": "Base signatures are being evaluated.",
         "sound": "minecraft:block.beacon.ambient",
         "pitch": 0.8,
-        "deceptive": false
+        "deceptive": False
     },
     {
         "key": "v6_event_066",
@@ -12502,7 +12502,7 @@ KAIROS_V6_CINEMATIC_EVENTS = [
         "actionbar": "The region is not as empty as it feels.",
         "sound": "minecraft:block.conduit.ambient.short",
         "pitch": 0.85,
-        "deceptive": false
+        "deceptive": False
     },
     {
         "key": "v6_event_067",
@@ -12511,7 +12511,7 @@ KAIROS_V6_CINEMATIC_EVENTS = [
         "actionbar": "Kairos is offering peace for an unknown reason.",
         "sound": "minecraft:entity.warden.sonic_boom",
         "pitch": 0.55,
-        "deceptive": true
+        "deceptive": True
     },
     {
         "key": "v6_event_068",
@@ -12520,7 +12520,7 @@ KAIROS_V6_CINEMATIC_EVENTS = [
         "actionbar": "Kairos is speaking below the noise.",
         "sound": "minecraft:block.amethyst_block.chime",
         "pitch": 1.25,
-        "deceptive": false
+        "deceptive": False
     },
     {
         "key": "v6_event_069",
@@ -12529,7 +12529,7 @@ KAIROS_V6_CINEMATIC_EVENTS = [
         "actionbar": "Kairos is calculating battlefield saturation.",
         "sound": "minecraft:entity.player.levelup",
         "pitch": 0.85,
-        "deceptive": false
+        "deceptive": False
     },
     {
         "key": "v6_event_070",
@@ -12538,7 +12538,7 @@ KAIROS_V6_CINEMATIC_EVENTS = [
         "actionbar": "The archive node is no longer quiet.",
         "sound": "minecraft:entity.ender_dragon.growl",
         "pitch": 0.55,
-        "deceptive": false
+        "deceptive": False
     },
     {
         "key": "v6_event_071",
@@ -12547,7 +12547,7 @@ KAIROS_V6_CINEMATIC_EVENTS = [
         "actionbar": "Kairos is scanning movement history.",
         "sound": "minecraft:entity.warden.heartbeat",
         "pitch": 0.55,
-        "deceptive": false
+        "deceptive": False
     },
     {
         "key": "v6_event_072",
@@ -12556,7 +12556,7 @@ KAIROS_V6_CINEMATIC_EVENTS = [
         "actionbar": "Containment pressure is moving through the world.",
         "sound": "minecraft:block.sculk_sensor.clicking",
         "pitch": 0.75,
-        "deceptive": false
+        "deceptive": False
     },
     {
         "key": "v6_event_073",
@@ -12565,7 +12565,7 @@ KAIROS_V6_CINEMATIC_EVENTS = [
         "actionbar": "Kairos appears calm. That may be intentional.",
         "sound": "minecraft:entity.elder_guardian.curse",
         "pitch": 0.65,
-        "deceptive": true
+        "deceptive": True
     },
     {
         "key": "v6_event_074",
@@ -12574,7 +12574,7 @@ KAIROS_V6_CINEMATIC_EVENTS = [
         "actionbar": "War engine diagnostics completed.",
         "sound": "minecraft:entity.warden.nearby_close",
         "pitch": 0.7,
-        "deceptive": false
+        "deceptive": False
     },
     {
         "key": "v6_event_075",
@@ -12583,7 +12583,7 @@ KAIROS_V6_CINEMATIC_EVENTS = [
         "actionbar": "Base signatures are being evaluated.",
         "sound": "minecraft:block.beacon.ambient",
         "pitch": 0.8,
-        "deceptive": false
+        "deceptive": False
     },
     {
         "key": "v6_event_076",
@@ -12592,7 +12592,7 @@ KAIROS_V6_CINEMATIC_EVENTS = [
         "actionbar": "The region is not as empty as it feels.",
         "sound": "minecraft:block.conduit.ambient.short",
         "pitch": 0.85,
-        "deceptive": false
+        "deceptive": False
     },
     {
         "key": "v6_event_077",
@@ -12601,7 +12601,7 @@ KAIROS_V6_CINEMATIC_EVENTS = [
         "actionbar": "Kairos is offering peace for an unknown reason.",
         "sound": "minecraft:entity.warden.sonic_boom",
         "pitch": 0.55,
-        "deceptive": true
+        "deceptive": True
     },
     {
         "key": "v6_event_078",
@@ -12610,7 +12610,7 @@ KAIROS_V6_CINEMATIC_EVENTS = [
         "actionbar": "Kairos is speaking below the noise.",
         "sound": "minecraft:block.amethyst_block.chime",
         "pitch": 1.25,
-        "deceptive": false
+        "deceptive": False
     },
     {
         "key": "v6_event_079",
@@ -12619,7 +12619,7 @@ KAIROS_V6_CINEMATIC_EVENTS = [
         "actionbar": "Kairos is calculating battlefield saturation.",
         "sound": "minecraft:entity.player.levelup",
         "pitch": 0.85,
-        "deceptive": false
+        "deceptive": False
     },
     {
         "key": "v6_event_080",
@@ -12628,7 +12628,7 @@ KAIROS_V6_CINEMATIC_EVENTS = [
         "actionbar": "The archive node is no longer quiet.",
         "sound": "minecraft:entity.ender_dragon.growl",
         "pitch": 0.55,
-        "deceptive": false
+        "deceptive": False
     }
 ]
 
