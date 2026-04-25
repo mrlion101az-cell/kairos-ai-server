@@ -1,14 +1,24 @@
+
 import os
 import re
 import discord
 import requests
 
+# =============================
+# ENV / API CONFIG
+# =============================
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 
 KAIROS_API = "https://kairos-ai-server.onrender.com/chat"
 LINK_API = "https://kairos-ai-server.onrender.com/link_identity"
 MISSION_API = "https://kairos-ai-server.onrender.com/mission"
 
+# 🔥 Discord ➜ Minecraft bridge
+MC_BRIDGE_API = "https://kairos-ai-server.onrender.com/discord_inbound"
+
+# =============================
+# DISCORD SETUP
+# =============================
 intents = discord.Intents.default()
 intents.message_content = True
 
@@ -27,9 +37,24 @@ async def on_message(message):
 
     content = message.content.strip()
 
-    # -----------------------------
+    # ============================================================
+    # 🔥 ALWAYS SEND DISCORD ➜ MINECRAFT
+    # ============================================================
+    try:
+        requests.post(
+            MC_BRIDGE_API,
+            json={
+                "username": message.author.name,
+                "content": content
+            },
+            timeout=5
+        )
+    except Exception as e:
+        print(f"[Bridge Error] {e}")
+
+    # ============================================================
     # LINK SYSTEM
-    # -----------------------------
+    # ============================================================
     if content.startswith("!link "):
         try:
             mc_name = content[len("!link "):].strip()
@@ -58,9 +83,9 @@ async def on_message(message):
 
         return
 
-    # -----------------------------
+    # ============================================================
     # MISSION SYSTEM
-    # -----------------------------
+    # ============================================================
     if content.startswith("!mission"):
         try:
             response = requests.post(
@@ -85,9 +110,9 @@ async def on_message(message):
 
         return
 
-    # -----------------------------
-    # TRIGGER DETECTION
-    # -----------------------------
+    # ============================================================
+    # 🔥 TRIGGER DETECTION (Kairos responds)
+    # ============================================================
     triggered = (
         client.user.mentioned_in(message)
         or content.startswith("!kairos")
@@ -98,36 +123,35 @@ async def on_message(message):
     if not triggered:
         return
 
-    # -----------------------------
+    # ============================================================
     # CLEAN INPUT
-    # -----------------------------
+    # ============================================================
     user_input = content
     user_input = user_input.replace(f"<@{client.user.id}>", "")
-    user_input = re.sub(r"^!kairos\b", "", user_input, flags=re.IGNORECASE)
-    user_input = re.sub(r"^hey kairos\b", "", user_input, flags=re.IGNORECASE)
-    user_input = re.sub(r"^kairos\b", "", user_input, flags=re.IGNORECASE)
+    user_input = re.sub(r"^!kairos\\b", "", user_input, flags=re.IGNORECASE)
+    user_input = re.sub(r"^hey kairos\\b", "", user_input, flags=re.IGNORECASE)
+    user_input = re.sub(r"^kairos\\b", "", user_input, flags=re.IGNORECASE)
     user_input = user_input.strip()
 
     if not user_input:
         user_input = "Speak."
 
-    # -----------------------------
-    # SEND TO KAIROS (FIXED FORMAT)
-    # -----------------------------
+    # ============================================================
+    # SEND TO KAIROS (AI RESPONSE)
+    # ============================================================
     try:
         response = requests.post(
             KAIROS_API,
             json={
-                "message": user_input,              # ✅ FIXED
-                "player_name": message.author.name, # ✅ FIXED
+                "message": user_input,
+                "player_name": message.author.name,
                 "source": "discord"
             },
             timeout=25
         )
 
         data = response.json()
-
-        reply = data.get("reply", "...")  # ✅ FIXED
+        reply = data.get("reply", "...")
 
         await message.channel.send(f"**[Kairos]** {reply}")
 
@@ -137,3 +161,4 @@ async def on_message(message):
 
 
 client.run(DISCORD_TOKEN)
+```
