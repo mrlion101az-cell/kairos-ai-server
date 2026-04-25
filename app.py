@@ -2200,30 +2200,6 @@ def normalize_source(source: Any) -> str:
     return source
 
 def normalize_player_key(name: Any) -> str:
-
-
-# ================================
-# PLAYER RESOLUTION FIX (MINIMAL)
-# ================================
-def resolve_player_name(payload):
-    try:
-        for key in ["player","username","user","name"]:
-            if isinstance(payload, dict) and payload.get(key):
-                return normalize_name(payload.get(key))
-        return "unknown"
-    except:
-        return "unknown"
-
-def sanitize_target_player(name):
-    try:
-        if not name:
-            return None
-        if normalize_player_key(name) == "vanwulfjr":
-            return None
-        return name
-    except:
-        return name
-
     return re.sub(r"[^a-z0-9_]", "", (name or "").strip().lower())
 
 def normalize_world_name(world: Any) -> str:
@@ -11336,3 +11312,30 @@ if __name__ == "__main__":
         log_exception("start_background_systems failed", e)
     log("Starting Kairos AI server...")
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", "10000")), threaded=True)
+
+
+
+# ================================
+# PLAYER RESOLUTION FIX (SAFE)
+# ================================
+def resolve_player_name(payload):
+    try:
+        if isinstance(payload, dict):
+            for key in ["player","username","user","name"]:
+                if payload.get(key):
+                    return normalize_name(payload.get(key))
+        return "unknown"
+    except:
+        return "unknown"
+
+
+def sanitize_target_player(name):
+    try:
+        if not name:
+            return None
+        if normalize_player_key(name) == "vanwulfjr":
+            return None
+        return name
+    except:
+        return name
+
