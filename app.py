@@ -12869,3 +12869,102 @@ def safe_queue_action(action, target=None):
     except Exception as e:
         log(f"Safe queue failed: {e}", "ERROR")
 
+
+
+# ============================================================
+# AMBIENT PRESENCE SYSTEM (Kairos Always Watching)
+# ============================================================
+
+AMBIENT_INTERVAL_MIN = 60
+AMBIENT_INTERVAL_MAX = 180
+
+last_ambient_event = {}
+
+def generate_ambient_effect(player):
+    import random
+    effects = []
+
+    sound_pool = [
+        "entity.warden.heartbeat",
+        "entity.warden.nearby_close",
+        "ambient.cave",
+        "block.beacon.ambient",
+        "entity.enderman.stare",
+        "entity.ghast.scream",
+        "entity.phantom.flap",
+        "block.respawn_anchor.charge",
+        "entity.wither.ambient"
+    ]
+
+    sound = random.choice(sound_pool)
+    effects.append(f"execute as {player} at {player} run playsound {sound} master {player} ~ ~ ~ 1 1")
+
+    particle_pool = [
+        "minecraft:sculk_soul",
+        "minecraft:ash",
+        "minecraft:smoke",
+        "minecraft:portal",
+        "minecraft:reverse_portal",
+        "minecraft:witch",
+        "minecraft:dragon_breath",
+        "minecraft:sonic_boom"
+    ]
+
+    particle = random.choice(particle_pool)
+    effects.append(f"execute as {player} at {player} run particle {particle} ~ ~1 ~ 0.5 1 0.5 0.01 20 force")
+
+    if random.random() < 0.4:
+        effects.append(f"effect give {player} darkness 3 1 true")
+
+    if random.random() < 0.3:
+        effects.append(f"effect give {player} nausea 2 1 true")
+
+    if random.random() < 0.3:
+        effects.append(f"execute as {player} at {player} run particle block minecraft:sculk ~ ~ ~ 1 0.1 1 0.1 30 force")
+
+    if random.random() < 0.25:
+        msg_pool = [
+            "I am still here.",
+            "You are not alone.",
+            "I see you.",
+            "Do not stop moving.",
+            "You feel that, don’t you?",
+            "Something is wrong here."
+        ]
+        msg = random.choice(msg_pool)
+        effects.append(f'title {player} actionbar {{"text":"{msg}","color":"dark_red"}}')
+
+    return effects
+
+
+def ambient_presence_loop():
+    import time, random
+    global last_ambient_event
+
+    while True:
+        try:
+            now = time.time()
+
+            for player in list(telemetry_data.keys()):
+                last_time = last_ambient_event.get(player, 0)
+                delay = random.randint(AMBIENT_INTERVAL_MIN, AMBIENT_INTERVAL_MAX)
+
+                if now - last_time < delay:
+                    continue
+
+                effects = generate_ambient_effect(player)
+
+                for cmd in effects:
+                    queue_action({
+                        "type": "command",
+                        "command": cmd,
+                        "target": player
+                    })
+
+                last_ambient_event[player] = now
+
+        except Exception as e:
+            print(f"[Ambient Loop Error] {e}")
+
+        time.sleep(5)
+
