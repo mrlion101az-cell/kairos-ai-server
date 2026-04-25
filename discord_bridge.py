@@ -1,4 +1,4 @@
-```python
+
 import os
 import requests
 import discord
