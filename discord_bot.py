@@ -1,11 +1,11 @@
-
+```python
 import os
 import re
 import discord
 import requests
 
 # =============================
-# ENV / API CONFIG
+# CONFIG
 # =============================
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 
@@ -13,12 +13,9 @@ KAIROS_API = "https://kairos-ai-server.onrender.com/chat"
 LINK_API = "https://kairos-ai-server.onrender.com/link_identity"
 MISSION_API = "https://kairos-ai-server.onrender.com/mission"
 
-# 🔥 Discord ➜ Minecraft bridge
+# 🔥 NEW: Discord ➜ Minecraft bridge
 MC_BRIDGE_API = "https://kairos-ai-server.onrender.com/discord_inbound"
 
-# =============================
-# DISCORD SETUP
-# =============================
 intents = discord.Intents.default()
 intents.message_content = True
 
@@ -111,7 +108,7 @@ async def on_message(message):
         return
 
     # ============================================================
-    # 🔥 TRIGGER DETECTION (Kairos responds)
+    # 🔥 KAIROS RESPONSE TRIGGER
     # ============================================================
     triggered = (
         client.user.mentioned_in(message)
@@ -137,7 +134,7 @@ async def on_message(message):
         user_input = "Speak."
 
     # ============================================================
-    # SEND TO KAIROS (AI RESPONSE)
+    # SEND TO KAIROS
     # ============================================================
     try:
         response = requests.post(
