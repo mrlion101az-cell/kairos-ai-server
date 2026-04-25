@@ -11315,27 +11315,56 @@ if __name__ == "__main__":
 
 
 
-# ================================
-# PLAYER RESOLUTION FIX (SAFE)
-# ================================
-def resolve_player_name(payload):
+
+# ============================================================
+# DISCORD <-> MINECRAFT BRIDGE (KAIROS V3 ADDITION)
+# ============================================================
+
+def forward_to_discord(player, message):
     try:
-        if isinstance(payload, dict):
-            for key in ["player","username","user","name"]:
-                if payload.get(key):
-                    return normalize_name(payload.get(key))
-        return "unknown"
-    except:
-        return "unknown"
+        if not DISCORD_WEBHOOK_URL:
+            return
+        payload = {
+            "content": f"**[MC] {player}:** {message}"
+        }
+        requests.post(DISCORD_WEBHOOK_URL, json=payload, timeout=3)
+    except Exception as e:
+        log(f"Discord forward failed: {e}", "ERROR")
 
 
-def sanitize_target_player(name):
+@app.route("/discord_inbound", methods=["POST"])
+def discord_inbound():
     try:
-        if not name:
-            return None
-        if normalize_player_key(name) == "vanwulfjr":
-            return None
-        return name
-    except:
-        return name
+        data = request.json or {}
+        username = data.get("username", "Unknown")
+        message = data.get("content", "")
+
+        if not message:
+            return jsonify({"status": "ignored"})
+
+        # Send message to Minecraft
+        mc_command = f'tellraw @a {{"text":"[DC] {username}: {message}","color":"light_purple"}}'
+        queue_action({
+            "type": "command",
+            "command": mc_command
+        })
+
+        # ALSO let Kairos react to it (same pipeline as chat)
+        try:
+            simulated_payload = {
+                "player": username,
+                "message": message,
+                "source": "discord"
+            }
+            # Call main chat handler logic if exists
+            if "handle_chat_logic" in globals():
+                handle_chat_logic(simulated_payload)
+        except Exception as e:
+            log(f"Kairos reaction failed: {e}", "ERROR")
+
+        return jsonify({"status": "ok"})
+
+    except Exception as e:
+        log_exception("Discord inbound error", e)
+        return jsonify({"status": "error"}), 500
 
