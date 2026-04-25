@@ -12986,6 +12986,336 @@ def start_background_systems():
                 log(f"Ambient startup test failed: {e}", level="WARN")
 
 
+# ============================================================
+# KAIROS PASSIVE MOB PRESSURE OVERLAY (ACTIVE BEFORE APP.RUN)
+# ============================================================
+# Purpose:
+# - Keep the existing audio/effects system exactly as-is.
+# - Add autonomous "probe" mobs near active players without requiring chat.
+# - Let combat kills agitate Kairos and escalate into the existing spawn_wave system.
+# - Non-destructive: uses queue_action / send_http_commands / update_threat when available.
+
+ENABLE_PASSIVE_MOB_PRESSURE = os.getenv("ENABLE_PASSIVE_MOB_PRESSURE", "true").lower() == "true"
+PASSIVE_MOB_LOOP_SLEEP = float(os.getenv("PASSIVE_MOB_LOOP_SLEEP", "5"))
+PASSIVE_MOB_MIN_SECONDS = int(os.getenv("PASSIVE_MOB_MIN_SECONDS", "90"))
+PASSIVE_MOB_MAX_SECONDS = int(os.getenv("PASSIVE_MOB_MAX_SECONDS", "180"))
+PASSIVE_MOB_CHANCE = float(os.getenv("PASSIVE_MOB_CHANCE", "0.55"))
+PASSIVE_MOB_COUNT_MIN = int(os.getenv("PASSIVE_MOB_COUNT_MIN", "2"))
+PASSIVE_MOB_COUNT_MAX = int(os.getenv("PASSIVE_MOB_COUNT_MAX", "3"))
+PASSIVE_MOB_MAX_PLAYERS_PER_TICK = int(os.getenv("PASSIVE_MOB_MAX_PLAYERS_PER_TICK", "3"))
+PASSIVE_MOB_STARTUP_TEST = os.getenv("PASSIVE_MOB_STARTUP_TEST", "false").lower() == "true"
+PASSIVE_MOB_ESCALATE_ON_CONTACT = os.getenv("PASSIVE_MOB_ESCALATE_ON_CONTACT", "true").lower() == "true"
+PASSIVE_MOB_CONTACT_ESCALATE_SECONDS = int(os.getenv("PASSIVE_MOB_CONTACT_ESCALATE_SECONDS", "75"))
+PASSIVE_MOB_CONTACT_ESCALATE_CHANCE = float(os.getenv("PASSIVE_MOB_CONTACT_ESCALATE_CHANCE", "0.35"))
+PASSIVE_MOB_KILL_THREAT_GAIN = float(os.getenv("PASSIVE_MOB_KILL_THREAT_GAIN", "22"))
+PASSIVE_MOB_CONTACT_THREAT_GAIN = float(os.getenv("PASSIVE_MOB_CONTACT_THREAT_GAIN", "12"))
+PASSIVE_MOB_WAVE_AFTER_KILLS = int(os.getenv("PASSIVE_MOB_WAVE_AFTER_KILLS", "1"))
+PASSIVE_MOB_COMMAND_BURST_LIMIT = int(os.getenv("PASSIVE_MOB_COMMAND_BURST_LIMIT", "12"))
+
+passive_mob_loop_started = False
+last_passive_mob_event = globals().get("last_passive_mob_event", {})
+passive_mob_contacts = globals().get("passive_mob_contacts", {})
+passive_mob_kill_counts = globals().get("passive_mob_kill_counts", {})
+
+KAIROS_PASSIVE_MOB_POOL = [
+    "minecraft:zombie",
+    "minecraft:husk",
+    "minecraft:skeleton",
+    "minecraft:stray",
+    "minecraft:spider",
+    "minecraft:vindicator",
+]
+
+KAIROS_PASSIVE_MOB_NAMES = [
+    "Kairos Probe",
+    "Kairos Trace",
+    "Kairos Echo",
+    "Kairos Watcher",
+    "Kairos Error",
+    "Kairos Signal",
+]
+
+KAIROS_PASSIVE_MOB_LINES = [
+    "Probe units released.",
+    "Contact pressure authorized.",
+    "Movement detected. Correction dispatched.",
+    "The silence now has teeth.",
+    "A small test has entered your area.",
+    "Do not kill what I send unless you want my attention.",
+]
+
+
+def _kairos_passive_selector(player):
+    try:
+        if "_kairos_player_selector" in globals() and callable(_kairos_player_selector):
+            return _kairos_player_selector(player)
+    except Exception:
+        pass
+    player = str(player or "").strip()
+    if not player or player in {"@a", "@p", "@r"}:
+        return player or "@a"
+    return re.sub(r"[^A-Za-z0-9_]", "", player.split(":")[-1]) or "@a"
+
+
+def _kairos_passive_targets():
+    players = []
+    try:
+        if "_kairos_known_players_for_ambient" in globals() and callable(_kairos_known_players_for_ambient):
+            players.extend(_kairos_known_players_for_ambient())
+    except Exception:
+        pass
+    try:
+        for name in list(globals().get("telemetry_data", {}).keys()):
+            sel = _kairos_passive_selector(name)
+            if sel and sel not in players:
+                players.append(sel)
+    except Exception:
+        pass
+    try:
+        for name in list(globals().get("player_positions", {}).keys()):
+            sel = _kairos_passive_selector(name)
+            if sel and sel not in players:
+                players.append(sel)
+    except Exception:
+        pass
+    try:
+        memory_data = ensure_memory_structure(load_memory())
+        for pid, rec in list(memory_data.get("players", {}).items()):
+            if not isinstance(rec, dict):
+                continue
+            last_seen = safe_float(rec.get("last_seen_ts"), 0.0)
+            has_position = isinstance(rec.get("last_position"), dict)
+            if has_position or (last_seen and unix_ts() - last_seen < 900):
+                sel = _kairos_passive_selector(rec.get("display_name") or pid)
+                if sel and sel not in players:
+                    players.append(sel)
+    except Exception:
+        pass
+    if not players and globals().get("AMBIENT_GLOBAL_WHEN_NO_TELEMETRY", True):
+        players = ["@a"]
+    random.shuffle(players)
+    return players[:max(1, PASSIVE_MOB_MAX_PLAYERS_PER_TICK)]
+
+
+def _kairos_queue_passive_commands(commands, reason="passive_mob_pressure"):
+    commands = [str(c).strip() for c in (commands or []) if str(c).strip()]
+    if not commands:
+        return False
+    commands = commands[:PASSIVE_MOB_COMMAND_BURST_LIMIT]
+    try:
+        queue_action({"type": "minecraft_commands", "commands": commands, "reason": reason})
+        return True
+    except Exception:
+        try:
+            return bool(send_http_commands(commands))
+        except Exception as e:
+            log(f"Passive mob command dispatch failed: {e}", level="ERROR")
+            return False
+
+
+def generate_passive_mob_probe_commands(player="@a", count=None):
+    selector = _kairos_passive_selector(player)
+    count = clamp(safe_int(count if count is not None else random.randint(PASSIVE_MOB_COUNT_MIN, PASSIVE_MOB_COUNT_MAX), 2), 1, 4)
+    line = random.choice(KAIROS_PASSIVE_MOB_LINES)
+    commands = [
+        f'execute as {selector} at {selector} run playsound minecraft:block.sculk_shrieker.shriek master {selector} ~ ~ ~ 0.9 0.65',
+        f'execute as {selector} at {selector} run particle minecraft:sculk_soul ~ ~1 ~ 1.2 1.0 1.2 0.02 60 force',
+        f'title {selector} actionbar {json.dumps({"text": line, "color": "dark_red"})}',
+    ]
+    offsets = [(4, 0), (-4, 0), (0, 4), (0, -4), (5, 3), (-5, -3)]
+    for i in range(int(count)):
+        dx, dz = offsets[i % len(offsets)]
+        mob = random.choice(KAIROS_PASSIVE_MOB_POOL)
+        name = random.choice(KAIROS_PASSIVE_MOB_NAMES)
+        nbt = (
+            "{"
+            + "CustomName:" + json.dumps(json.dumps({"text": name, "color": "dark_red"})) + ","
+            + "CustomNameVisible:1b,PersistenceRequired:1b,"
+            + "Tags:[\"kairos_probe\",\"kairos_passive\",\"kairos_army\"],"
+            + "Health:24.0f,Attributes:[{Name:\"generic.max_health\",Base:24.0},{Name:\"generic.follow_range\",Base:36.0},{Name:\"generic.movement_speed\",Base:0.28}]"
+            + "}"
+        )
+        commands.append(f"execute as {selector} at {selector} run summon {mob} ~{dx} ~ ~{dz} {nbt}")
+    if random.random() < 0.6:
+        commands.append(f"effect give {selector} darkness 4 0 true")
+    return commands
+
+
+def _kairos_note_passive_contact(player, count=2):
+    key = _kairos_passive_selector(player)
+    now = time.time()
+    contact = passive_mob_contacts.setdefault(key, {"spawned": 0, "count": 0, "next_escalate": 0, "waves": 0})
+    contact["spawned"] = now
+    contact["count"] = safe_int(contact.get("count", 0), 0) + safe_int(count, 2)
+    contact["next_escalate"] = now + PASSIVE_MOB_CONTACT_ESCALATE_SECONDS
+    passive_mob_contacts[key] = contact
+
+
+def _kairos_try_escalate_contact(player, reason="passive_contact"):
+    selector = _kairos_passive_selector(player)
+    if selector in {"@a", "@p", "@r"}:
+        return False
+    try:
+        memory_data = ensure_memory_structure(load_memory())
+        player_id = None
+        for pid, rec in memory_data.get("players", {}).items():
+            if not isinstance(rec, dict):
+                continue
+            names = {str(pid).lower(), str(rec.get("display_name", "")).lower(), str(pid).split(":")[-1].lower()}
+            if selector.lower() in names:
+                player_id = pid
+                break
+        player_id = player_id or selector
+        try:
+            update_threat(player_id, PASSIVE_MOB_CONTACT_THREAT_GAIN if reason != "probe_killed" else PASSIVE_MOB_KILL_THREAT_GAIN, reason=reason)
+        except Exception:
+            pass
+        profile = globals().get("threat_scores", {}).get(player_id, {}) if isinstance(globals().get("threat_scores"), dict) else {}
+        tier = str(profile.get("tier", "target") or "target")
+        score = safe_float(profile.get("score", 0.0), 0.0)
+        if reason == "probe_killed" or tier in {"target", "hunt", "maximum"}:
+            if "can_spawn_wave" not in globals() or can_spawn_wave(player_id):
+                if tier == "maximum" or score >= safe_float(globals().get("THREAT_THRESHOLD_MAXIMUM", 160), 160):
+                    template, count = "enforcer", 4
+                elif tier == "hunt" or score >= safe_float(globals().get("THREAT_THRESHOLD_HUNT", 95), 95):
+                    template, count = "enforcer", 3
+                else:
+                    template, count = "hunter", 2
+                queue_action({"type": "spawn_wave", "target": player_id, "template": template, "count": count, "bypass_cooldown": True})
+                log(f"Passive mob escalation queued: {reason} → {player_id} {template}x{count}", level="INFO")
+                return True
+    except Exception as e:
+        log(f"Passive contact escalation failed: {e}", level="WARN")
+    return False
+
+
+def passive_mob_pressure_loop():
+    global last_passive_mob_event
+    while True:
+        try:
+            if not ENABLE_PASSIVE_MOB_PRESSURE:
+                time.sleep(PASSIVE_MOB_LOOP_SLEEP)
+                continue
+
+            now = time.time()
+
+            # Existing passive contacts can escalate into real waves, even without chat.
+            if PASSIVE_MOB_ESCALATE_ON_CONTACT:
+                for player, contact in list(passive_mob_contacts.items()):
+                    if now >= safe_float(contact.get("next_escalate", 0), 0):
+                        contact["next_escalate"] = now + PASSIVE_MOB_CONTACT_ESCALATE_SECONDS
+                        if random.random() < PASSIVE_MOB_CONTACT_ESCALATE_CHANCE:
+                            if _kairos_try_escalate_contact(player, reason="passive_probe_contact"):
+                                contact["waves"] = safe_int(contact.get("waves", 0), 0) + 1
+                        passive_mob_contacts[player] = contact
+
+            # Randomly spawn a few probe mobs near currently-known players.
+            for player in _kairos_passive_targets():
+                last_time = float(last_passive_mob_event.get(player, 0) or 0)
+                delay = random.randint(max(20, PASSIVE_MOB_MIN_SECONDS), max(PASSIVE_MOB_MIN_SECONDS, PASSIVE_MOB_MAX_SECONDS))
+                if now - last_time < delay:
+                    continue
+                if random.random() > PASSIVE_MOB_CHANCE:
+                    last_passive_mob_event[player] = now - max(10, delay // 3)
+                    continue
+                count = random.randint(max(1, PASSIVE_MOB_COUNT_MIN), max(PASSIVE_MOB_COUNT_MIN, PASSIVE_MOB_COUNT_MAX))
+                commands = generate_passive_mob_probe_commands(player, count=count)
+                if _kairos_queue_passive_commands(commands, reason=f"passive_mob_probe:{player}"):
+                    last_passive_mob_event[player] = now
+                    _kairos_note_passive_contact(player, count=count)
+                    log(f"Passive mob probe queued for {player}: {count} mobs", level="INFO")
+        except Exception as e:
+            log(f"Passive mob pressure loop error: {e}", level="ERROR")
+        time.sleep(PASSIVE_MOB_LOOP_SLEEP)
+
+
+@app.route("/kairos/combat_event", methods=["POST"])
+@app.route("/combat_event", methods=["POST"])
+def kairos_combat_event():
+    """Webhook for server-side kill/event plugins.
+    Send JSON like: {"event":"npc_kill", "player":"Steve", "victim":"Kairos Probe", "tags":["kairos_probe"]}
+    """
+    try:
+        data = request.json or {}
+        event = sanitize_text(data.get("event") or data.get("type") or "npc_kill", 40).lower()
+        player = sanitize_text(data.get("player") or data.get("killer") or data.get("name") or "", 80)
+        victim = sanitize_text(data.get("victim") or data.get("entity") or data.get("mob") or "", 120).lower()
+        tags = data.get("tags") or []
+        if isinstance(tags, str):
+            tags = [tags]
+        tags_text = " ".join(str(t).lower() for t in tags)
+        kairos_related = any(term in (victim + " " + tags_text) for term in ["kairos", "kairos_probe", "kairos_passive", "kairos_army"])
+        if not player:
+            return jsonify({"status": "ignored", "reason": "missing_player"})
+        if event in {"npc_kill", "mob_kill", "entity_kill", "kill"} and kairos_related:
+            key = _kairos_passive_selector(player)
+            passive_mob_kill_counts[key] = safe_int(passive_mob_kill_counts.get(key, 0), 0) + 1
+            try:
+                memory_data = ensure_memory_structure(load_memory())
+                pid = key
+                for stored_id, rec in memory_data.get("players", {}).items():
+                    if isinstance(rec, dict) and key.lower() in {str(stored_id).lower(), str(rec.get("display_name", "")).lower(), str(stored_id).split(":")[-1].lower()}:
+                        pid = stored_id
+                        try:
+                            update_combat_intelligence(rec, pid, "npc_kill")
+                        except Exception:
+                            pass
+                        break
+                try:
+                    add_world_event(memory_data, "kairos_probe_killed", actor=pid, source="minecraft", details=f"{key} killed a Kairos probe.", metadata={"victim": victim, "tags": tags})
+                    save_memory(memory_data)
+                except Exception:
+                    pass
+            except Exception:
+                pass
+            escalated = False
+            if passive_mob_kill_counts[key] >= PASSIVE_MOB_WAVE_AFTER_KILLS:
+                escalated = _kairos_try_escalate_contact(key, reason="probe_killed")
+            return jsonify({"status": "ok", "kairos_related": True, "kills": passive_mob_kill_counts[key], "escalated": escalated})
+        return jsonify({"status": "ignored", "kairos_related": False})
+    except Exception as e:
+        log_exception("Kairos combat event error", e)
+        return jsonify({"status": "error", "error": str(e)}), 500
+
+
+@app.route("/kairos/passive_mob_test", methods=["POST", "GET"])
+def kairos_passive_mob_test():
+    try:
+        data = request.json if request.method == "POST" and request.is_json else {}
+        player = request.args.get("player") or data.get("player") or "@a"
+        count = safe_int(request.args.get("count") or data.get("count"), 2)
+        commands = generate_passive_mob_probe_commands(player, count=count)
+        ok = _kairos_queue_passive_commands(commands, reason="manual_passive_mob_test")
+        if ok:
+            _kairos_note_passive_contact(player, count=count)
+        return jsonify({"status": "ok" if ok else "failed", "player": player, "count": count})
+    except Exception as e:
+        log_exception("Passive mob test failed", e)
+        return jsonify({"status": "error", "error": str(e)}), 500
+
+
+try:
+    _KAIROS_PASSIVE_MOB_PREVIOUS_START_BACKGROUND_SYSTEMS = start_background_systems
+except Exception:
+    _KAIROS_PASSIVE_MOB_PREVIOUS_START_BACKGROUND_SYSTEMS = None
+
+
+def start_background_systems():
+    global passive_mob_loop_started
+    if callable(_KAIROS_PASSIVE_MOB_PREVIOUS_START_BACKGROUND_SYSTEMS):
+        _KAIROS_PASSIVE_MOB_PREVIOUS_START_BACKGROUND_SYSTEMS()
+    if ENABLE_PASSIVE_MOB_PRESSURE and not passive_mob_loop_started:
+        threading.Thread(target=passive_mob_pressure_loop, daemon=True, name="kairos_passive_mob_pressure_loop").start()
+        passive_mob_loop_started = True
+        log("Passive mob pressure loop started.", level="INFO")
+        if PASSIVE_MOB_STARTUP_TEST:
+            try:
+                _kairos_queue_passive_commands(generate_passive_mob_probe_commands("@a", count=2), reason="passive_mob_startup_test")
+                log("Passive mob startup test queued.", level="INFO")
+            except Exception as e:
+                log(f"Passive mob startup test failed: {e}", level="WARN")
+
+
 if __name__ == "__main__":
     try:
         start_background_systems()
