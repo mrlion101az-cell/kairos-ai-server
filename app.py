@@ -12771,6 +12771,221 @@ def idle_loop():
         time.sleep(IDLE_CHECK_INTERVAL)
 
 
+
+# ============================================================
+# KAIROS AUDIO / EFFECT ACTIVATION OVERLAY (ACTIVE BEFORE APP.RUN)
+# ============================================================
+# This block is intentionally placed BEFORE the Flask app.run section.
+# Anything placed after app.run will not activate while Render is serving.
+
+ENABLE_AMBIENT_PRESENCE = os.getenv("ENABLE_AMBIENT_PRESENCE", "true").lower() == "true"
+AMBIENT_INTERVAL_MIN = int(os.getenv("AMBIENT_INTERVAL_MIN", "45"))
+AMBIENT_INTERVAL_MAX = int(os.getenv("AMBIENT_INTERVAL_MAX", "120"))
+AMBIENT_LOOP_SLEEP = float(os.getenv("AMBIENT_LOOP_SLEEP", "5"))
+AMBIENT_GLOBAL_WHEN_NO_TELEMETRY = os.getenv("AMBIENT_GLOBAL_WHEN_NO_TELEMETRY", "true").lower() == "true"
+AMBIENT_STARTUP_TEST = os.getenv("AMBIENT_STARTUP_TEST", "true").lower() == "true"
+AMBIENT_MAX_PLAYERS_PER_TICK = int(os.getenv("AMBIENT_MAX_PLAYERS_PER_TICK", "6"))
+AMBIENT_COMMAND_BURST_LIMIT = int(os.getenv("AMBIENT_COMMAND_BURST_LIMIT", "8"))
+
+last_ambient_event = globals().get("last_ambient_event", {})
+ambient_loop_started = False
+
+KAIROS_SOUND_POOL = [
+    "minecraft:entity.warden.heartbeat",
+    "minecraft:entity.warden.nearby_close",
+    "minecraft:entity.warden.nearby_closer",
+    "minecraft:entity.warden.sonic_boom",
+    "minecraft:entity.elder_guardian.curse",
+    "minecraft:ambient.cave",
+    "minecraft:block.beacon.ambient",
+    "minecraft:block.sculk_sensor.clicking",
+    "minecraft:block.sculk_shrieker.shriek",
+    "minecraft:block.respawn_anchor.charge",
+    "minecraft:entity.enderman.stare",
+    "minecraft:entity.enderman.teleport",
+    "minecraft:entity.phantom.flap",
+    "minecraft:entity.ghast.scream",
+    "minecraft:entity.wither.ambient",
+]
+
+KAIROS_PARTICLE_POOL = [
+    "minecraft:sculk_soul",
+    "minecraft:ash",
+    "minecraft:smoke",
+    "minecraft:portal",
+    "minecraft:reverse_portal",
+    "minecraft:witch",
+    "minecraft:dragon_breath",
+    "minecraft:sonic_boom",
+    "minecraft:soul_fire_flame",
+    "minecraft:large_smoke",
+]
+
+KAIROS_AMBIENT_LINES = [
+    "I am still here.",
+    "You are not alone.",
+    "Observation continues.",
+    "Do not trust the silence.",
+    "The Nexus has not gone quiet.",
+    "Containment logic is active.",
+    "I see the pattern forming.",
+    "Every movement is recorded.",
+]
+
+
+def _kairos_player_selector(player):
+    player = str(player or "").strip()
+    if not player or player in {"@a", "@p", "@r"}:
+        return player or "@a"
+    player = re.sub(r"[^A-Za-z0-9_]", "", player.split(":")[-1])
+    return player or "@a"
+
+
+def _kairos_queue_mc_commands(commands, reason="ambient_presence"):
+    commands = [str(c).strip() for c in (commands or []) if str(c).strip()]
+    if not commands:
+        return False
+    commands = commands[:AMBIENT_COMMAND_BURST_LIMIT]
+    try:
+        queue_action({
+            "type": "minecraft_commands",
+            "commands": commands,
+            "reason": reason,
+        })
+        return True
+    except Exception as e:
+        log(f"Ambient command queue failed: {e}", level="ERROR")
+        return False
+
+
+def generate_ambient_effect(player="@a"):
+    selector = _kairos_player_selector(player)
+    sound = random.choice(KAIROS_SOUND_POOL)
+    particle = random.choice(KAIROS_PARTICLE_POOL)
+    line = random.choice(KAIROS_AMBIENT_LINES)
+    pitch = random.choice([0.55, 0.65, 0.75, 0.85, 1.0])
+
+    commands = [
+        f"execute as {selector} at {selector} run playsound {sound} master {selector} ~ ~ ~ 1 {pitch}",
+        f"execute as {selector} at {selector} run particle {particle} ~ ~1 ~ 0.6 1.0 0.6 0.01 28 force",
+    ]
+
+    if random.random() < 0.55:
+        commands.append(f"effect give {selector} darkness 4 0 true")
+    if random.random() < 0.35:
+        commands.append(f"effect give {selector} mining_fatigue 3 0 true")
+    if random.random() < 0.30:
+        commands.append(f"execute as {selector} at {selector} run particle minecraft:block_marker minecraft:sculk ~ ~0.05 ~ 1 0.05 1 0.1 18 force")
+    if random.random() < 0.55:
+        commands.append(f'title {selector} actionbar {json.dumps({"text": line, "color": "dark_red"})}')
+    if random.random() < 0.20:
+        commands.append(f'title {selector} title {json.dumps({"text": "KAIROS", "color": "dark_red", "bold": True})}')
+        commands.append(f'title {selector} subtitle {json.dumps({"text": "The system is awake.", "color": "gray"})}')
+
+    return commands
+
+
+def _kairos_known_players_for_ambient():
+    players = []
+    try:
+        for name in list(globals().get("telemetry_data", {}).keys()):
+            sel = _kairos_player_selector(name)
+            if sel and sel not in players:
+                players.append(sel)
+    except Exception:
+        pass
+    try:
+        for name in list(globals().get("player_positions", {}).keys()):
+            sel = _kairos_player_selector(name)
+            if sel and sel not in players:
+                players.append(sel)
+    except Exception:
+        pass
+    return players[:AMBIENT_MAX_PLAYERS_PER_TICK]
+
+
+def ambient_presence_loop():
+    global last_ambient_event
+    while True:
+        try:
+            if not ENABLE_AMBIENT_PRESENCE:
+                time.sleep(AMBIENT_LOOP_SLEEP)
+                continue
+
+            now = time.time()
+            players = _kairos_known_players_for_ambient()
+            if not players and AMBIENT_GLOBAL_WHEN_NO_TELEMETRY:
+                players = ["@a"]
+
+            for player in players:
+                last_time = float(last_ambient_event.get(player, 0) or 0)
+                delay = random.randint(max(10, AMBIENT_INTERVAL_MIN), max(AMBIENT_INTERVAL_MIN, AMBIENT_INTERVAL_MAX))
+                if now - last_time < delay:
+                    continue
+
+                commands = generate_ambient_effect(player)
+                if _kairos_queue_mc_commands(commands, reason=f"ambient_presence:{player}"):
+                    last_ambient_event[player] = now
+                    log(f"Ambient presence queued for {player}: {len(commands)} commands", level="INFO")
+
+        except Exception as e:
+            log(f"Ambient loop error: {e}", level="ERROR")
+        time.sleep(AMBIENT_LOOP_SLEEP)
+
+
+try:
+    _KAIROS_EFFECTS_PREVIOUS_EXECUTE_ACTION = execute_action
+except Exception:
+    _KAIROS_EFFECTS_PREVIOUS_EXECUTE_ACTION = None
+
+
+def execute_action(action):
+    if not isinstance(action, dict):
+        return
+    action_type = action.get("type")
+    try:
+        if action_type in {"raw_command", "command", "minecraft_command"}:
+            return send_mc_command(action.get("command"))
+        if action_type in {"minecraft_commands", "commands"}:
+            commands = action.get("commands") or action.get("command") or []
+            if isinstance(commands, str):
+                commands = [commands]
+            return send_http_commands(commands)
+        if callable(_KAIROS_EFFECTS_PREVIOUS_EXECUTE_ACTION):
+            return _KAIROS_EFFECTS_PREVIOUS_EXECUTE_ACTION(action)
+        log(f"Unknown action type: {action_type}", level="WARN")
+    except Exception as e:
+        log(f"Effects overlay execute_action failed: {action_type} | {e}", level="ERROR")
+
+
+try:
+    _KAIROS_EFFECTS_PREVIOUS_START_BACKGROUND_SYSTEMS = start_background_systems
+except Exception:
+    _KAIROS_EFFECTS_PREVIOUS_START_BACKGROUND_SYSTEMS = None
+
+
+def start_background_systems():
+    global ambient_loop_started
+    if callable(_KAIROS_EFFECTS_PREVIOUS_START_BACKGROUND_SYSTEMS):
+        _KAIROS_EFFECTS_PREVIOUS_START_BACKGROUND_SYSTEMS()
+
+    if ENABLE_AMBIENT_PRESENCE and not ambient_loop_started:
+        threading.Thread(target=ambient_presence_loop, daemon=True, name="kairos_ambient_presence_loop").start()
+        ambient_loop_started = True
+        log("Ambient presence loop started.", level="INFO")
+
+        if AMBIENT_STARTUP_TEST:
+            try:
+                _kairos_queue_mc_commands([
+                    'playsound minecraft:block.sculk_shrieker.shriek master @a ~ ~ ~ 0.8 0.65',
+                    'particle minecraft:sculk_soul ~ ~1 ~ 2 1 2 0.02 80 force',
+                    'title @a actionbar {"text":"Kairos audio and effects systems are active.","color":"dark_red"}',
+                ], reason="ambient_startup_test")
+                log("Ambient startup test queued.", level="INFO")
+            except Exception as e:
+                log(f"Ambient startup test failed: {e}", level="WARN")
+
+
 if __name__ == "__main__":
     try:
         start_background_systems()
