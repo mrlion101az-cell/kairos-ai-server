@@ -1,4 +1,3 @@
-
 import os
 import requests
 import discord
@@ -12,15 +11,51 @@ DISCORD_CHANNEL_ID_RAW = os.getenv("DISCORD_CHANNEL_ID", "").strip()
 KAIROS_API_URL = os.getenv("KAIROS_API_URL", "").strip()
 KAIROS_SHARED_SECRET = os.getenv("KAIROS_SHARED_SECRET", "").strip()
 
-# 🔥 NEW: Minecraft bridge endpoint
-MC_BRIDGE_API = os.getenv("MC_BRIDGE_API", "https://kairos-ai-server.onrender.com/discord_inbound")
+MC_BRIDGE_API = os.getenv(
+    "MC_BRIDGE_API",
+    "https://kairos-ai-server.onrender.com/discord_inbound"
+)
+
+# =============================
+# VALIDATION
+# =============================
+if not DISCORD_BOT_TOKEN:
+    raise RuntimeError("DISCORD_BOT_TOKEN is not set")
+
+if not KAIROS_API_URL:
+    raise RuntimeError("KAIROS_API_URL is not set")
 
 DISCORD_CHANNEL_ID = int(DISCORD_CHANNEL_ID_RAW) if DISCORD_CHANNEL_ID_RAW.isdigit() else 0
 
+# =============================
+# DISCORD SETUP
+# =============================
 intents = discord.Intents.default()
 intents.message_content = True
 
 client = discord.Client(intents=intents)
+
+
+# =============================
+# SAFE REQUEST FUNCTION
+# =============================
+def safe_post(url, payload, headers=None, timeout=10):
+    try:
+        res = requests.post(url, json=payload, headers=headers, timeout=timeout)
+
+        if res.status_code != 200:
+            print(f"[HTTP ERROR] {url} -> {res.status_code}")
+            return None
+
+        try:
+            return res.json()
+        except Exception:
+            print(f"[JSON ERROR] Invalid response from {url}")
+            return None
+
+    except Exception as e:
+        print(f"[REQUEST ERROR] {url} -> {e}")
+        return None
 
 
 # =============================
@@ -40,7 +75,7 @@ def should_process_message(message: discord.Message) -> bool:
 
 
 # =============================
-# DISCORD ➜ KAIROS
+# DISCORD ➜ KAIROS (SAFE)
 # =============================
 def forward_to_kairos(message: discord.Message):
     headers = {"Content-Type": "application/json"}
@@ -56,32 +91,26 @@ def forward_to_kairos(message: discord.Message):
         "discord_channel_id": str(message.channel.id)
     }
 
-    response = requests.post(
+    return safe_post(
         KAIROS_API_URL,
-        json=payload,
+        payload,
         headers=headers,
-        timeout=30
+        timeout=25
     )
 
-    response.raise_for_status()
-    return response.json()
-
 
 # =============================
-# 🔥 DISCORD ➜ MINECRAFT (NEW)
+# DISCORD ➜ MINECRAFT (SAFE)
 # =============================
 def forward_to_minecraft(message: discord.Message):
-    try:
-        requests.post(
-            MC_BRIDGE_API,
-            json={
-                "username": message.author.display_name,
-                "content": message.content
-            },
-            timeout=5
-        )
-    except Exception as e:
-        print(f"[Bridge Error] {e}")
+    safe_post(
+        MC_BRIDGE_API,
+        {
+            "username": message.author.display_name,
+            "content": message.content
+        },
+        timeout=5
+    )
 
 
 # =============================
@@ -90,8 +119,9 @@ def forward_to_minecraft(message: discord.Message):
 @client.event
 async def on_ready():
     print("=" * 60)
-    print(f"Discord bridge online as {client.user}")
+    print(f"[Kairos Bridge] Online as {client.user}")
     print(f"KAIROS_API_URL: {KAIROS_API_URL}")
+    print(f"CHANNEL LOCK: {DISCORD_CHANNEL_ID if DISCORD_CHANNEL_ID else 'ALL'}")
     print("=" * 60)
 
 
@@ -101,26 +131,31 @@ async def on_message(message: discord.Message):
         return
 
     try:
-        # 🔥 SEND TO MINECRAFT FIRST (ALWAYS)
+        # 🔥 ALWAYS SEND TO MINECRAFT
         forward_to_minecraft(message)
 
-        # 🔥 THEN SEND TO KAIROS
+        # 🔥 THEN PROCESS KAIROS
         async with message.channel.typing():
             data = forward_to_kairos(message)
 
-        # 🔥 SEND KAIROS RESPONSE BACK
-        reply = data.get("reply", None)
+        # 🔥 HANDLE RESPONSE SAFELY
+        if data:
+            reply = data.get("reply", None)
 
-        if reply:
-            await message.channel.send(f"**[Kairos]** {reply}")
+            if reply:
+                await message.channel.send(f"**[Kairos]** {reply}")
+        else:
+            await message.channel.send("**[Kairos]** ...no response from core.")
 
     except Exception as e:
-        print(f"Error: {e}")
+        print(f"[FATAL MESSAGE ERROR] {e}")
         await message.channel.send("**[Kairos]** ...connection disrupted.")
 
 
-if not DISCORD_BOT_TOKEN:
-    raise RuntimeError("DISCORD_BOT_TOKEN is not set")
-
-client.run(DISCORD_BOT_TOKEN)
-```
+# =============================
+# START BOT
+# =============================
+try:
+    client.run(DISCORD_BOT_TOKEN)
+except Exception as e:
+    print(f"[FATAL START ERROR] {e}")
