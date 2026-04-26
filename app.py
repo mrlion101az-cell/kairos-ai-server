@@ -13316,6 +13316,232 @@ def start_background_systems():
                 log(f"Passive mob startup test failed: {e}", level="WARN")
 
 
+# ============================================================
+# KAIROS SERVER-SAFE WAVE GOVERNOR (EMERGENCY PERFORMANCE FIX)
+# ============================================================
+# This overlay is intentionally placed BEFORE app.run so Render loads it.
+# It preserves the existing army / Citizens / Sentinel structure, but makes
+# wave timing and mob caps HARD limits instead of suggestions.
+
+KAIROS_SAFE_WAVE_GOVERNOR_ENABLED = os.getenv("KAIROS_SAFE_WAVE_GOVERNOR_ENABLED", "true").lower() == "true"
+
+# Real cooldown target requested: 30-60 seconds. Default is 45 seconds.
+WAVE_COOLDOWN_SECONDS = max(safe_float(os.getenv("WAVE_COOLDOWN_SECONDS", globals().get("WAVE_COOLDOWN_SECONDS", 45.0)), 45.0), 30.0)
+GLOBAL_WAVE_COOLDOWN_SECONDS = max(safe_float(os.getenv("GLOBAL_WAVE_COOLDOWN_SECONDS", "20"), 20.0), 10.0)
+
+# Hard performance caps. These override the older aggressive/relentless tuning.
+MAX_ACTIVE_UNITS = min(safe_int(os.getenv("MAX_ACTIVE_UNITS", globals().get("MAX_ACTIVE_UNITS", 30)), 30), 30)
+MAX_GLOBAL_NPCS = min(safe_int(os.getenv("MAX_GLOBAL_NPCS", globals().get("MAX_GLOBAL_NPCS", 35)), 35), 35)
+MAX_UNITS_PER_PLAYER = min(safe_int(os.getenv("MAX_UNITS_PER_PLAYER", globals().get("MAX_UNITS_PER_PLAYER", 8)), 8), 8)
+MAX_ACTIVE_UNITS_PER_PLAYER = min(safe_int(os.getenv("MAX_ACTIVE_UNITS_PER_PLAYER", globals().get("MAX_ACTIVE_UNITS_PER_PLAYER", 8)), 8), 8)
+MAX_ACTIVE_WAVES_PER_PLAYER = min(safe_int(os.getenv("MAX_ACTIVE_WAVES_PER_PLAYER", globals().get("MAX_ACTIVE_WAVES_PER_PLAYER", 1)), 1), 1)
+
+# Smaller waves. Kairos stays dangerous, but no longer floods the server.
+BASE_WAVE_SIZE = min(safe_int(os.getenv("BASE_WAVE_SIZE", globals().get("BASE_WAVE_SIZE", 2)), 2), 2)
+MAX_WAVE_SIZE = min(safe_int(os.getenv("MAX_WAVE_SIZE", globals().get("MAX_WAVE_SIZE", 4)), 4), 4)
+SAFE_MAX_UNITS_PER_WAVE = min(safe_int(os.getenv("SAFE_MAX_UNITS_PER_WAVE", "4"), 4), 4)
+
+# Wave/engagement duration: 5-10 minutes, then cleanup eligibility.
+MIN_WAVE_DURATION = max(safe_int(os.getenv("MIN_WAVE_DURATION", "300"), 300), 300)
+MAX_WAVE_DURATION = min(max(safe_int(os.getenv("MAX_WAVE_DURATION", "600"), 600), 300), 600)
+ENGAGEMENT_DURATION_SECONDS = min(max(safe_int(os.getenv("ENGAGEMENT_DURATION_SECONDS", globals().get("ENGAGEMENT_DURATION_SECONDS", 600)), 600), 300), 600)
+UNIT_LIFETIME_SECONDS = min(max(safe_int(os.getenv("UNIT_LIFETIME_SECONDS", globals().get("UNIT_LIFETIME_SECONDS", 360)), 360), 240), 600)
+UNIT_DESPAWN_SECONDS = UNIT_LIFETIME_SECONDS
+
+# Slow command pressure down; this prevents one player from receiving stacked actions.
+TARGET_ACTION_COOLDOWN = max(safe_float(os.getenv("TARGET_ACTION_COOLDOWN", globals().get("TARGET_ACTION_COOLDOWN", 3.0)), 3.0), 2.5)
+GLOBAL_ACTION_COOLDOWN = max(safe_float(os.getenv("GLOBAL_ACTION_COOLDOWN", globals().get("GLOBAL_ACTION_COOLDOWN", 0.15)), 0.15), 0.10)
+UNIT_SPAWN_DELAY = max(safe_float(os.getenv("UNIT_SPAWN_DELAY", globals().get("UNIT_SPAWN_DELAY", 0.75)), 0.75), 0.50)
+
+# Passive pressure can still exist, but it cannot rapid-fire waves anymore.
+PASSIVE_PRESSURE_COOLDOWN = max(safe_int(os.getenv("PASSIVE_PRESSURE_COOLDOWN", globals().get("PASSIVE_PRESSURE_COOLDOWN", 120)), 120), 90)
+ENABLE_PERSISTENT_ENGAGEMENT = os.getenv("ENABLE_PERSISTENT_ENGAGEMENT", "false").lower() == "true"
+ENABLE_PERSISTENT_HUNTS = os.getenv("ENABLE_PERSISTENT_HUNTS", "false").lower() == "true"
+ENABLE_MULTI_WAVE_ATTACKS = os.getenv("ENABLE_MULTI_WAVE_ATTACKS", "true").lower() == "true"
+ENABLE_SPAWN_LIMITS = True
+ENABLE_AUTO_CLEANUP = True
+ENABLE_UNIT_DESPAWN = True
+
+# The vanilla fallback was doubling pressure after Citizens/Sentinel waves. Keep it off by default.
+ENABLE_VANILLA_FALLBACK_MOBS = os.getenv("ENABLE_VANILLA_FALLBACK_MOBS", "false").lower() == "true"
+
+_wave_reservations = globals().get("_wave_reservations", {})
+_real_wave_spawn_times = globals().get("_real_wave_spawn_times", {})
+_real_global_wave_time = globals().get("_real_global_wave_time", 0.0)
+
+
+def _safe_player_unit_count(player_id):
+    try:
+        return len(player_unit_map.get(player_id, set()))
+    except Exception:
+        return 0
+
+
+def _safe_total_unit_count():
+    try:
+        return len(active_units)
+    except Exception:
+        return 0
+
+
+def _prune_finished_waves_for_player(player_id):
+    try:
+        now = unix_ts()
+        waves = active_waves.get(player_id, [])
+        kept = []
+        for wave in waves:
+            start = safe_float(wave.get("start_time", wave.get("created_at", now)), now)
+            if now - start < MAX_WAVE_DURATION:
+                kept.append(wave)
+        active_waves[player_id] = kept
+    except Exception:
+        pass
+
+
+def _available_spawn_slots(player_id):
+    total_room = max(0, min(MAX_ACTIVE_UNITS, MAX_GLOBAL_NPCS) - _safe_total_unit_count())
+    player_room = max(0, min(MAX_UNITS_PER_PLAYER, MAX_ACTIVE_UNITS_PER_PLAYER) - _safe_player_unit_count(player_id))
+    return max(0, min(total_room, player_room, SAFE_MAX_UNITS_PER_WAVE))
+
+
+def can_spawn_more_units(player):
+    try:
+        if not KAIROS_SAFE_WAVE_GOVERNOR_ENABLED:
+            return True
+        return _available_spawn_slots(player) > 0
+    except Exception as e:
+        log(f"Spawn check error: {e}", "ERROR")
+        return False
+
+
+def can_spawn_wave(player_id: str) -> bool:
+    """Hard wave gate: cooldown + active wave count + global/player NPC caps."""
+    global _real_global_wave_time
+    try:
+        if not KAIROS_SAFE_WAVE_GOVERNOR_ENABLED:
+            return True
+        if not player_id:
+            return False
+
+        now = unix_ts()
+        _prune_finished_waves_for_player(player_id)
+
+        if _available_spawn_slots(player_id) <= 0:
+            log(f"Wave blocked for {player_id}: NPC cap reached total={_safe_total_unit_count()} player={_safe_player_unit_count(player_id)}", level="WARN")
+            return False
+
+        if len(active_waves.get(player_id, [])) >= MAX_ACTIVE_WAVES_PER_PLAYER:
+            log(f"Wave blocked for {player_id}: active wave limit reached", level="WARN")
+            return False
+
+        if now - _real_global_wave_time < GLOBAL_WAVE_COOLDOWN_SECONDS:
+            return False
+
+        last = _real_wave_spawn_times.get(player_id, last_wave_times.get(player_id, 0.0) if "last_wave_times" in globals() else 0.0)
+        if now - last < WAVE_COOLDOWN_SECONDS:
+            return False
+
+        # Reserve so multiple systems cannot queue 10 waves before the first handler runs.
+        _wave_reservations[player_id] = now
+        last_wave_times[player_id] = now
+        _real_global_wave_time = now
+        return True
+    except Exception as e:
+        log(f"can_spawn_wave safety failure: {e}", level="ERROR")
+        return False
+
+
+def _mark_wave_spawned(player_id, count):
+    global _real_global_wave_time
+    now = unix_ts()
+    _real_wave_spawn_times[player_id] = now
+    last_wave_times[player_id] = now
+    _real_global_wave_time = now
+    try:
+        active_waves[player_id].append({
+            "wave_id": generate_operation_id() if "generate_operation_id" in globals() else gen_id("wave"),
+            "units": [],
+            "start_time": now,
+            "end_time": now + MAX_WAVE_DURATION,
+            "tier": str(threat_scores.get(player_id, {}).get("tier", "target")),
+            "count": count,
+            "safety_governed": True,
+        })
+    except Exception:
+        pass
+
+
+try:
+    _KAIROS_PRE_SAFE_HANDLE_SPAWN_WAVE = handle_spawn_wave
+except Exception:
+    _KAIROS_PRE_SAFE_HANDLE_SPAWN_WAVE = None
+
+
+def handle_spawn_wave(action):
+    """Final spawn-wave governor. Keeps original structure, clamps counts, blocks runaway waves."""
+    try:
+        action = dict(action or {})
+        player_id = action.get("target")
+        if not player_id:
+            return False
+
+        now = unix_ts()
+        reserved_at = _wave_reservations.pop(player_id, 0.0)
+        bypass_requested = bool(action.get("bypass_cooldown"))
+        true_admin_bypass = bypass_requested and bool(globals().get("ENABLE_FORCE_ACTIONS", False))
+
+        # Do NOT let passive systems bypass cooldown. Only ENABLE_FORCE_ACTIONS can do that.
+        if not true_admin_bypass and now - reserved_at > 5.0:
+            if not can_spawn_wave(player_id):
+                log(f"Spawn wave denied by safety governor: {player_id}", level="WARN")
+                return False
+
+        slots = _available_spawn_slots(player_id)
+        if slots <= 0:
+            log(f"Spawn wave cancelled: no NPC slots available for {player_id}", level="WARN")
+            return False
+
+        requested = safe_int(action.get("count", BASE_WAVE_SIZE), BASE_WAVE_SIZE)
+        safe_count = max(1, min(requested, slots, SAFE_MAX_UNITS_PER_WAVE, MAX_WAVE_SIZE))
+        action["count"] = safe_count
+        action["bypass_cooldown"] = False
+
+        _mark_wave_spawned(player_id, safe_count)
+
+        if callable(_KAIROS_PRE_SAFE_HANDLE_SPAWN_WAVE):
+            result = _KAIROS_PRE_SAFE_HANDLE_SPAWN_WAVE(action)
+        else:
+            result = False
+
+        # Optional fallback is disabled by default because it can double-spawn mobs.
+        if ENABLE_VANILLA_FALLBACK_MOBS and not result:
+            template = str(action.get("template", "hunter") or "hunter").lower()
+            fallback_count = min(1, safe_count)
+            fallback_cmds = _citizens_command_fallbacks(player_id, template=template, count=fallback_count) if "_citizens_command_fallbacks" in globals() else []
+            if fallback_cmds:
+                send_http_commands(fallback_cmds)
+
+        log(f"Safety-governed wave executed: {player_id} count={safe_count} cooldown={WAVE_COOLDOWN_SECONDS}s caps={MAX_UNITS_PER_PLAYER}/{MAX_GLOBAL_NPCS}", level="INFO")
+        return result
+    except Exception as e:
+        log_exception("Safety-governed spawn wave failed", e)
+        return False
+
+
+# Replace any over-aggressive fallback tier counts with safe values.
+def _bridge_default_wave_for_tier(player_id, tier, score=0.0):
+    tier = str(tier or "target").lower()
+    if tier == "maximum":
+        return {"type": "spawn_wave", "target": player_id, "template": "enforcer", "count": min(3, SAFE_MAX_UNITS_PER_WAVE)}
+    if tier == "hunt":
+        return {"type": "spawn_wave", "target": player_id, "template": "hunter", "count": min(2, SAFE_MAX_UNITS_PER_WAVE)}
+    return {"type": "spawn_wave", "target": player_id, "template": "scout", "count": 1}
+
+
+log(f"Kairos safe wave governor loaded: cooldown={WAVE_COOLDOWN_SECONDS}s global_cooldown={GLOBAL_WAVE_COOLDOWN_SECONDS}s max_global={MAX_GLOBAL_NPCS} max_per_player={MAX_UNITS_PER_PLAYER} max_wave={SAFE_MAX_UNITS_PER_WAVE}", level="INFO")
+
+
+
 if __name__ == "__main__":
     try:
         start_background_systems()
