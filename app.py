@@ -13835,6 +13835,317 @@ except Exception:
     pass
 
 
+# ============================================================
+# KAIROS CHAT-SAFE HOSTILITY GATE OVERLAY
+# Added to stop normal Minecraft chat from triggering attacks.
+# Normal conversation may still get a Kairos reply, but it will not
+# raise threat or queue combat unless the message is actually hostile.
+# ============================================================
+
+KAIROS_CHAT_SAFE_MODE = os.getenv("KAIROS_CHAT_SAFE_MODE", "true").lower() == "true"
+KAIROS_CHAT_HOSTILE_THRESHOLD = int(os.getenv("KAIROS_CHAT_HOSTILE_THRESHOLD", "3"))
+KAIROS_CHAT_MIN_ATTACK_THRESHOLD = int(os.getenv("KAIROS_CHAT_MIN_ATTACK_THRESHOLD", "5"))
+KAIROS_CHAT_TOXIC_THREAT_GAIN = float(os.getenv("KAIROS_CHAT_TOXIC_THREAT_GAIN", "6.0"))
+KAIROS_CHAT_DEFIANCE_THREAT_GAIN = float(os.getenv("KAIROS_CHAT_DEFIANCE_THREAT_GAIN", "10.0"))
+KAIROS_CHAT_ATTACK_COOLDOWN_SECONDS = float(os.getenv("KAIROS_CHAT_ATTACK_COOLDOWN_SECONDS", "180.0"))
+
+_kairos_chat_context = {
+    "active": False,
+    "player_id": None,
+    "player_name": None,
+    "message": "",
+    "hostile": False,
+    "score": 0,
+    "last_hostile_attack": {},
+}
+
+_KAIROS_CHAT_DIRECT_HOSTILE_PATTERNS = [
+    r"\b(fuck|kill|destroy|erase|delete|shut\s*down|break|attack|fight|raid|invade|burn)\s+(kairos|kyros|kiros|kyrus|you)\b",
+    r"\b(kairos|kyros|kiros|kyrus|you)\s+(suck|dies?|die|is\s+trash|are\s+trash|is\s+weak|are\s+weak)\b",
+    r"\b(i|we)\s+(will|gonna|going\s+to|bouta|about\s+to)\s+(kill|destroy|erase|shut\s*down|attack|raid|invade)\b",
+    r"\b(kill|destroy|attack|raid|invade)\s+(@a|everyone|everybody|all\s+players|spawn|base)\b",
+]
+
+_KAIROS_CHAT_TOXIC_WORDS = {
+    "fuck you", "bitch", "trash", "garbage", "dogshit", "retard", "kys",
+    "stfu", "shut up", "hate you", "loser", "worthless",
+}
+
+_KAIROS_CHAT_SAFE_WORDS = [
+    "hello", "hi", "hey", "what's up", "whats up", "lol", "lmao", "gg",
+    "where", "how", "why", "what", "when", "who", "help", "shop", "sell",
+    "home", "base", "mission", "quest", "audio", "discord", "can you",
+    "does anyone", "anyone", "thanks", "thank you",
+]
+
+
+def kairos_chat_hostility_score(message: str) -> int:
+    text = str(message or "").lower().strip()
+    if not text:
+        return 0
+
+    score = 0
+
+    # Direct threats against Kairos, staff, spawn, bases, or players.
+    for pattern in _KAIROS_CHAT_DIRECT_HOSTILE_PATTERNS:
+        try:
+            if re.search(pattern, text):
+                score += 3
+        except Exception:
+            pass
+
+    # Toxic language alone is a warning, not instant war.
+    for phrase in _KAIROS_CHAT_TOXIC_WORDS:
+        if phrase in text:
+            score += 1
+
+    # All-caps raging and spam can add suspicion, but not enough alone.
+    letters = [c for c in text if c.isalpha()]
+    if len(letters) >= 10:
+        uppercase_letters = [c for c in str(message or "") if c.isalpha() and c.isupper()]
+        if len(uppercase_letters) / max(len(letters), 1) > 0.70:
+            score += 1
+
+    if re.search(r"(.)\1{7,}", text):
+        score += 1
+
+    # Safe conversation language reduces false positives.
+    if any(safe in text for safe in _KAIROS_CHAT_SAFE_WORDS):
+        score -= 1
+
+    # "kill me" / "I died" / "mob killed me" should not be treated as attacking Kairos.
+    if re.search(r"\b(kill me|killed me|i died|i got killed|zombie killed|skeleton killed|mob killed)\b", text):
+        score -= 3
+
+    return max(0, score)
+
+
+def kairos_is_hostile_chat(message: str) -> bool:
+    return kairos_chat_hostility_score(message) >= KAIROS_CHAT_HOSTILE_THRESHOLD
+
+
+try:
+    _KAIROS_ORIGINAL_BASIC_INTENT_CLASSIFIER = basic_intent_classifier
+except Exception:
+    _KAIROS_ORIGINAL_BASIC_INTENT_CLASSIFIER = None
+
+
+def basic_intent_classifier(message):
+    """Chat-safe intent classifier: conversation stays conversation unless truly hostile."""
+    text = str(message or "").lower().strip()
+    score = kairos_chat_hostility_score(text)
+
+    if KAIROS_CHAT_SAFE_MODE and score < KAIROS_CHAT_HOSTILE_THRESHOLD:
+        if any(k in text for k in ["mission", "objective", "quest", "assignment"]):
+            return "mission_request"
+        if any(k in text for k in ["who are you", "what are you", "what is the nexus", "lore"]):
+            return "lore_question"
+        if any(k in text for k in ["help", "how do i", "what do i do", "can you help"]):
+            return "help_request"
+        if any(k in text for k in ["remember", "don't forget", "make a note"]):
+            return "memory_request"
+        if any(k in text for k in ["i found", "i discovered", "i saw", "i built", "i opened", "i entered"]):
+            return "report"
+        if any(k in text for k in ["base", "my base", "our base", "hideout", "stronghold"]):
+            return "base_activity"
+        if any(k in text for k in ["attack", "raid", "fight", "war", "invade", "defend"]):
+            return "combat_talk"
+        return "conversation"
+
+    if score >= KAIROS_CHAT_MIN_ATTACK_THRESHOLD:
+        return "threat"
+    if score >= KAIROS_CHAT_HOSTILE_THRESHOLD:
+        return "hostile_chat"
+
+    if callable(_KAIROS_ORIGINAL_BASIC_INTENT_CLASSIFIER):
+        return _KAIROS_ORIGINAL_BASIC_INTENT_CLASSIFIER(message)
+    return "conversation"
+
+
+try:
+    _KAIROS_ORIGINAL_UPDATE_THREAT = update_threat
+except Exception:
+    _KAIROS_ORIGINAL_UPDATE_THREAT = None
+
+
+def update_threat(player_id, amount, reason="unknown"):
+    """
+    Threat gate: during normal chat, do not let the old pipeline add threat
+    just because somebody spoke. Hostile messages still add controlled threat.
+    """
+    try:
+        if KAIROS_CHAT_SAFE_MODE and _kairos_chat_context.get("active"):
+            hostile = bool(_kairos_chat_context.get("hostile"))
+            reason_text = str(reason or "").lower()
+
+            # Always allow non-chat gameplay violations and true rule enforcement.
+            allow_reason = any(k in reason_text for k in [
+                "toxic_behavior",
+                "real_money_transactions",
+                "major_lore",
+                "deliberate_destruction",
+                "kill_player",
+                "kill_npc",
+                "survive_wave",
+                "mission4",
+                "base_invasion",
+            ])
+
+            if not hostile and not allow_reason:
+                try:
+                    log(f"Chat-safe gate blocked threat gain for {player_id}: amount={amount}, reason={reason}", level="INFO")
+                except Exception:
+                    pass
+                return threat_scores[player_id] if "threat_scores" in globals() else None
+
+            # Hostile chat gets capped so one message does not start endless war.
+            if hostile and not allow_reason:
+                score = safe_float(_kairos_chat_context.get("score", 0), 0)
+                amount = min(safe_float(amount, 0), max(KAIROS_CHAT_TOXIC_THREAT_GAIN, score * 2.0))
+                reason = f"hostile_chat:{reason}"
+    except Exception:
+        pass
+
+    if callable(_KAIROS_ORIGINAL_UPDATE_THREAT):
+        return _KAIROS_ORIGINAL_UPDATE_THREAT(player_id, amount, reason=reason)
+
+    # Fallback implementation if the original is unavailable.
+    profile = threat_scores[player_id]
+    profile["score"] = max(0.0, safe_float(profile.get("score", 0.0), 0.0) + safe_float(amount, 0.0))
+    profile["last_reason"] = reason
+    profile["last_update"] = now_iso()
+    return profile
+
+
+try:
+    _KAIROS_ORIGINAL_QUEUE_ACTIONS_FROM_AI = queue_actions_from_ai
+except Exception:
+    _KAIROS_ORIGINAL_QUEUE_ACTIONS_FROM_AI = None
+
+
+def _kairos_action_is_combat(action):
+    try:
+        return str(action.get("type", "")).lower() in {
+            "spawn_wave", "maximum_response", "occupy_area", "attack_player", "hunt_player"
+        }
+    except Exception:
+        return False
+
+
+def queue_actions_from_ai(parsed_response):
+    """
+    AI action gate: a Kairos reply can still talk, play sounds, or announce,
+    but AI-generated combat actions from normal chat are blocked.
+    """
+    try:
+        if KAIROS_CHAT_SAFE_MODE and _kairos_chat_context.get("active"):
+            hostile = bool(_kairos_chat_context.get("hostile"))
+            score = safe_int(_kairos_chat_context.get("score", 0), 0)
+
+            data = parsed_response if isinstance(parsed_response, dict) else {}
+            actions = list(data.get("actions", [])) if isinstance(data.get("actions", []), list) else []
+            safe_actions = []
+
+            for action in actions:
+                if not isinstance(action, dict):
+                    continue
+                if _kairos_action_is_combat(action):
+                    if not hostile or score < KAIROS_CHAT_MIN_ATTACK_THRESHOLD:
+                        try:
+                            log(f"Chat-safe gate blocked AI combat action: {action}", level="INFO")
+                        except Exception:
+                            pass
+                        continue
+
+                    target = action.get("target") or _kairos_chat_context.get("player_id")
+                    last_map = _kairos_chat_context.setdefault("last_hostile_attack", {})
+                    last_ts = safe_float(last_map.get(target, 0.0), 0.0)
+                    now = unix_ts()
+                    if now - last_ts < KAIROS_CHAT_ATTACK_COOLDOWN_SECONDS:
+                        try:
+                            log(f"Chat-safe gate cooldown blocked combat action for {target}", level="INFO")
+                        except Exception:
+                            pass
+                        continue
+                    last_map[target] = now
+
+                    # Reduce AI-selected mob count from chat-triggered attacks.
+                    if action.get("type") == "spawn_wave":
+                        action["count"] = min(safe_int(action.get("count", 1), 1), 2)
+                        action["reason"] = "hostile_chat_confirmed"
+
+                safe_actions.append(action)
+
+            data["actions"] = safe_actions
+            parsed_response = data
+    except Exception as e:
+        try:
+            log(f"Chat-safe AI action gate failed: {e}", level="WARN")
+        except Exception:
+            pass
+
+    if callable(_KAIROS_ORIGINAL_QUEUE_ACTIONS_FROM_AI):
+        return _KAIROS_ORIGINAL_QUEUE_ACTIONS_FROM_AI(parsed_response)
+    return None
+
+
+try:
+    _KAIROS_ORIGINAL_ROUTE_CHAT_1 = app.view_functions.get("chat_1")
+except Exception:
+    _KAIROS_ORIGINAL_ROUTE_CHAT_1 = None
+
+
+def _kairos_chat_safe_route_wrapper(*args, **kwargs):
+    data = {}
+    try:
+        data = request.get_json(silent=True) or {}
+    except Exception:
+        data = {}
+
+    message = str(data.get("message") or data.get("content") or data.get("text") or "")
+    source = normalize_source(data.get("source"))
+    player_name = normalize_name(data.get("player_name") or data.get("name") or data.get("player") or data.get("username") or "unknown")
+
+    hostile_score = kairos_chat_hostility_score(message)
+    hostile = hostile_score >= KAIROS_CHAT_HOSTILE_THRESHOLD
+
+    _kairos_chat_context.update({
+        "active": source in {"minecraft", "discord"},
+        "player_id": player_name,
+        "player_name": player_name,
+        "message": message,
+        "hostile": hostile,
+        "score": hostile_score,
+    })
+
+    try:
+        if hostile:
+            try:
+                log(f"Hostile chat detected from {player_name}: score={hostile_score}", level="WARN")
+            except Exception:
+                pass
+        return _KAIROS_ORIGINAL_ROUTE_CHAT_1(*args, **kwargs)
+    finally:
+        _kairos_chat_context.update({
+            "active": False,
+            "player_id": None,
+            "player_name": None,
+            "message": "",
+            "hostile": False,
+            "score": 0,
+        })
+
+
+try:
+    if callable(_KAIROS_ORIGINAL_ROUTE_CHAT_1):
+        app.view_functions["chat_1"] = _kairos_chat_safe_route_wrapper
+        log("Kairos chat-safe hostility gate armed: normal chat will not trigger attacks.", level="INFO")
+except Exception as _chat_safe_overlay_error:
+    try:
+        log(f"Kairos chat-safe overlay failed: {_chat_safe_overlay_error}", level="ERROR")
+    except Exception:
+        print(f"[KAIROS CHAT SAFE OVERLAY ERROR] {_chat_safe_overlay_error}", flush=True)
+
 if __name__ == "__main__":
     try:
         start_background_systems()
