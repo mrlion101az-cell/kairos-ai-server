@@ -14202,3 +14202,77 @@ if __name__ == "__main__":
         log_exception("start_background_systems failed", e)
     log("Starting Kairos AI server...")
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", "10000")), threaded=True)
+
+
+# ================================
+# KAIROS HARD CAP + EMOTION SYSTEM (INJECTED FIX)
+# ================================
+
+# ---- HARD CAPS (OVERRIDE EVERYTHING) ----
+MAX_ACTIVE_UNITS = 16
+MAX_UNITS_PER_PLAYER = 16
+MAX_ACTIVE_WAVES_PER_PLAYER = 1
+MAX_WAVE_SIZE = 4
+BASE_WAVE_SIZE = 2
+
+# Safety enforcement at runtime
+def enforce_unit_caps():
+    global active_units, player_unit_map
+    try:
+        # Global cap
+        if len(active_units) > MAX_ACTIVE_UNITS:
+            to_remove = list(active_units.keys())[MAX_ACTIVE_UNITS:]
+            for uid in to_remove:
+                active_units.pop(uid, None)
+
+        # Per-player cap
+        for player, units in list(player_unit_map.items()):
+            if len(units) > MAX_UNITS_PER_PLAYER:
+                overflow = list(units)[MAX_UNITS_PER_PLAYER:]
+                for uid in overflow:
+                    active_units.pop(uid, None)
+                    units.discard(uid)
+    except Exception as e:
+        print("[CAP ERROR]", e)
+
+
+# Hook into action loop safety
+_original_action_loop = action_loop
+def action_loop():
+    enforce_unit_caps()
+    _original_action_loop()
+
+
+# ---- EMOTION SYSTEM ----
+kairos_emotions = {
+    "current": "neutral",
+    "last_change": time.time()
+}
+
+EMOTION_STATES = [
+    "calm",
+    "curious",
+    "neutral",
+    "focused",
+    "irritated",
+    "hostile"
+]
+
+def update_emotion():
+    now = time.time()
+    duration = now - kairos_emotions["last_change"]
+
+    # Long emotional states (hours)
+    if duration > random.randint(1800, 7200):  # 30 min to 2 hours
+        kairos_emotions["current"] = random.choice(EMOTION_STATES)
+        kairos_emotions["last_change"] = now
+
+
+# Hook into idle loop
+_original_idle_loop = idle_loop if 'idle_loop' in globals() else None
+
+def idle_loop():
+    update_emotion()
+    if _original_idle_loop:
+        _original_idle_loop()
+
