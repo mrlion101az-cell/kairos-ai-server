@@ -25,6 +25,26 @@ from flask import Flask, request, jsonify
 from openai import OpenAI
 
 app = Flask(__name__)
+
+# ============================================================
+# PLATFORM-SAFE RESPONSE (NO DUPLICATES)
+# ============================================================
+def send_kairos_response(reply_text, source, player=None):
+    try:
+        source = normalize_source(source)
+
+        if source == "minecraft":
+            send_to_minecraft(reply_text, player)
+
+        elif source == "discord":
+            send_to_discord(reply_text)
+
+        else:
+            send_to_minecraft(reply_text, player)
+
+    except Exception as e:
+        log_exception("send_kairos_response failed", e)
+
 # ================================
 # COMMAND CLEAN FIX (SAFE)
 # ================================
@@ -14514,3 +14534,21 @@ def idle_loop():
     if _original_idle_loop:
         _original_idle_loop()
 
+
+
+def should_send_idle_message():
+    global last_idle_message_time
+
+    now = time.time()
+
+    if now - last_idle_message_time < IDLE_TRIGGER_SECONDS:
+        return False
+
+    if now - last_activity_time > 600:
+        return False
+
+    if random.random() > 0.65:
+        return False
+
+    last_idle_message_time = now
+    return True
