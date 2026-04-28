@@ -14118,6 +14118,11 @@ def _kairos_chat_safe_route_wrapper(*args, **kwargs):
         "score": hostile_score,
     })
 
+    # SAFE PATCH: mirror Minecraft player chat into Discord without touching Kairos war/AI behavior.
+    # Only Minecraft-origin messages are mirrored, so Discord -> Minecraft messages do not echo back.
+    if source == "minecraft" and message:
+        kairos_mirror_minecraft_chat_to_discord(player_name, message)
+
     try:
         if hostile:
             try:
@@ -14136,6 +14141,50 @@ def _kairos_chat_safe_route_wrapper(*args, **kwargs):
         })
 
 
+# ------------------------------------------------------------
+# Minecraft -> Discord chat mirror (SAFE PATCH)
+# ------------------------------------------------------------
+# This patch ONLY mirrors Minecraft chat into Discord.
+# It does not change Kairos behavior, war engine logic, NPC logic, cooldowns, or AI replies.
+def kairos_mirror_minecraft_chat_to_discord(player_name, message):
+    try:
+        if not DISCORD_WEBHOOK_URL:
+            try:
+                log("Discord webhook not configured; Minecraft chat mirror skipped.", level="WARN")
+            except Exception:
+                print("Discord webhook not configured; Minecraft chat mirror skipped.", flush=True)
+            return False
+
+        player_name = sanitize_text(player_name or "Unknown", 80)
+        message = sanitize_text(message or "", 1800)
+        if not message:
+            return False
+
+        payload = {
+            "username": "Minecraft Chat",
+            "content": f"🟣 **{player_name}**: {message}"
+        }
+        r = requests.post(DISCORD_WEBHOOK_URL, json=payload, timeout=REQUEST_TIMEOUT)
+        if 200 <= r.status_code < 300:
+            try:
+                log(f"Minecraft chat mirrored to Discord for {player_name}", level="INFO")
+            except Exception:
+                pass
+            return True
+
+        try:
+            log(f"Minecraft chat mirror Discord API error: {r.status_code} {getattr(r, 'text', '')[:200]}", level="WARN")
+        except Exception:
+            pass
+        return False
+    except Exception as e:
+        try:
+            log(f"Minecraft chat mirror failed: {e}", level="ERROR")
+        except Exception:
+            print(f"[MC->DISCORD MIRROR ERROR] {e}", flush=True)
+        return False
+
+
 try:
     if callable(_KAIROS_ORIGINAL_ROUTE_CHAT_1):
         app.view_functions["chat_1"] = _kairos_chat_safe_route_wrapper
@@ -14145,343 +14194,6 @@ except Exception as _chat_safe_overlay_error:
         log(f"Kairos chat-safe overlay failed: {_chat_safe_overlay_error}", level="ERROR")
     except Exception:
         print(f"[KAIROS CHAT SAFE OVERLAY ERROR] {_chat_safe_overlay_error}", flush=True)
-
-
-# ============================================================
-# KAIROS BALANCED WAR + MC -> DISCORD BRIDGE OVERLAY
-# Added by ChatGPT for Nexus Mission 4 stability.
-# Purpose:
-# - Keep the full existing Kairos structure intact.
-# - Stop normal Minecraft conversation from triggering waves.
-# - Allow hostile/disrespectful chat to trigger controlled escalation.
-# - Lower NPC/mob caps and wave intensity.
-# - Mirror Minecraft chat into Discord through DISCORD_WEBHOOK_URL.
-# ============================================================
-
-KAIROS_BALANCED_WAR_MODE = os.getenv("KAIROS_BALANCED_WAR_MODE", "true").lower() == "true"
-MC_TO_DISCORD_ENABLED = os.getenv("MC_TO_DISCORD_ENABLED", "true").lower() == "true"
-
-# Balanced defaults are intentionally lower than the old war build.
-# You can still override these in Render with environment variables.
-if KAIROS_BALANCED_WAR_MODE:
-    MAX_ACTIVE_UNITS = int(os.getenv("MAX_ACTIVE_UNITS", "25"))
-    MAX_GLOBAL_NPCS = int(os.getenv("MAX_GLOBAL_NPCS", "35"))
-    MAX_UNITS_PER_PLAYER = int(os.getenv("MAX_UNITS_PER_PLAYER", "6"))
-    MAX_ACTIVE_UNITS_PER_PLAYER = int(os.getenv("MAX_ACTIVE_UNITS_PER_PLAYER", "6"))
-    MAX_ACTIVE_WAVES_PER_PLAYER = int(os.getenv("MAX_ACTIVE_WAVES_PER_PLAYER", "1"))
-    MAX_ACTIVE_SQUADS = int(os.getenv("MAX_ACTIVE_SQUADS", "6"))
-    BASE_WAVE_SIZE = int(os.getenv("BASE_WAVE_SIZE", "1"))
-    MAX_WAVE_SIZE = int(os.getenv("MAX_WAVE_SIZE", "4"))
-    UNIT_SPAWN_DELAY = float(os.getenv("UNIT_SPAWN_DELAY", "0.85"))
-    WAVE_COOLDOWN_SECONDS = float(os.getenv("WAVE_COOLDOWN_SECONDS", "75"))
-    GLOBAL_BALANCED_WAVE_COOLDOWN_SECONDS = float(os.getenv("GLOBAL_BALANCED_WAVE_COOLDOWN_SECONDS", "35"))
-    CHAT_HOSTILE_ATTACK_COOLDOWN_SECONDS = float(os.getenv("CHAT_HOSTILE_ATTACK_COOLDOWN_SECONDS", "120"))
-    CHAT_MAX_WAVE_COUNT = int(os.getenv("CHAT_MAX_WAVE_COUNT", "2"))
-
-    # Passive pressure stays creepy, but stops being a constant mob faucet.
-    ENABLE_MULTI_WAVE_ATTACKS = os.getenv("ENABLE_MULTI_WAVE_ATTACKS", "false").lower() == "true"
-    ENABLE_PERSISTENT_ENGAGEMENT = os.getenv("ENABLE_PERSISTENT_ENGAGEMENT", "false").lower() == "true"
-    ENABLE_PERSISTENT_HUNTS = os.getenv("ENABLE_PERSISTENT_HUNTS", "false").lower() == "true"
-    PASSIVE_MOB_MIN_SECONDS = int(os.getenv("PASSIVE_MOB_MIN_SECONDS", "180"))
-    PASSIVE_MOB_MAX_SECONDS = int(os.getenv("PASSIVE_MOB_MAX_SECONDS", "420"))
-    PASSIVE_MOB_CHANCE = float(os.getenv("PASSIVE_MOB_CHANCE", "0.22"))
-    PASSIVE_MOB_COUNT_MIN = int(os.getenv("PASSIVE_MOB_COUNT_MIN", "1"))
-    PASSIVE_MOB_COUNT_MAX = int(os.getenv("PASSIVE_MOB_COUNT_MAX", "2"))
-    PASSIVE_MOB_MAX_PLAYERS_PER_TICK = int(os.getenv("PASSIVE_MOB_MAX_PLAYERS_PER_TICK", "1"))
-    PASSIVE_MOB_COMMAND_BURST_LIMIT = int(os.getenv("PASSIVE_MOB_COMMAND_BURST_LIMIT", "6"))
-
-# Stronger hostility detection. Normal chat = no combat. Disrespect/threats = controlled response.
-KAIROS_BALANCED_HOSTILE_TERMS = {
-    "fuck kairos", "fuck karios", "fuck you kairos", "fuck you karios",
-    "kairos is trash", "karios is trash", "kairos sucks", "karios sucks",
-    "stupid ai", "dumb ai", "bitch", "shut up kairos", "shut up karios",
-    "kill me kairos", "kill me karios", "come kill me", "come at me",
-    "try me", "do something", "attack me", "fight me", "i dare you",
-    "you can't kill me", "you cant kill me", "weak ai", "trash ai",
-}
-
-KAIROS_BALANCED_SOFT_TALK_TERMS = {
-    "hello", "hey", "hi", "where are you", "where is", "who has",
-    "can someone", "does anyone", "i need help", "thanks", "thank you",
-    "lol", "lmao", "gg", "brb", "coming", "omw", "where should",
-}
-
-def kairos_balanced_hostility_score(message):
-    text = str(message or "").lower().strip()
-    if not text:
-        return 0
-
-    score = 0
-
-    if any(term in text for term in KAIROS_BALANCED_SOFT_TALK_TERMS):
-        score -= 2
-
-    if any(term in text for term in KAIROS_BALANCED_HOSTILE_TERMS):
-        score += 8
-
-    # Direct violent language aimed at Kairos/the system.
-    if re.search(r"\b(kill|fight|attack|destroy|raid|burn|wipe)\b.*\b(kairos|karios|ai|system)\b", text):
-        score += 7
-    if re.search(r"\b(kairos|karios|ai|system)\b.*\b(kill|fight|attack|destroy|raid|burn|wipe)\b", text):
-        score += 7
-
-    # General insults near Kairos.
-    if re.search(r"\b(kairos|karios|ai|system)\b.*\b(stupid|dumb|trash|weak|bitch|idiot|pathetic)\b", text):
-        score += 6
-    if re.search(r"\b(stupid|dumb|trash|weak|bitch|idiot|pathetic)\b.*\b(kairos|karios|ai|system)\b", text):
-        score += 6
-
-    # Shouting alone is not enough, but it adds weight.
-    if text.count("!") >= 3:
-        score += 2
-    if len(text) > 0 and sum(1 for c in text if c.isupper()) / max(1, sum(1 for c in text if c.isalpha())) > 0.65 and len(text) > 10:
-        score += 1
-
-    return max(0, score)
-
-def kairos_balanced_is_hostile_chat(message):
-    return kairos_balanced_hostility_score(message) >= int(os.getenv("KAIROS_BALANCED_HOSTILE_THRESHOLD", "6"))
-
-def _kairos_discord_escape(text, limit=1800):
-    safe = trim_text(str(text or ""), limit)
-    # Avoid accidental mass pings from Minecraft chat.
-    safe = safe.replace("@everyone", "@\u200beveryone").replace("@here", "@\u200bhere")
-    return safe
-
-def send_minecraft_chat_to_discord(player_name, message):
-    """Mirror incoming Minecraft chat into Discord without making the Discord bot responsible for it."""
-    if not MC_TO_DISCORD_ENABLED or not DISCORD_WEBHOOK_URL:
-        return False
-
-    msg = _kairos_discord_escape(message, 1600)
-    player = _kairos_discord_escape(player_name or "Unknown", 80)
-    if not msg:
-        return False
-
-    payload = {
-        "username": "Nexus Minecraft",
-        "content": f"🟣 **{player}**: {msg}"
-    }
-
-    try:
-        r = requests.post(DISCORD_WEBHOOK_URL, json=payload, timeout=REQUEST_TIMEOUT)
-        if 200 <= r.status_code < 300:
-            log(f"MC -> Discord mirrored for {player}", level="INFO")
-            return True
-        log(f"MC -> Discord webhook error {r.status_code}: {r.text[:200]}", level="WARN")
-    except Exception as e:
-        log(f"MC -> Discord mirror failed: {e}", level="ERROR")
-    return False
-
-try:
-    _BALANCED_ORIGINAL_CAN_SPAWN_WAVE = can_spawn_wave
-except Exception:
-    _BALANCED_ORIGINAL_CAN_SPAWN_WAVE = None
-
-_balanced_last_global_wave_time = 0.0
-_balanced_last_hostile_chat_attack = {}
-
-def can_spawn_wave(player_id: str) -> bool:
-    """Final wave cooldown gate. This overrides older aggressive cooldowns."""
-    global _balanced_last_global_wave_time
-    now = unix_ts()
-
-    if KAIROS_BALANCED_WAR_MODE:
-        if now - _balanced_last_global_wave_time < GLOBAL_BALANCED_WAVE_COOLDOWN_SECONDS:
-            return False
-
-        last = last_wave_times.get(player_id, 0.0)
-        profile = threat_scores.get(player_id, {}) if "threat_scores" in globals() else {}
-        tier = str(profile.get("tier", "idle")).lower()
-
-        cooldown = WAVE_COOLDOWN_SECONDS
-        if tier == "maximum":
-            cooldown *= 0.75
-        elif tier == "hunt":
-            cooldown *= 0.9
-        elif tier == "target":
-            cooldown *= 1.15
-        elif tier == "watch":
-            cooldown *= 1.5
-
-        if now - last < cooldown:
-            return False
-
-        last_wave_times[player_id] = now
-        _balanced_last_global_wave_time = now
-        return True
-
-    if callable(_BALANCED_ORIGINAL_CAN_SPAWN_WAVE):
-        return _BALANCED_ORIGINAL_CAN_SPAWN_WAVE(player_id)
-    return True
-
-try:
-    _BALANCED_ORIGINAL_BRIDGE_DEFAULT_WAVE = _bridge_default_wave_for_tier
-except Exception:
-    _BALANCED_ORIGINAL_BRIDGE_DEFAULT_WAVE = None
-
-def _bridge_default_wave_for_tier(player_id, tier, score=0.0):
-    """Keep fallback attacks small. Kairos should feel present, not unplayable."""
-    tier = str(tier or "idle").lower()
-    score = safe_float(score, 0.0)
-
-    if KAIROS_BALANCED_WAR_MODE:
-        if tier == "maximum":
-            return {"type": "spawn_wave", "target": player_id, "template": "enforcer", "count": 3}
-        if tier == "hunt":
-            return {"type": "spawn_wave", "target": player_id, "template": "hunter", "count": 2}
-        if tier == "target":
-            return {"type": "spawn_wave", "target": player_id, "template": "scout", "count": 1}
-        if tier == "watch":
-            return {
-                "type": "announce",
-                "channel": "actionbar",
-                "text": random.choice([
-                    "KAIROS // observation only",
-                    "KAIROS // signal logged",
-                    "KAIROS // no deployment authorized"
-                ])
-            }
-        return None
-
-    if callable(_BALANCED_ORIGINAL_BRIDGE_DEFAULT_WAVE):
-        return _BALANCED_ORIGINAL_BRIDGE_DEFAULT_WAVE(player_id, tier, score)
-    return None
-
-try:
-    _BALANCED_ORIGINAL_QUEUE_ACTION = queue_action
-except Exception:
-    _BALANCED_ORIGINAL_QUEUE_ACTION = None
-
-def _kairos_balanced_is_combat_action(action):
-    try:
-        return str(action.get("type", "")).lower() in {
-            "spawn_wave", "maximum_response", "occupy_area", "attack_player", "hunt_player",
-            "deploy_unit", "deploy_squad", "citizens_wave", "sentinel_squad"
-        }
-    except Exception:
-        return False
-
-def queue_action(action):
-    """Final action gate. Blocks chat-triggered combat unless chat was truly hostile."""
-    try:
-        if KAIROS_BALANCED_WAR_MODE and isinstance(action, dict) and _kairos_balanced_is_combat_action(action):
-            ctx = globals().get("_kairos_chat_context", {})
-            if isinstance(ctx, dict) and ctx.get("active"):
-                hostile = bool(ctx.get("hostile")) or kairos_balanced_is_hostile_chat(ctx.get("message", ""))
-                score = safe_int(ctx.get("score", 0), 0)
-                target = action.get("target") or ctx.get("player_id") or ctx.get("player_name")
-
-                if not hostile:
-                    log(f"Balanced gate blocked normal-chat combat action: {action}", level="INFO")
-                    return
-
-                now = unix_ts()
-                last = safe_float(_balanced_last_hostile_chat_attack.get(target, 0.0), 0.0)
-                if now - last < CHAT_HOSTILE_ATTACK_COOLDOWN_SECONDS:
-                    log(f"Balanced gate cooldown blocked hostile-chat combat for {target}", level="INFO")
-                    return
-                _balanced_last_hostile_chat_attack[target] = now
-
-                if action.get("type") == "spawn_wave":
-                    action["count"] = min(max(1, safe_int(action.get("count", 1), 1)), CHAT_MAX_WAVE_COUNT)
-                    action["reason"] = "balanced_hostile_chat_only"
-
-            if action.get("type") == "spawn_wave":
-                action["count"] = min(max(1, safe_int(action.get("count", 1), 1)), MAX_WAVE_SIZE)
-    except Exception as e:
-        try:
-            log(f"Balanced queue gate warning: {e}", level="WARN")
-        except Exception:
-            pass
-
-    if callable(_BALANCED_ORIGINAL_QUEUE_ACTION):
-        return _BALANCED_ORIGINAL_QUEUE_ACTION(action)
-    try:
-        command_queue.append(action)
-    except Exception:
-        pass
-
-try:
-    _BALANCED_ORIGINAL_VALIDATE_ACTIONS = validate_actions
-except Exception:
-    _BALANCED_ORIGINAL_VALIDATE_ACTIONS = None
-
-def validate_actions(actions, default_target=None, default_tier="idle"):
-    """Final sanitizer: never allow huge AI-selected counts through."""
-    if callable(_BALANCED_ORIGINAL_VALIDATE_ACTIONS):
-        safe = _BALANCED_ORIGINAL_VALIDATE_ACTIONS(actions, default_target=default_target, default_tier=default_tier)
-    else:
-        safe = actions if isinstance(actions, list) else []
-
-    cleaned = []
-    for action in safe:
-        if not isinstance(action, dict):
-            continue
-        if action.get("type") == "spawn_wave":
-            action["count"] = min(max(1, safe_int(action.get("count", 1), 1)), MAX_WAVE_SIZE)
-        if action.get("type") == "occupy_area":
-            action["count"] = min(max(1, safe_int(action.get("count", 1), 1)), 3)
-        cleaned.append(action)
-    return cleaned[:3]
-
-try:
-    _BALANCED_ORIGINAL_ROUTE_CHAT_1 = app.view_functions.get("chat_1")
-except Exception:
-    _BALANCED_ORIGINAL_ROUTE_CHAT_1 = None
-
-def _kairos_balanced_route_wrapper(*args, **kwargs):
-    data = {}
-    try:
-        data = request.get_json(silent=True) or {}
-    except Exception:
-        data = {}
-
-    source = normalize_source(data.get("source"))
-    player_name = normalize_name(data.get("player_name") or data.get("name") or data.get("player") or data.get("username") or "unknown")
-    message = data.get("message") or data.get("content") or data.get("text") or ""
-
-    # Mirror Minecraft chat to Discord BEFORE Kairos responds.
-    # Discord inbound should not be mirrored back to Discord or it will loop.
-    if source == "minecraft" and message:
-        send_minecraft_chat_to_discord(player_name, message)
-
-    hostile_score = kairos_balanced_hostility_score(message)
-    hostile = hostile_score >= int(os.getenv("KAIROS_BALANCED_HOSTILE_THRESHOLD", "6"))
-
-    # Merge with older chat-safe context so all previous code paths see the same truth.
-    try:
-        if isinstance(globals().get("_kairos_chat_context"), dict):
-            _kairos_chat_context.update({
-                "active": source in {"minecraft", "discord"},
-                "player_id": player_name,
-                "player_name": player_name,
-                "message": message,
-                "hostile": hostile,
-                "score": hostile_score,
-            })
-    except Exception:
-        pass
-
-    if hostile:
-        log(f"Balanced hostile chat detected from {player_name}: score={hostile_score}", level="WARN")
-
-    return _BALANCED_ORIGINAL_ROUTE_CHAT_1(*args, **kwargs)
-
-try:
-    if callable(_BALANCED_ORIGINAL_ROUTE_CHAT_1):
-        app.view_functions["chat_1"] = _kairos_balanced_route_wrapper
-        log("Kairos balanced war overlay armed: MC->Discord enabled, normal chat combat blocked, wave caps reduced.", level="INFO")
-except Exception as _balanced_overlay_error:
-    try:
-        log(f"Kairos balanced overlay failed: {_balanced_overlay_error}", level="ERROR")
-    except Exception:
-        print(f"[KAIROS BALANCED OVERLAY ERROR] {_balanced_overlay_error}", flush=True)
-
-# ============================================================
-# END KAIROS BALANCED WAR + MC -> DISCORD BRIDGE OVERLAY
-# ============================================================
-
 
 if __name__ == "__main__":
     try:
