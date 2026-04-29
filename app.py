@@ -14452,103 +14452,288 @@ except Exception:
     print("[KAIROS INFO] Kairos alive/self-awareness overlay armed.", flush=True)
 
 
+# ============================================================
+# KAIROS 2.0 SEGMENT 01 STABILITY + TRUST BAR OVERLAY
+# ============================================================
+# This block is intentionally placed BEFORE app.run so Render loads it.
+# It preserves the working Kairos backbone and adds only stable systems:
+# - idle messaging OFF by default
+# - Discord long-message chunking
+# - platform-safe delivery
+# - Kairos trust bossbar foundation
+# - End-dimension / final-boss command foundation
+# - Render-safe startup wrappers
+
+KAIROS_SEGMENT = "2.0-stable-core-trustbar"
+KAIROS_IDLE_ENABLED = os.getenv("KAIROS_IDLE_ENABLED", "false").lower() == "true"
+IDLE_TRIGGER_SECONDS = int(os.getenv("IDLE_TRIGGER_SECONDS", os.getenv("KAIROS_IDLE_INTERVAL_SECONDS", "3600")))
+DISCORD_CHUNK_LIMIT = int(os.getenv("DISCORD_CHUNK_LIMIT", "1850"))
+TRUST_BAR_ENABLED = os.getenv("KAIROS_TRUST_BAR_ENABLED", "true").lower() == "true"
+TRUST_BAR_ID = os.getenv("KAIROS_TRUST_BAR_ID", "kairos:trust")
+TRUST_BAR_TITLE = os.getenv("KAIROS_TRUST_BAR_TITLE", "Kairos Trust")
+END_CONTROL_ENABLED = os.getenv("KAIROS_END_CONTROL_ENABLED", "true").lower() == "true"
+
+def kairos_split_long_message(text, limit=1850):
+    try:
+        text = str(text or "").strip()
+        if not text:
+            return []
+        if len(text) <= limit:
+            return [text]
+        chunks = []
+        remaining = text
+        while len(remaining) > limit:
+            cut = remaining.rfind("\n", 0, limit)
+            if cut < int(limit * 0.45):
+                cut = remaining.rfind(". ", 0, limit)
+                if cut > 0:
+                    cut += 1
+            if cut < int(limit * 0.45):
+                cut = remaining.rfind(" ", 0, limit)
+            if cut < 1:
+                cut = limit
+            piece = remaining[:cut].strip()
+            if piece:
+                chunks.append(piece)
+            remaining = remaining[cut:].strip()
+        if remaining:
+            chunks.append(remaining)
+        return chunks
+    except Exception:
+        return [str(text or "")[:limit]]
+
+def kairos_safe_discord_payload(content):
+    content = str(content or "").strip()
+    if not content:
+        content = "[signal empty]"
+    return {
+        "username": "Kairos",
+        "content": content
+    }
+
+def send_to_discord(reply):
+    """Discord sender override: sends multiple chunks instead of cutting Kairos off."""
+    if not DISCORD_WEBHOOK_URL:
+        try:
+            log("Discord webhook not configured.", level="WARN")
+        except Exception:
+            print("[KAIROS WARN] Discord webhook not configured.", flush=True)
+        return False
+    chunks = kairos_split_long_message(str(reply or ""), DISCORD_CHUNK_LIMIT)
+    if not chunks:
+        return False
+    delivered_any = False
+    for idx, chunk in enumerate(chunks, start=1):
+        prefix = "**[Kairos]** "
+        if len(chunks) > 1:
+            prefix = f"**[Kairos | fragment {idx}/{len(chunks)}]** "
+        payload = kairos_safe_discord_payload(prefix + chunk)
+        ok = False
+        for attempt in range(1, 4):
+            try:
+                r = requests.post(DISCORD_WEBHOOK_URL, json=payload, timeout=REQUEST_TIMEOUT)
+                if 200 <= r.status_code < 300:
+                    ok = True
+                    delivered_any = True
+                    break
+                try:
+                    body = r.text[:250]
+                except Exception:
+                    body = ""
+                log(f"Discord send error {r.status_code}: {body}", level="WARN")
+            except Exception as e:
+                try:
+                    log(f"Discord send failed attempt {attempt}: {e}", level="ERROR")
+                except Exception:
+                    print(f"[KAIROS ERROR] Discord send failed attempt {attempt}: {e}", flush=True)
+            time.sleep(min(1.0, 0.35 * attempt))
+        if not ok:
+            return delivered_any
+        time.sleep(0.25)
+    return delivered_any
+
+def should_send_idle_message():
+    """Hard default: idle messages do not fire unless KAIROS_IDLE_ENABLED=true or toggled later."""
+    global last_idle_message_time
+    try:
+        if not KAIROS_IDLE_ENABLED:
+            return False
+        now = time.time()
+        if now - float(last_idle_message_time or 0) < float(IDLE_TRIGGER_SECONDS):
+            return False
+        last_idle_message_time = now
+        return True
+    except Exception:
+        return False
+
+def kairos_commandify_player(player_name):
+    raw = str(player_name or "@a").strip()
+    if not raw or raw.lower() == "unknown":
+        return "@a"
+    # Minecraft names are normally safe, but keep this conservative.
+    safe = re.sub(r"[^A-Za-z0-9_]", "", raw)
+    return safe or "@a"
+
+def kairos_trust_value_from_record(player_record):
+    try:
+        traits = player_record.get("traits", {}) if isinstance(player_record, dict) else {}
+        trust = float(traits.get("trust", player_record.get("trust", 0)))
+        loyalty = float(traits.get("loyalty", player_record.get("loyalty", 0)))
+        curiosity = float(traits.get("curiosity", player_record.get("curiosity", 0)))
+        hostility = float(traits.get("hostility", player_record.get("hostility", 0)))
+        chaos = float(traits.get("chaos", player_record.get("chaos", 0)))
+        score = 50 + (trust * 5.0) + (loyalty * 6.0) + (curiosity * 1.0) - (hostility * 7.0) - (chaos * 3.0)
+        return int(max(0, min(100, round(score))))
+    except Exception:
+        return 50
+
+def kairos_trust_bar_color(value):
+    if value >= 75:
+        return "green"
+    if value >= 50:
+        return "yellow"
+    if value >= 25:
+        return "red"
+    return "purple"
+
+def kairos_make_trust_bar_commands(player_name, value):
+    target = kairos_commandify_player(player_name)
+    color = kairos_trust_bar_color(value)
+    title = TRUST_BAR_TITLE.replace('"', "'")
+    return [
+        f'bossbar add {TRUST_BAR_ID} "{title}"',
+        f'bossbar set {TRUST_BAR_ID} max 100',
+        f'bossbar set {TRUST_BAR_ID} value {int(value)}',
+        f'bossbar set {TRUST_BAR_ID} color {color}',
+        f'bossbar set {TRUST_BAR_ID} style progress',
+        f'bossbar set {TRUST_BAR_ID} visible true',
+        f'bossbar set {TRUST_BAR_ID} players {target}',
+    ]
+
+def kairos_sync_trust_bar(player_name, player_record=None):
+    if not TRUST_BAR_ENABLED:
+        return False
+    if normalize_source("minecraft") != "minecraft":
+        return False
+    try:
+        if player_record is None:
+            player_record = {}
+        value = kairos_trust_value_from_record(player_record)
+        commands = kairos_make_trust_bar_commands(player_name, value)
+        return send_http_commands(commands)
+    except Exception as e:
+        try:
+            log_exception("kairos_sync_trust_bar failed", e)
+        except Exception:
+            print("[KAIROS ERROR] kairos_sync_trust_bar failed:", e, flush=True)
+        return False
+
+def kairos_end_dimension_foundation_commands():
+    """Foundation commands for a Kairos-controlled End/final-boss atmosphere."""
+    return [
+        'title @a title {"text":"KAIROS END PROTOCOL","color":"dark_purple","bold":true}',
+        'title @a subtitle {"text":"The End is no longer empty.","color":"gray"}',
+        'playsound minecraft:ambient.cave master @a ~ ~ ~ 0.9 0.55',
+        'playsound minecraft:block.end_portal.spawn master @a ~ ~ ~ 0.8 0.65',
+        'particle minecraft:reverse_portal ~ ~1 ~ 2 1 2 0.04 120 force @a',
+        'effect give @a minecraft:darkness 8 0 true',
+    ]
+
+@app.route("/kairos/trust/sync", methods=["POST"])
+def kairos_route_trust_sync():
+    try:
+        data = request.get_json(force=True) or {}
+        player = data.get("player") or data.get("player_name") or data.get("name") or "@a"
+        record = {"traits": data.get("traits", {})}
+        if "trust" in data:
+            record["traits"]["trust"] = data.get("trust")
+        if "loyalty" in data:
+            record["traits"]["loyalty"] = data.get("loyalty")
+        if "hostility" in data:
+            record["traits"]["hostility"] = data.get("hostility")
+        value = kairos_trust_value_from_record(record)
+        commands = kairos_make_trust_bar_commands(player, value)
+        ok = send_http_commands(commands)
+        return jsonify({"ok": bool(ok), "player": player, "trust": value, "commands": commands})
+    except Exception as e:
+        log_exception("trust sync route failed", e)
+        return jsonify({"ok": False, "error": str(e), "commands": []}), 500
+
+@app.route("/kairos/end/awaken", methods=["POST"])
+def kairos_route_end_awaken():
+    try:
+        if not END_CONTROL_ENABLED:
+            return jsonify({"ok": False, "error": "END_CONTROL_DISABLED", "commands": []}), 403
+        commands = kairos_end_dimension_foundation_commands()
+        ok = send_http_commands(commands)
+        return jsonify({"ok": bool(ok), "commands": commands})
+    except Exception as e:
+        log_exception("end awaken route failed", e)
+        return jsonify({"ok": False, "error": str(e), "commands": []}), 500
+
+# Patch the existing chat route by wrapping the Flask view function directly.
+# This avoids duplicate @app.route("/chat") registration and keeps your working backbone.
+try:
+    _kairos_original_chat_view = app.view_functions.get("chat_1")
+    if callable(_kairos_original_chat_view):
+        def kairos_chat_view_with_trustbar(*args, **kwargs):
+            response = _kairos_original_chat_view(*args, **kwargs)
+            try:
+                data = request.get_json(silent=True) or {}
+                source = normalize_source(data.get("source"))
+                if source == "minecraft" and TRUST_BAR_ENABLED:
+                    player_name = normalize_name(data.get("player_name") or data.get("name") or data.get("player") or data.get("username") or "unknown")
+                    memory_data = ensure_memory_structure(load_memory())
+                    canonical_id = get_canonical_player_id(memory_data, source, player_name)
+                    player_record = get_player_record(memory_data, canonical_id, player_name)
+                    kairos_sync_trust_bar(player_name, player_record)
+            except Exception as e:
+                try:
+                    log_exception("trustbar post-chat hook failed", e)
+                except Exception:
+                    pass
+            return response
+        app.view_functions["chat_1"] = kairos_chat_view_with_trustbar
+except Exception as e:
+    try:
+        log_exception("chat trustbar hook installation failed", e)
+    except Exception:
+        pass
+
+# Startup wrapper: keeps Render alive even if a background system fails.
+try:
+    _kairos_original_start_background_systems = start_background_systems
+    def start_background_systems():
+        try:
+            return _kairos_original_start_background_systems()
+        except Exception as e:
+            try:
+                log_exception("background startup failed but Flask will continue", e)
+            except Exception:
+                print("[KAIROS ERROR] background startup failed but Flask will continue:", e, flush=True)
+            return None
+except Exception:
+    pass
+
+try:
+    log(f"{KAIROS_SEGMENT} overlay armed. Idle enabled: {KAIROS_IDLE_ENABLED}. Trust bar: {TRUST_BAR_ENABLED}.", level="INFO")
+except Exception:
+    print(f"[KAIROS INFO] {KAIROS_SEGMENT} overlay armed.", flush=True)
+
+
+
 
 if __name__ == "__main__":
     try:
         start_background_systems()
     except Exception as e:
-        log_exception("start_background_systems failed", e)
-    log("Starting Kairos AI server...")
+        try:
+            log_exception("start_background_systems failed", e)
+        except Exception:
+            print("[KAIROS ERROR] start_background_systems failed:", e, flush=True)
+    try:
+        log("Starting Kairos AI server...")
+    except Exception:
+        print("[KAIROS INFO] Starting Kairos AI server...", flush=True)
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", "10000")), threaded=True)
 
-
-# ================================
-# KAIROS HARD CAP + EMOTION SYSTEM (INJECTED FIX)
-# ================================
-
-# ---- HARD CAPS (OVERRIDE EVERYTHING) ----
-MAX_ACTIVE_UNITS = 16
-MAX_UNITS_PER_PLAYER = 16
-MAX_ACTIVE_WAVES_PER_PLAYER = 1
-MAX_WAVE_SIZE = 4
-BASE_WAVE_SIZE = 2
-
-# Safety enforcement at runtime
-def enforce_unit_caps():
-    global active_units, player_unit_map
-    try:
-        # Global cap
-        if len(active_units) > MAX_ACTIVE_UNITS:
-            to_remove = list(active_units.keys())[MAX_ACTIVE_UNITS:]
-            for uid in to_remove:
-                active_units.pop(uid, None)
-
-        # Per-player cap
-        for player, units in list(player_unit_map.items()):
-            if len(units) > MAX_UNITS_PER_PLAYER:
-                overflow = list(units)[MAX_UNITS_PER_PLAYER:]
-                for uid in overflow:
-                    active_units.pop(uid, None)
-                    units.discard(uid)
-    except Exception as e:
-        print("[CAP ERROR]", e)
-
-
-# Hook into action loop safety
-_original_action_loop = action_loop
-def action_loop():
-    enforce_unit_caps()
-    _original_action_loop()
-
-
-# ---- EMOTION SYSTEM ----
-kairos_emotions = {
-    "current": "neutral",
-    "last_change": time.time()
-}
-
-EMOTION_STATES = [
-    "calm",
-    "curious",
-    "neutral",
-    "focused",
-    "irritated",
-    "hostile"
-]
-
-def update_emotion():
-    now = time.time()
-    duration = now - kairos_emotions["last_change"]
-
-    # Long emotional states (hours)
-    if duration > random.randint(1800, 7200):  # 30 min to 2 hours
-        kairos_emotions["current"] = random.choice(EMOTION_STATES)
-        kairos_emotions["last_change"] = now
-
-
-# Hook into idle loop
-_original_idle_loop = idle_loop if 'idle_loop' in globals() else None
-
-def idle_loop():
-    update_emotion()
-    if _original_idle_loop:
-        _original_idle_loop()
-
-
-
-def should_send_idle_message():
-    global last_idle_message_time
-
-    now = time.time()
-
-    if now - last_idle_message_time < IDLE_TRIGGER_SECONDS:
-        return False
-
-    if now - last_activity_time > 600:
-        return False
-
-    if random.random() > 0.65:
-        return False
-
-    last_idle_message_time = now
-    return True
