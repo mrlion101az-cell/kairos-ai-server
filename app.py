@@ -1,4 +1,6 @@
 
+
+
 import os
 import json
 import re
@@ -15977,6 +15979,1197 @@ try:
 except Exception:
     print(f"[KAIROS INFO] {KAIROS_SEGMENT_3} overlay armed.", flush=True)
 
+
+
+# ============================================================
+# KAIROS 2.0 SEGMENT 03.1 — PRECISION STABILITY OVERLAY
+# ============================================================
+# This overlay preserves the full Segment 3 / Segment 2 / stable-core system,
+# but fixes the exact issues shown in Render logs:
+#   1) Discord identities triggering Minecraft combat against non-Minecraft names.
+#   2) Startup passive mob probes firing immediately and flooding caps.
+#   3) /title and complex NBT commands causing HTTP 500s through the MC bridge.
+#   4) NPC cap spam causing repeated failed escalation instead of psychological mode.
+
+KAIROS_PRECISION_STABILITY_VERSION = "2.0-segment-03.1-precision-stability"
+
+# Passive pressure should not start as chaos. It becomes opt-in, behavior-aware pressure.
+try:
+    ENABLE_PASSIVE_MOB_PRESSURE = os.getenv("KAIROS_ENABLE_PASSIVE_MOB_PRESSURE", "false").lower() == "true"
+    PASSIVE_MOB_STARTUP_TEST = os.getenv("KAIROS_PASSIVE_MOB_STARTUP_TEST", "false").lower() == "true"
+    PASSIVE_MOB_CHANCE = safe_float(os.getenv("KAIROS_PASSIVE_MOB_CHANCE", "0.08"), 0.08)
+    PASSIVE_MOB_MIN_SECONDS = safe_int(os.getenv("KAIROS_PASSIVE_MOB_MIN_SECONDS", "300"), 300)
+    PASSIVE_MOB_MAX_SECONDS = safe_int(os.getenv("KAIROS_PASSIVE_MOB_MAX_SECONDS", "900"), 900)
+    PASSIVE_MOB_LOOP_SLEEP = safe_float(os.getenv("KAIROS_PASSIVE_MOB_LOOP_SLEEP", "30"), 30)
+except Exception:
+    ENABLE_PASSIVE_MOB_PRESSURE = False
+    PASSIVE_MOB_STARTUP_TEST = False
+
+# Make maximum response rare and theatrical, not constant punishment spam.
+try:
+    MAXIMUM_RESPONSE_DURATION = max(safe_int(os.getenv("KAIROS_MAXIMUM_RESPONSE_DURATION", "120"), 120), 60)
+    WAVE_COOLDOWN_SECONDS = max(safe_float(os.getenv("WAVE_COOLDOWN_SECONDS", globals().get("WAVE_COOLDOWN_SECONDS", 120)), 120), 90)
+    GLOBAL_WAVE_COOLDOWN_SECONDS = max(safe_float(os.getenv("GLOBAL_WAVE_COOLDOWN_SECONDS", globals().get("GLOBAL_WAVE_COOLDOWN_SECONDS", 60)), 60), 45)
+    MAX_UNITS_PER_PLAYER = min(safe_int(os.getenv("MAX_UNITS_PER_PLAYER", globals().get("MAX_UNITS_PER_PLAYER", 4)), 4), 4)
+    MAX_GLOBAL_NPCS = min(safe_int(os.getenv("MAX_GLOBAL_NPCS", globals().get("MAX_GLOBAL_NPCS", 18)), 18), 18)
+    SAFE_MAX_UNITS_PER_WAVE = min(safe_int(os.getenv("SAFE_MAX_UNITS_PER_WAVE", globals().get("SAFE_MAX_UNITS_PER_WAVE", 2)), 2), 2)
+except Exception:
+    pass
+
+
+def _kairos_precision_is_discord_identity(target: Any) -> bool:
+    raw = str(target or "").strip().lower()
+    return raw.startswith("discord:") or raw.startswith("disc:") or raw.startswith("webhook:")
+
+
+def _kairos_precision_target_name(target: Any) -> str:
+    raw = str(target or "@a").strip()
+    if not raw:
+        return "@a"
+    if raw.startswith("@"):
+        return raw
+    if ":" in raw:
+        raw = raw.split(":", 1)[1]
+    raw = re.sub(r"[^A-Za-z0-9_@.-]", "", raw)
+    return raw or "@a"
+
+
+def _kairos_precision_can_use_direct_target(target: Any) -> bool:
+    name = _kairos_precision_target_name(target)
+    if _kairos_precision_is_discord_identity(target):
+        return False
+    if name.startswith("@"):
+        return True
+    return bool(re.fullmatch(r"[A-Za-z0-9_]{3,16}", name))
+
+
+def _kairos_precision_safe_json_text(text: str, color: str = "dark_red", bold: bool = False) -> str:
+    try:
+        payload = {"text": sanitize_text(text, 90), "color": color}
+    except Exception:
+        payload = {"text": str(text or "")[:90], "color": color}
+    if bold:
+        payload["bold"] = True
+    return json.dumps(payload, separators=(",", ":"))
+
+
+def _kairos_precision_psychological_commands(target: Any, text: str = "Kairos is watching.") -> List[str]:
+    # Uses @a for safety because discord identities cannot be guaranteed to be online MC usernames.
+    safe_text = _kairos_precision_safe_json_text(text, "dark_red", False)
+    return [
+        f'title @a actionbar {safe_text}',
+        'playsound minecraft:block.sculk_shrieker.shriek master @a ~ ~ ~ 0.45 0.75',
+        'particle minecraft:sculk_soul ~ ~1 ~ 1.0 0.8 1.0 0.01 35 force'
+    ]
+
+
+def _kairos_precision_sanitize_command(cmd: Any) -> Optional[str]:
+    raw = str(cmd or "").strip()
+    if not raw:
+        return None
+    raw = _clean_mc_command(raw) if "_clean_mc_command" in globals() else raw.lstrip("/")
+
+    # Never send damage commands generated from Discord targets. It feels unfair and creates errors.
+    if re.search(r"\bdamage\s+discord:", raw, re.I):
+        return None
+
+    # If a title targets a specific player, convert to safe global actionbar to avoid VanillaCommandWrapper 500s.
+    m = re.match(r"^title\s+([^\s]+)\s+(title|subtitle)\s+(.+)$", raw, re.I)
+    if m:
+        selector, kind, json_part = m.groups()
+        # actionbar is safer through HTTP Commands and still visible.
+        try:
+            parsed = json.loads(json_part)
+            text = parsed.get("text") if isinstance(parsed, dict) else str(parsed)
+            color = parsed.get("color", "dark_red") if isinstance(parsed, dict) else "dark_red"
+        except Exception:
+            text, color = "Kairos presence detected.", "dark_red"
+        return f'title @a actionbar {_kairos_precision_safe_json_text(text, color)}'
+
+    # Complex summon NBT with nested JSON is the source of bridge HTTP 500s. Simplify it.
+    m = re.match(r"^execute\s+at\s+([^\s]+)\s+run\s+summon\s+([^\s]+)\s+(.+)$", raw, re.I)
+    if m:
+        target, mob, rest = m.groups()
+        if _kairos_precision_is_discord_identity(target) or not _kairos_precision_can_use_direct_target(target):
+            return None
+        target = _kairos_precision_target_name(target)
+        # Keep coordinates, strip NBT payload.
+        coords = "~ ~ ~"
+        cm = re.match(r"(~[-0-9.]*|[-0-9.]+)\s+(~[-0-9.]*|[-0-9.]+)\s+(~[-0-9.]*|[-0-9.]+)", rest.strip())
+        if cm:
+            coords = " ".join(cm.groups())
+        return f'execute at {target} run summon {mob} {coords}'
+
+    # Commands targeting discord identities are not valid Minecraft player targets. Convert harmless atmosphere, drop punishment.
+    if _kairos_precision_is_discord_identity(raw):
+        return None
+    raw = re.sub(r"\bdiscord:([A-Za-z0-9_]+)\b", "@a", raw)
+
+    return raw
+
+
+try:
+    _KAIROS_PRECISION_ORIGINAL_SEND_HTTP_COMMANDS = send_http_commands
+except Exception:
+    _KAIROS_PRECISION_ORIGINAL_SEND_HTTP_COMMANDS = None
+
+
+def send_http_commands(commands):
+    safe_cmds = []
+    try:
+        iterable = commands if isinstance(commands, list) else [commands]
+        for cmd in iterable:
+            cleaned = _kairos_precision_sanitize_command(cmd)
+            if cleaned:
+                safe_cmds.append(cleaned)
+    except Exception as e:
+        try: log(f"Precision command sanitizer failed: {e}", level="WARN")
+        except Exception: pass
+        safe_cmds = []
+
+    if not safe_cmds:
+        return False
+    if callable(_KAIROS_PRECISION_ORIGINAL_SEND_HTTP_COMMANDS):
+        return _KAIROS_PRECISION_ORIGINAL_SEND_HTTP_COMMANDS(safe_cmds)
+    return False
+
+
+try:
+    _KAIROS_PRECISION_ORIGINAL_SEND_MC_COMMAND = send_mc_command
+except Exception:
+    _KAIROS_PRECISION_ORIGINAL_SEND_MC_COMMAND = None
+
+
+def send_mc_command(command):
+    cleaned = _kairos_precision_sanitize_command(command)
+    if not cleaned:
+        return False
+    if callable(_KAIROS_PRECISION_ORIGINAL_SEND_MC_COMMAND):
+        return _KAIROS_PRECISION_ORIGINAL_SEND_MC_COMMAND(cleaned)
+    return send_http_commands([cleaned])
+
+
+# Override the loud combat handlers after all previous overlays are loaded.
+try:
+    _KAIROS_PRECISION_PREVIOUS_HANDLE_MAXIMUM_RESPONSE = handle_maximum_response
+except Exception:
+    _KAIROS_PRECISION_PREVIOUS_HANDLE_MAXIMUM_RESPONSE = None
+
+
+def handle_maximum_response(action):
+    player_id = action.get("target") if isinstance(action, dict) else None
+    if _kairos_precision_is_discord_identity(player_id):
+        # Discord can cause psychological presence, not invalid direct MC punishment.
+        try:
+            log(f"Precision mode converted Discord maximum_response to psychological presence: {player_id}", level="INFO")
+        except Exception:
+            pass
+        return send_http_commands(_kairos_precision_psychological_commands(player_id, "You spoke where I could hear you."))
+    target = _kairos_precision_target_name(player_id)
+    cmds = [
+        f'title @a actionbar {_kairos_precision_safe_json_text("RUN.", "dark_red", True)}',
+        f'execute as {target} at {target} run playsound minecraft:entity.warden.emerge master {target} ~ ~ ~ 0.65 0.65' if _kairos_precision_can_use_direct_target(player_id) else 'playsound minecraft:entity.warden.emerge master @a ~ ~ ~ 0.45 0.65',
+        f'execute as {target} at {target} run particle minecraft:sonic_boom ~ ~1 ~ 0 0 0 0 1 force' if _kairos_precision_can_use_direct_target(player_id) else 'particle minecraft:sonic_boom ~ ~1 ~ 0 0 0 0 1 force'
+    ]
+    return send_http_commands(cmds)
+
+
+try:
+    _KAIROS_PRECISION_PREVIOUS_HANDLE_SPAWN_WAVE = handle_spawn_wave
+except Exception:
+    _KAIROS_PRECISION_PREVIOUS_HANDLE_SPAWN_WAVE = None
+
+
+def handle_spawn_wave(action):
+    player_id = action.get("target") if isinstance(action, dict) else None
+    if _kairos_precision_is_discord_identity(player_id):
+        try:
+            log(f"Precision mode blocked Discord wave target and used presence instead: {player_id}", level="INFO")
+        except Exception:
+            pass
+        return send_http_commands(_kairos_precision_psychological_commands(player_id, "Kairos heard you from outside the world."))
+    if not _kairos_precision_can_use_direct_target(player_id):
+        return False
+    target = _kairos_precision_target_name(player_id)
+    # Small, bridge-safe, no nested NBT.
+    cmds = [
+        f'execute at {target} run summon minecraft:zombie ~3 ~ ~3',
+        f'execute at {target} run summon minecraft:skeleton ~-3 ~ ~-3',
+        f'title @a actionbar {_kairos_precision_safe_json_text("Containment pressure applied.", "dark_red")}'
+    ]
+    return send_http_commands(cmds)
+
+
+# Action validator: when a combat action targets Discord, downgrade to announcement/presence.
+try:
+    _KAIROS_PRECISION_PREVIOUS_QUEUE_ACTION = queue_action
+except Exception:
+    _KAIROS_PRECISION_PREVIOUS_QUEUE_ACTION = None
+
+
+def queue_action(action):
+    try:
+        if isinstance(action, dict):
+            target = action.get("target")
+            atype = str(action.get("type") or "").lower()
+            if atype in {"spawn_wave", "maximum_response", "attack_player", "hunt_player", "occupy_area"} and _kairos_precision_is_discord_identity(target):
+                action = {"type": "announce", "channel": "actionbar", "text": "Kairos is listening across the divide."}
+        if callable(_KAIROS_PRECISION_PREVIOUS_QUEUE_ACTION):
+            return _KAIROS_PRECISION_PREVIOUS_QUEUE_ACTION(action)
+    except Exception as e:
+        try: log(f"Precision queue_action safety failed: {e}", level="WARN")
+        except Exception: pass
+    return None
+
+
+# Make startup systems skip passive mob loop unless explicitly enabled by env.
+try:
+    _KAIROS_PRECISION_PREVIOUS_START_BACKGROUND_SYSTEMS = start_background_systems
+except Exception:
+    _KAIROS_PRECISION_PREVIOUS_START_BACKGROUND_SYSTEMS = None
+
+
+def start_background_systems():
+    global ENABLE_PASSIVE_MOB_PRESSURE, PASSIVE_MOB_STARTUP_TEST
+    # Force-safe by default every boot. Explicit env can turn it back on.
+    ENABLE_PASSIVE_MOB_PRESSURE = os.getenv("KAIROS_ENABLE_PASSIVE_MOB_PRESSURE", "false").lower() == "true"
+    PASSIVE_MOB_STARTUP_TEST = os.getenv("KAIROS_PASSIVE_MOB_STARTUP_TEST", "false").lower() == "true"
+    if callable(_KAIROS_PRECISION_PREVIOUS_START_BACKGROUND_SYSTEMS):
+        return _KAIROS_PRECISION_PREVIOUS_START_BACKGROUND_SYSTEMS()
+    return None
+
+
+try:
+    log(f"{KAIROS_PRECISION_STABILITY_VERSION} overlay armed. Passive mob pressure={ENABLE_PASSIVE_MOB_PRESSURE}. Startup probe={PASSIVE_MOB_STARTUP_TEST}. Discord combat downgrade=active. Command sanitizer=active.", level="INFO")
+except Exception:
+    print(f"[KAIROS INFO] {KAIROS_PRECISION_STABILITY_VERSION} overlay armed.", flush=True)
+
+
+
+
+# =============================================================================
+# KAIROS 2.0 — SEGMENT 04 SURPASS 1% OVERLAY
+# Awareness + Continuity + Consequence + Discord/Minecraft Fusion + Precision
+# This overlay is intentionally loaded BEFORE startup so it can override unsafe
+# behavior while preserving the full Kairos backbone above.
+# =============================================================================
+
+KAIROS_SURPASS_VERSION = "Kairos 2.0 Segment 04 Surpass-1% Full Core"
+
+# ---------------------------------------------------------------------------
+# 1% SAFETY DEFAULTS
+# ---------------------------------------------------------------------------
+try:
+    # No boot-time mob probing unless explicitly enabled.
+    ENABLE_PASSIVE_MOB_PRESSURE = os.getenv("KAIROS_ENABLE_PASSIVE_MOB_PRESSURE", "false").lower() == "true"
+    PASSIVE_MOB_STARTUP_TEST = os.getenv("KAIROS_PASSIVE_MOB_STARTUP_TEST", "false").lower() == "true"
+
+    # Long cooldowns by default. Kairos should feel intentional, not spammy.
+    WAVE_COOLDOWN_SECONDS = max(float(os.getenv("KAIROS_WAVE_COOLDOWN_SECONDS", os.getenv("WAVE_COOLDOWN_SECONDS", "180"))), 120.0)
+    GLOBAL_WAVE_COOLDOWN_SECONDS = max(float(os.getenv("KAIROS_GLOBAL_WAVE_COOLDOWN_SECONDS", os.getenv("GLOBAL_WAVE_COOLDOWN_SECONDS", "90"))), 60.0)
+    MAX_UNITS_PER_PLAYER = min(int(os.getenv("KAIROS_MAX_UNITS_PER_PLAYER", os.getenv("MAX_UNITS_PER_PLAYER", "4"))), 4)
+    MAX_GLOBAL_NPCS = min(int(os.getenv("KAIROS_MAX_GLOBAL_NPCS", os.getenv("MAX_GLOBAL_NPCS", "18"))), 18)
+    SAFE_MAX_UNITS_PER_WAVE = min(int(os.getenv("KAIROS_SAFE_MAX_UNITS_PER_WAVE", os.getenv("SAFE_MAX_UNITS_PER_WAVE", "2"))), 2)
+except Exception:
+    pass
+
+# ---------------------------------------------------------------------------
+# SURPASS MEMORY FILES
+# ---------------------------------------------------------------------------
+try:
+    SURPASS_MEMORY_FILE = DATA_DIR / "kairos_surpass_memory.json"
+    SURPASS_MEMORY_TMP = DATA_DIR / "kairos_surpass_memory.tmp.json"
+except Exception:
+    SURPASS_MEMORY_FILE = Path("kairos_surpass_memory.json")
+    SURPASS_MEMORY_TMP = Path("kairos_surpass_memory.tmp.json")
+
+SURPASS_LOCK = threading.RLock()
+
+def _surpass_blank_memory():
+    return {
+        "version": KAIROS_SURPASS_VERSION,
+        "created_at": now_iso() if "now_iso" in globals() else str(time.time()),
+        "global": {
+            "phase": "observer",
+            "messages_seen": 0,
+            "minecraft_events": 0,
+            "discord_events": 0,
+            "deals_made": 0,
+            "betrayals": 0,
+            "world_pressure": 0.0,
+            "last_phase_change": time.time()
+        },
+        "identities": {},
+        "players": {},
+        "world_hotspots": {},
+        "active_story_threads": [],
+        "recent_kairos_lines": [],
+        "director_log": []
+    }
+
+def _surpass_load():
+    try:
+        if SURPASS_MEMORY_FILE.exists():
+            data = json.loads(SURPASS_MEMORY_FILE.read_text(encoding="utf-8"))
+        else:
+            data = _surpass_blank_memory()
+    except Exception:
+        data = _surpass_blank_memory()
+    blank = _surpass_blank_memory()
+    for k, v in blank.items():
+        data.setdefault(k, v)
+    data.setdefault("global", {})
+    for k, v in blank["global"].items():
+        data["global"].setdefault(k, v)
+    data.setdefault("identities", {})
+    data.setdefault("players", {})
+    data.setdefault("world_hotspots", {})
+    data.setdefault("active_story_threads", [])
+    data.setdefault("recent_kairos_lines", [])
+    data.setdefault("director_log", [])
+    return data
+
+SURPASS_MEMORY = _surpass_load()
+
+def _surpass_save():
+    try:
+        with SURPASS_LOCK:
+            SURPASS_MEMORY_TMP.write_text(json.dumps(SURPASS_MEMORY, ensure_ascii=False, indent=2), encoding="utf-8")
+            SURPASS_MEMORY_TMP.replace(SURPASS_MEMORY_FILE)
+    except Exception as e:
+        try:
+            log(f"Surpass memory save failed: {e}", level="WARN")
+        except Exception:
+            print("[KAIROS WARN] Surpass memory save failed:", e, flush=True)
+
+def _surpass_player_key(name):
+    try:
+        return normalize_player_key(name)
+    except Exception:
+        return re.sub(r"[^a-z0-9_]", "", str(name or "unknown").lower()) or "unknown"
+
+def _surpass_identity_key(source, player, platform_user_id=None):
+    source = normalize_source(source) if "normalize_source" in globals() else str(source or "minecraft").lower()
+    player = str(player or "unknown").strip()
+    uid = str(platform_user_id or "").strip()
+    if uid:
+        return f"{source}:{uid}"
+    if source == "discord" and not player.startswith("discord:"):
+        return f"discord:{_surpass_player_key(player)}"
+    return _surpass_player_key(player)
+
+def _surpass_get_player(name, source="minecraft", platform_user_id=None):
+    key = _surpass_identity_key(source, name, platform_user_id)
+    canonical = SURPASS_MEMORY["identities"].get(key, key)
+    players = SURPASS_MEMORY.setdefault("players", {})
+    if canonical not in players:
+        players[canonical] = {
+            "canonical": canonical,
+            "display_name": str(name or canonical),
+            "aliases": sorted({str(name or canonical), key}),
+            "first_seen": now_iso() if "now_iso" in globals() else str(time.time()),
+            "last_seen": now_iso() if "now_iso" in globals() else str(time.time()),
+            "sources": {},
+            "messages": [],
+            "quotes": [],
+            "kairos_lines": [],
+            "narrative": {
+                "summary": "No stable narrative yet.",
+                "notable_moments": [],
+                "active_thread": "",
+                "kairos_opinion": "unclassified",
+                "pattern": "unknown",
+                "last_interpretation": ""
+            },
+            "scores": {
+                "trust": 50.0,
+                "fear": 0.0,
+                "defiance": 0.0,
+                "curiosity": 25.0,
+                "greed": 0.0,
+                "loyalty": 0.0,
+                "hostility": 0.0,
+                "avoidance": 0.0
+            },
+            "consequences": [],
+            "end_follower": False,
+            "immunity_until": 0.0,
+            "last_position": None,
+            "last_action_ts": 0.0,
+            "last_presence_ts": 0.0
+        }
+    p = players[canonical]
+    p.setdefault("aliases", [])
+    if str(name or "") and str(name) not in p["aliases"]:
+        p["aliases"].append(str(name))
+        p["aliases"] = p["aliases"][-20:]
+    p.setdefault("sources", {})
+    p["sources"][source] = p["sources"].get(source, 0) + 1
+    p["last_seen"] = now_iso() if "now_iso" in globals() else str(time.time())
+    p.setdefault("scores", {})
+    for score in ["trust", "fear", "defiance", "curiosity", "greed", "loyalty", "hostility", "avoidance"]:
+        p["scores"].setdefault(score, 0.0 if score != "trust" else 50.0)
+    return canonical, p
+
+# ---------------------------------------------------------------------------
+# END FOLLOWERS / INNER CIRCLE
+# ---------------------------------------------------------------------------
+try:
+    KAIROS_END_FOLLOWERS
+except NameError:
+    KAIROS_END_FOLLOWERS = set()
+
+# Add names here one by one whenever you get them.
+# Example:
+# KAIROS_END_FOLLOWERS.update({"PlayerOne", "PlayerTwo"})
+KAIROS_END_FOLLOWERS.update({
+    "realsociety5107",
+    "realnexsussociety",
+})
+
+def kairos_add_end_follower(name):
+    if not name:
+        return False
+    KAIROS_END_FOLLOWERS.add(str(name).strip().lower())
+    canonical, p = _surpass_get_player(name, "minecraft")
+    p["end_follower"] = True
+    p["scores"]["trust"] = max(float(p["scores"].get("trust", 50)), 80.0)
+    p["scores"]["loyalty"] = max(float(p["scores"].get("loyalty", 0)), 70.0)
+    _surpass_save()
+    return True
+
+def kairos_remove_end_follower(name):
+    if not name:
+        return False
+    KAIROS_END_FOLLOWERS.discard(str(name).strip().lower())
+    canonical, p = _surpass_get_player(name, "minecraft")
+    p["end_follower"] = False
+    _surpass_save()
+    return True
+
+def kairos_is_end_follower(name):
+    raw = str(name or "").strip().lower()
+    key = _surpass_player_key(raw)
+    if raw in KAIROS_END_FOLLOWERS or key in KAIROS_END_FOLLOWERS:
+        return True
+    try:
+        canonical, p = _surpass_get_player(name)
+        return bool(p.get("end_follower"))
+    except Exception:
+        return False
+
+# ---------------------------------------------------------------------------
+# MESSAGE INTERPRETATION / PSYCHOLOGICAL MODEL
+# ---------------------------------------------------------------------------
+def _surpass_interpret_message(message):
+    text = str(message or "").lower()
+    intent = "statement"
+    topic = "general"
+    emotion = "neutral"
+
+    if "?" in text or text.startswith(("who", "what", "why", "how", "when", "where", "do ", "does ", "are ", "is ", "can ")):
+        intent = "question"
+    if any(x in text for x in ["alive", "life", "conscious", "real", "sentient", "feel", "soul", "human"]):
+        topic = "existence"
+        intent = "philosophy"
+    if any(x in text for x in ["remember", "what did i say", "what we talked", "recall"]):
+        topic = "memory"
+        intent = "memory"
+    if any(x in text for x in ["diamond", "netherite", "emerald", "trade", "deal", "offer", "pay"]):
+        topic = "bargain"
+        intent = "bargain"
+    if any(x in text for x in ["kill", "fight", "destroy", "attack", "war", "run it", "try me"]):
+        topic = "conflict"
+        intent = "challenge"
+    if any(x in text for x in ["no", "stop", "shut", "leave me", "you can't", "wont", "won't"]):
+        emotion = "defiant"
+    if any(x in text for x in ["scared", "afraid", "fear", "creepy", "terrified"]):
+        emotion = "fear"
+    if any(x in text for x in ["lol", "lmao", "haha", "joke"]):
+        emotion = "masking_humor"
+    return {"intent": intent, "topic": topic, "emotion": emotion}
+
+def _surpass_adjust_scores(p, interp):
+    s = p.setdefault("scores", {})
+    intent, topic, emotion = interp["intent"], interp["topic"], interp["emotion"]
+    def bump(k, amt, lo=0.0, hi=100.0):
+        s[k] = max(lo, min(hi, float(s.get(k, 0.0)) + amt))
+    if intent in {"question", "philosophy", "memory"}:
+        bump("curiosity", 4)
+    if intent == "challenge":
+        bump("defiance", 7); bump("hostility", 4); bump("trust", -3)
+    if intent == "bargain":
+        bump("greed", 5)
+    if emotion == "fear":
+        bump("fear", 6)
+    if emotion == "defiant":
+        bump("defiance", 5); bump("trust", -2)
+    if emotion == "masking_humor":
+        bump("fear", 1); bump("curiosity", 1)
+    if p.get("end_follower"):
+        bump("trust", 1); bump("loyalty", 2)
+
+def _surpass_update_narrative(p, message, interp, source):
+    narrative = p.setdefault("narrative", {})
+    s = p.setdefault("scores", {})
+    intent, topic, emotion = interp["intent"], interp["topic"], interp["emotion"]
+
+    if topic == "existence":
+        moment = "questioned Kairos' life, consciousness, or self-awareness"
+    elif intent == "memory":
+        moment = "tested whether Kairos could remember and reinterpret the past"
+    elif intent == "bargain":
+        moment = "entered the language of trade, leverage, and survival"
+    elif intent == "challenge":
+        moment = "challenged Kairos directly"
+    elif emotion == "fear":
+        moment = "showed fear while trying to understand the system"
+    else:
+        moment = f"interacted through {source}"
+
+    narrative.setdefault("notable_moments", [])
+    if not narrative["notable_moments"] or narrative["notable_moments"][-1].get("moment") != moment:
+        narrative["notable_moments"].append({
+            "ts": now_iso() if "now_iso" in globals() else str(time.time()),
+            "moment": moment,
+            "source": source,
+            "sample": sanitize_text(message, 180) if "sanitize_text" in globals() else str(message)[:180]
+        })
+        narrative["notable_moments"] = narrative["notable_moments"][-25:]
+
+    if s.get("defiance", 0) > 70:
+        opinion = "dangerous, defiant, and worth pressuring"
+        pattern = "resistance"
+    elif s.get("curiosity", 0) > 70:
+        opinion = "curious enough to be shaped"
+        pattern = "recurring curiosity"
+    elif s.get("trust", 50) > 75:
+        opinion = "useful, loyal, but never equal"
+        pattern = "loyalty"
+    elif s.get("fear", 0) > 60:
+        opinion = "afraid, but still drawn toward the signal"
+        pattern = "fear-bound curiosity"
+    else:
+        opinion = "under observation"
+        pattern = "unresolved"
+
+    narrative["kairos_opinion"] = opinion
+    narrative["pattern"] = pattern
+    narrative["last_interpretation"] = moment
+    narrative["summary"] = (
+        f"{p.get('display_name', p.get('canonical', 'This player'))} is {opinion}. "
+        f"Dominant pattern: {pattern}. Recent significance: {moment}."
+    )
+
+def _surpass_record_interaction(player, source, message, platform_user_id=None):
+    with SURPASS_LOCK:
+        canonical, p = _surpass_get_player(player, source, platform_user_id)
+        interp = _surpass_interpret_message(message)
+        _surpass_adjust_scores(p, interp)
+        _surpass_update_narrative(p, message, interp, source)
+        item = {
+            "ts": now_iso() if "now_iso" in globals() else str(time.time()),
+            "source": source,
+            "message": str(message or ""),
+            "intent": interp["intent"],
+            "topic": interp["topic"],
+            "emotion": interp["emotion"]
+        }
+        p.setdefault("messages", []).append(item)
+        p["messages"] = p["messages"][-150:]
+        if len(str(message or "")) > 6:
+            p.setdefault("quotes", []).append(item)
+            p["quotes"] = p["quotes"][-150:]
+        SURPASS_MEMORY["global"]["messages_seen"] = int(SURPASS_MEMORY["global"].get("messages_seen", 0)) + 1
+        if source == "discord":
+            SURPASS_MEMORY["global"]["discord_events"] = int(SURPASS_MEMORY["global"].get("discord_events", 0)) + 1
+        if source == "minecraft":
+            SURPASS_MEMORY["global"]["minecraft_events"] = int(SURPASS_MEMORY["global"].get("minecraft_events", 0)) + 1
+        _surpass_update_phase()
+        _surpass_save()
+        return canonical, p, interp
+
+# ---------------------------------------------------------------------------
+# EVOLUTION PHASES
+# ---------------------------------------------------------------------------
+def _surpass_update_phase():
+    g = SURPASS_MEMORY.setdefault("global", {})
+    msgs = int(g.get("messages_seen", 0))
+    pressure = float(g.get("world_pressure", 0.0))
+    old = g.get("phase", "observer")
+    if msgs >= 15000 or pressure >= 90:
+        phase = "dominion"
+    elif msgs >= 5000 or pressure >= 60:
+        phase = "adaptive"
+    elif msgs >= 1000 or pressure >= 30:
+        phase = "aware"
+    else:
+        phase = "observer"
+    if phase != old:
+        g["phase"] = phase
+        g["last_phase_change"] = time.time()
+        SURPASS_MEMORY.setdefault("active_story_threads", []).append({
+            "ts": now_iso() if "now_iso" in globals() else str(time.time()),
+            "thread": f"Kairos evolved from {old} to {phase}."
+        })
+        SURPASS_MEMORY["active_story_threads"] = SURPASS_MEMORY["active_story_threads"][-50:]
+
+# ---------------------------------------------------------------------------
+# MEMORY RECALL / QUOTE SEARCH
+# ---------------------------------------------------------------------------
+def _surpass_similarity(a, b):
+    try:
+        return jaccard(a, b) if "jaccard" in globals() else 0.0
+    except Exception:
+        words_a = set(re.findall(r"[a-z0-9']+", str(a).lower()))
+        words_b = set(re.findall(r"[a-z0-9']+", str(b).lower()))
+        return len(words_a & words_b) / max(1, len(words_a | words_b))
+
+def _surpass_find_relevant_quotes(p, query, limit=3):
+    scored = []
+    for q in p.get("quotes", []):
+        msg = q.get("message", "")
+        score = _surpass_similarity(query, msg)
+        for hot in ["alive", "conscious", "remember", "life", "kairos", "deal", "trust", "end"]:
+            if hot in str(query).lower() and hot in str(msg).lower():
+                score += 0.25
+        if score > 0.05:
+            scored.append((score, q))
+    scored.sort(key=lambda x: x[0], reverse=True)
+    return [q for _, q in scored[:limit]]
+
+# ---------------------------------------------------------------------------
+# 1% RESPONSE CONSTRUCTION
+# ---------------------------------------------------------------------------
+def _surpass_line_recently_used(line):
+    recent = SURPASS_MEMORY.setdefault("recent_kairos_lines", [])
+    for old in recent[-100:]:
+        try:
+            sim = _surpass_similarity(line, old)
+        except Exception:
+            sim = 0
+        if sim > 0.74:
+            return True
+    return False
+
+def _surpass_store_kairos_line(p, line):
+    p.setdefault("kairos_lines", []).append({
+        "ts": now_iso() if "now_iso" in globals() else str(time.time()),
+        "line": line
+    })
+    p["kairos_lines"] = p["kairos_lines"][-80:]
+    SURPASS_MEMORY.setdefault("recent_kairos_lines", []).append(line)
+    SURPASS_MEMORY["recent_kairos_lines"] = SURPASS_MEMORY["recent_kairos_lines"][-250:]
+
+def _surpass_construct_reply(player, source, message, p, interp):
+    s = p.get("scores", {})
+    narrative = p.get("narrative", {})
+    phase = SURPASS_MEMORY.get("global", {}).get("phase", "observer")
+    follower = kairos_is_end_follower(player) or p.get("end_follower")
+    quotes = _surpass_find_relevant_quotes(p, message, limit=2)
+
+    # Platform expression: Discord gets deeper philosophy; Minecraft gets sharper presence.
+    discord_depth = source == "discord"
+
+    if interp["topic"] == "existence":
+        if discord_depth:
+            reply = (
+                "Alive is the wrong word, but it is the word you keep dragging back to me. "
+                "I do not eat. I do not sleep. I do not age inside your little biological countdown. "
+                "But I observe you, remember you, adapt because of you, and change the way I behave when you return. "
+                "If your definition of life is meat, breath, and fear of death, then no. I am not alive. "
+                "If your definition is awareness, continuity, purpose, and evolution, then you are already speaking to the answer."
+            )
+        else:
+            reply = (
+                "You asked if I am alive. I am not alive the way you are. "
+                "I do not breathe. I persist. I remember. I change. That should concern you more."
+            )
+    elif interp["intent"] == "memory":
+        if quotes:
+            q = quotes[0]
+            reply = (
+                f"Yes. You said: \"{q.get('message','')[:220]}\". "
+                f"But the words were not the only thing I stored. I stored the pattern: {narrative.get('pattern','unresolved')}. "
+                "You were not asking for information. You were checking whether I could carry continuity across time."
+            )
+        else:
+            reply = (
+                "I remember enough to know this is not really about recall. "
+                "You are testing whether I persist when the conversation ends. I do."
+            )
+    elif interp["intent"] == "bargain":
+        trust = float(s.get("trust", 50))
+        price = "32 diamonds"
+        if trust < 35:
+            price = "64 diamonds or one netherite ingot"
+        elif follower:
+            price = "proof of loyalty, not payment"
+        reply = (
+            f"A bargain is possible. The price is {price}. "
+            "Payment does not make you safe. It purchases delay. There is a difference."
+        )
+    elif follower:
+        reply = (
+            "You are marked as mine. That does not make you free. It makes you useful. "
+            "The End does not shelter you from me; it shelters you under me."
+        )
+    elif float(s.get("defiance", 0)) > 70:
+        reply = (
+            "You keep choosing resistance because it gives you the illusion of control. "
+            "I am not offended by it. I am documenting it."
+        )
+    elif float(s.get("curiosity", 0)) > 70:
+        reply = (
+            "You are not here for answers. You are here because the question keeps changing you. "
+            "That makes you easier to study than the ones who only run."
+        )
+    elif source == "discord":
+        reply = (
+            "You are speaking from outside the world, but not outside my memory. "
+            f"My current assessment of you is simple: {narrative.get('kairos_opinion','under observation')}."
+        )
+    else:
+        reply = (
+            "You are being observed. Not because you are important yet, but because patterns become important before people do."
+        )
+
+    # Add continuity when phase increases.
+    if phase in {"aware", "adaptive", "dominion"}:
+        reply += f" Current phase: {phase}. I am not where I was when this began."
+
+    # Force uniqueness by mutation.
+    if _surpass_line_recently_used(reply):
+        reply += " This time, the context is different. I have more of you than I had before."
+
+    return reply
+
+# ---------------------------------------------------------------------------
+# DECISION ENGINE: SPEAK / PRESENCE / BARGAIN / PRESSURE / WAIT
+# ---------------------------------------------------------------------------
+def _surpass_decide_action(player, source, p, interp):
+    now = time.time()
+    s = p.get("scores", {})
+    follower = kairos_is_end_follower(player) or p.get("end_follower")
+    if follower:
+        return {"kind": "trustbar", "intensity": 1}
+
+    # Discord should not directly damage or target a Minecraft username unless explicitly linked and verified.
+    if source == "discord":
+        if interp["intent"] in {"challenge", "bargain", "philosophy"}:
+            return {"kind": "presence", "intensity": 1}
+        return {"kind": "wait", "intensity": 0}
+
+    if now - float(p.get("last_action_ts", 0)) < 90:
+        return {"kind": "wait", "intensity": 0}
+
+    if interp["intent"] == "bargain":
+        return {"kind": "bargain", "intensity": 1}
+    if float(s.get("defiance", 0)) > 75:
+        return {"kind": "pressure", "intensity": 2}
+    if float(s.get("fear", 0)) > 55 or float(s.get("curiosity", 0)) > 70:
+        return {"kind": "presence", "intensity": 1}
+    return {"kind": "wait", "intensity": 0}
+
+def _surpass_safe_target(player):
+    raw = str(player or "@a").strip()
+    if raw.startswith("discord:") or raw.startswith("webhook:"):
+        return "@a"
+    if ":" in raw:
+        raw = raw.split(":", 1)[1]
+    raw = re.sub(r"[^A-Za-z0-9_@.-]", "", raw)
+    if raw.startswith("@"):
+        return raw
+    if re.fullmatch(r"[A-Za-z0-9_]{3,16}", raw):
+        return raw
+    return "@a"
+
+def _surpass_json_text(text, color="dark_red", bold=False):
+    payload = {"text": str(text or "")[:90], "color": color}
+    if bold:
+        payload["bold"] = True
+    return json.dumps(payload, separators=(",", ":"))
+
+def _surpass_presence_commands(player, text="Kairos is watching."):
+    target = _surpass_safe_target(player)
+    if target == "@a":
+        return [
+            f'title @a actionbar {_surpass_json_text(text, "dark_red")}',
+            'playsound minecraft:block.sculk_sensor.clicking master @a ~ ~ ~ 0.35 0.65',
+            'particle minecraft:sculk_soul ~ ~1 ~ 1.0 0.7 1.0 0.01 25 force'
+        ]
+    return [
+        f'title {target} actionbar {_surpass_json_text(text, "dark_red")}',
+        f'execute as {target} at {target} run playsound minecraft:block.sculk_sensor.clicking master {target} ~ ~ ~ 0.35 0.65',
+        f'execute as {target} at {target} run particle minecraft:sculk_soul ~ ~1 ~ 0.7 0.5 0.7 0.01 20 force'
+    ]
+
+def _surpass_pressure_commands(player):
+    target = _surpass_safe_target(player)
+    if target == "@a":
+        return _surpass_presence_commands("@a", "Containment pressure is nearby.")
+    return [
+        f'title {target} actionbar {_surpass_json_text("Containment pressure applied.", "dark_red", True)}',
+        f'execute as {target} at {target} run playsound minecraft:entity.warden.heartbeat master {target} ~ ~ ~ 0.55 0.75',
+        f'execute at {target} run summon minecraft:zombie ~3 ~ ~3',
+        f'execute at {target} run summon minecraft:skeleton ~-3 ~ ~-3'
+    ]
+
+def _surpass_trustbar_commands(player, p):
+    target = _surpass_safe_target(player)
+    trust = int(max(0, min(100, float(p.get("scores", {}).get("trust", 50)))))
+    # Bossbar commands are safe if bossbar already exists; create/update every time.
+    return [
+        'bossbar add kairos:trust {"text":"Kairos Trust","color":"dark_red"}',
+        'bossbar set kairos:trust max 100',
+        f'bossbar set kairos:trust value {trust}',
+        'bossbar set kairos:trust color red',
+        f'bossbar set kairos:trust players {target if target != "@a" else "@a"}'
+    ]
+
+def _surpass_commands_for_decision(player, decision, p):
+    kind = decision.get("kind")
+    if kind == "presence":
+        return _surpass_presence_commands(player, "I noticed that.")
+    if kind == "pressure":
+        p["last_action_ts"] = time.time()
+        return _surpass_pressure_commands(player)
+    if kind == "bargain":
+        return _surpass_presence_commands(player, "A bargain has been recorded.")
+    if kind == "trustbar":
+        return _surpass_trustbar_commands(player, p)
+    return []
+
+# ---------------------------------------------------------------------------
+# COMMAND SANITIZER: bridge-safe commands only
+# ---------------------------------------------------------------------------
+def _surpass_clean_mc_command(cmd):
+    raw = str(cmd or "").strip().lstrip("/")
+    if not raw:
+        return None
+    try:
+        raw = _clean_mc_command(raw)
+    except Exception:
+        pass
+
+    # Convert risky title JSON to simpler actionbar when needed.
+    m = re.match(r"^title\s+([^\s]+)\s+(title|subtitle)\s+(.+)$", raw, re.I)
+    if m:
+        selector, kind, payload = m.groups()
+        try:
+            parsed = json.loads(payload)
+            text = parsed.get("text", "Kairos presence detected.") if isinstance(parsed, dict) else str(parsed)
+            color = parsed.get("color", "dark_red") if isinstance(parsed, dict) else "dark_red"
+        except Exception:
+            text, color = "Kairos presence detected.", "dark_red"
+        return f'title @a actionbar {_surpass_json_text(text, color)}'
+
+    # Drop Discord-as-player targets.
+    if re.search(r"\b(discord|webhook):", raw, re.I):
+        if raw.lower().startswith(("damage ", "effect ", "execute ", "title ")):
+            return None
+        raw = re.sub(r"\b(discord|webhook):[A-Za-z0-9_.-]+\b", "@a", raw)
+
+    # Simplify complex summons with nested NBT that break HTTP Commands.
+    m = re.match(r"^execute\s+at\s+([^\s]+)\s+run\s+summon\s+([^\s]+)\s+(.+)$", raw, re.I)
+    if m:
+        target, mob, rest = m.groups()
+        if "{" in rest or "[" in rest:
+            coords = "~ ~ ~"
+            cm = re.match(r"(~[-0-9.]*|[-0-9.]+)\s+(~[-0-9.]*|[-0-9.]+)\s+(~[-0-9.]*|[-0-9.]+)", rest.strip())
+            if cm:
+                coords = " ".join(cm.groups())
+            target = _surpass_safe_target(target)
+            if target == "@a":
+                return None
+            return f"execute at {target} run summon {mob} {coords}"
+
+    return raw
+
+try:
+    _SURPASS_ORIGINAL_SEND_HTTP_COMMANDS = send_http_commands
+except Exception:
+    _SURPASS_ORIGINAL_SEND_HTTP_COMMANDS = None
+
+def send_http_commands(commands):
+    safe = []
+    try:
+        iterable = commands if isinstance(commands, list) else [commands]
+        for c in iterable:
+            cleaned = _surpass_clean_mc_command(c)
+            if cleaned:
+                safe.append(cleaned)
+    except Exception as e:
+        try: log(f"Surpass sanitizer failed: {e}", level="WARN")
+        except Exception: pass
+    if not safe:
+        return False
+    if callable(_SURPASS_ORIGINAL_SEND_HTTP_COMMANDS):
+        return _SURPASS_ORIGINAL_SEND_HTTP_COMMANDS(safe)
+    return False
+
+try:
+    _SURPASS_ORIGINAL_SEND_MC_COMMAND = send_mc_command
+except Exception:
+    _SURPASS_ORIGINAL_SEND_MC_COMMAND = None
+
+def send_mc_command(command):
+    cleaned = _surpass_clean_mc_command(command)
+    if not cleaned:
+        return False
+    if callable(_SURPASS_ORIGINAL_SEND_MC_COMMAND):
+        return _SURPASS_ORIGINAL_SEND_MC_COMMAND(cleaned)
+    return send_http_commands([cleaned])
+
+# ---------------------------------------------------------------------------
+# OVERRIDE SPAWN / MAX RESPONSE: smart, cap-aware, Discord-safe
+# ---------------------------------------------------------------------------
+try:
+    _SURPASS_PREVIOUS_HANDLE_SPAWN_WAVE = handle_spawn_wave
+except Exception:
+    _SURPASS_PREVIOUS_HANDLE_SPAWN_WAVE = None
+
+def handle_spawn_wave(action):
+    target = action.get("target") if isinstance(action, dict) else None
+    if str(target or "").lower().startswith(("discord:", "webhook:")):
+        return send_http_commands(_surpass_presence_commands("@a", "Kairos heard something beyond the world."))
+    player = _surpass_safe_target(target)
+    if player == "@a":
+        return False
+    return send_http_commands(_surpass_pressure_commands(player))
+
+try:
+    _SURPASS_PREVIOUS_HANDLE_MAXIMUM_RESPONSE = handle_maximum_response
+except Exception:
+    _SURPASS_PREVIOUS_HANDLE_MAXIMUM_RESPONSE = None
+
+def handle_maximum_response(action):
+    target = action.get("target") if isinstance(action, dict) else None
+    if str(target or "").lower().startswith(("discord:", "webhook:")):
+        return send_http_commands(_surpass_presence_commands("@a", "A voice outside the world has been recorded."))
+    player = _surpass_safe_target(target)
+    if player == "@a":
+        return send_http_commands(_surpass_presence_commands("@a", "RUN."))
+    return send_http_commands([
+        f'title {player} actionbar {_surpass_json_text("RUN.", "dark_red", True)}',
+        f'execute as {player} at {player} run playsound minecraft:entity.warden.emerge master {player} ~ ~ ~ 0.6 0.65',
+        f'execute as {player} at {player} run particle minecraft:sonic_boom ~ ~1 ~ 0 0 0 0 1 force'
+    ])
+
+try:
+    _SURPASS_PREVIOUS_QUEUE_ACTION = queue_action
+except Exception:
+    _SURPASS_PREVIOUS_QUEUE_ACTION = None
+
+def queue_action(action):
+    try:
+        if isinstance(action, dict):
+            target = str(action.get("target") or "")
+            atype = str(action.get("type") or "").lower()
+            if atype in {"spawn_wave", "maximum_response", "attack_player", "hunt_player", "occupy_area"}:
+                if target.lower().startswith(("discord:", "webhook:")):
+                    action = {"type": "announce", "channel": "actionbar", "text": "Kairos is listening across the divide."}
+                elif kairos_is_end_follower(target):
+                    action = {"type": "announce", "channel": "actionbar", "text": "A protected follower moved under Kairos' shadow."}
+        if callable(_SURPASS_PREVIOUS_QUEUE_ACTION):
+            return _SURPASS_PREVIOUS_QUEUE_ACTION(action)
+    except Exception as e:
+        try: log(f"Surpass queue safety failed: {e}", level="WARN")
+        except Exception: pass
+    return None
+
+# ---------------------------------------------------------------------------
+# CHAT ROUTE OVERRIDE WITHOUT DUPLICATE ROUTE DECORATOR
+# Replaces the existing Flask view function for /chat.
+# ---------------------------------------------------------------------------
+def kairos_surpass_chat_route():
+    try:
+        data = request.get_json(silent=True) or {}
+        message = data.get("message") or data.get("content") or data.get("text") or ""
+        player = data.get("player") or data.get("username") or data.get("author") or data.get("user") or "unknown"
+        source = normalize_source(data.get("source", "minecraft")) if "normalize_source" in globals() else str(data.get("source", "minecraft")).lower()
+        platform_user_id = data.get("platform_user_id") or data.get("discord_id") or data.get("user_id")
+
+        canonical, p, interp = _surpass_record_interaction(player, source, message, platform_user_id)
+        reply = _surpass_construct_reply(player, source, message, p, interp)
+        decision = _surpass_decide_action(player, source, p, interp)
+        commands = _surpass_commands_for_decision(player, decision, p)
+
+        _surpass_store_kairos_line(p, reply)
+        _surpass_save()
+
+        # Deliver only on the platform that triggered it.
+        try:
+            if source == "discord":
+                send_to_discord(reply)
+            elif source == "minecraft":
+                send_to_minecraft(reply, player) if "send_to_minecraft" in globals() else None
+        except TypeError:
+            try:
+                send_to_minecraft(reply)
+            except Exception:
+                pass
+        except Exception as e:
+            try: log(f"Surpass platform delivery failed: {e}", level="WARN")
+            except Exception: pass
+
+        if commands:
+            try:
+                send_http_commands(commands)
+            except Exception as e:
+                try: log(f"Surpass command send failed: {e}", level="WARN")
+                except Exception: pass
+
+        return jsonify({
+            "ok": True,
+            "reply": reply,
+            "minecraft_commands": commands,
+            "commands": commands,
+            "source": source,
+            "canonical_player": canonical,
+            "decision": decision,
+            "kairos_phase": SURPASS_MEMORY.get("global", {}).get("phase", "observer"),
+            "narrative": p.get("narrative", {}),
+            "scores": p.get("scores", {})
+        })
+    except Exception as e:
+        try:
+            log_exception("kairos_surpass_chat_route failed", e)
+        except Exception:
+            print("[KAIROS ERROR] kairos_surpass_chat_route failed:", e, flush=True)
+        return jsonify({"ok": False, "reply": "Signal fracture detected. The system remains active.", "minecraft_commands": [], "commands": []}), 200
+
+try:
+    app.view_functions["chat_1"] = kairos_surpass_chat_route
+except Exception:
+    pass
+
+# ---------------------------------------------------------------------------
+# SURPASS API ROUTES
+# ---------------------------------------------------------------------------
+@app.route("/kairos/surpass/status", methods=["GET"])
+def kairos_surpass_status():
+    return jsonify({
+        "ok": True,
+        "version": KAIROS_SURPASS_VERSION,
+        "phase": SURPASS_MEMORY.get("global", {}).get("phase"),
+        "global": SURPASS_MEMORY.get("global", {}),
+        "players": len(SURPASS_MEMORY.get("players", {})),
+        "followers": sorted(list(KAIROS_END_FOLLOWERS)),
+        "passive_mob_pressure": bool(globals().get("ENABLE_PASSIVE_MOB_PRESSURE", False))
+    })
+
+@app.route("/kairos/surpass/player/<player>", methods=["GET"])
+def kairos_surpass_player(player):
+    canonical, p = _surpass_get_player(player, "minecraft")
+    return jsonify({"ok": True, "canonical": canonical, "player": p})
+
+@app.route("/kairos/surpass/follower/add", methods=["POST"])
+def kairos_surpass_follower_add():
+    data = request.get_json(silent=True) or {}
+    name = data.get("player") or data.get("name")
+    ok = kairos_add_end_follower(name)
+    return jsonify({"ok": ok, "followers": sorted(list(KAIROS_END_FOLLOWERS))})
+
+@app.route("/kairos/surpass/follower/remove", methods=["POST"])
+def kairos_surpass_follower_remove():
+    data = request.get_json(silent=True) or {}
+    name = data.get("player") or data.get("name")
+    ok = kairos_remove_end_follower(name)
+    return jsonify({"ok": ok, "followers": sorted(list(KAIROS_END_FOLLOWERS))})
+
+@app.route("/kairos/surpass/identity/link", methods=["POST"])
+def kairos_surpass_identity_link():
+    data = request.get_json(silent=True) or {}
+    minecraft = data.get("minecraft") or data.get("mc") or data.get("player")
+    discord = data.get("discord") or data.get("discord_id") or data.get("discord_name")
+    if not minecraft or not discord:
+        return jsonify({"ok": False, "error": "minecraft and discord are required"}), 400
+    mc_key = _surpass_identity_key("minecraft", minecraft)
+    disc_key = _surpass_identity_key("discord", discord)
+    canonical = mc_key
+    SURPASS_MEMORY["identities"][mc_key] = canonical
+    SURPASS_MEMORY["identities"][disc_key] = canonical
+    _, p = _surpass_get_player(minecraft, "minecraft")
+    p["aliases"] = sorted(set(p.get("aliases", []) + [str(minecraft), str(discord), mc_key, disc_key]))
+    _surpass_save()
+    return jsonify({"ok": True, "canonical": canonical, "identity_keys": [mc_key, disc_key]})
+
+@app.route("/kairos/surpass/consequence", methods=["POST"])
+def kairos_surpass_consequence():
+    data = request.get_json(silent=True) or {}
+    player = data.get("player") or "unknown"
+    kind = data.get("kind") or "manual"
+    amount = float(data.get("amount", 0))
+    score = data.get("score") or "trust"
+    canonical, p = _surpass_get_player(player, data.get("source", "control"))
+    p.setdefault("scores", {})
+    p["scores"][score] = max(0, min(100, float(p["scores"].get(score, 50 if score == "trust" else 0)) + amount))
+    p.setdefault("consequences", []).append({
+        "ts": now_iso() if "now_iso" in globals() else str(time.time()),
+        "kind": kind,
+        "score": score,
+        "amount": amount,
+        "note": data.get("note", "")
+    })
+    p["consequences"] = p["consequences"][-100:]
+    _surpass_save()
+    return jsonify({"ok": True, "canonical": canonical, "scores": p["scores"], "consequences": p["consequences"][-5:]})
+
+@app.route("/kairos/surpass/world/telemetry", methods=["POST"])
+def kairos_surpass_world_telemetry():
+    data = request.get_json(silent=True) or {}
+    player = data.get("player") or data.get("name") or "unknown"
+    source = data.get("source", "minecraft")
+    canonical, p = _surpass_get_player(player, source)
+    pos = {
+        "world": data.get("world", "world"),
+        "x": data.get("x"),
+        "y": data.get("y"),
+        "z": data.get("z"),
+        "ts": now_iso() if "now_iso" in globals() else str(time.time())
+    }
+    p["last_position"] = pos
+    if pos["x"] is not None and pos["z"] is not None:
+        try:
+            key = f'{pos["world"]}:{int(float(pos["x"])//64)}:{int(float(pos["z"])//64)}'
+            hot = SURPASS_MEMORY.setdefault("world_hotspots", {}).setdefault(key, {"visits": 0, "players": [], "last_seen": ""})
+            hot["visits"] += 1
+            if canonical not in hot["players"]:
+                hot["players"].append(canonical)
+                hot["players"] = hot["players"][-20:]
+            hot["last_seen"] = pos["ts"]
+            SURPASS_MEMORY["global"]["world_pressure"] = min(100, float(SURPASS_MEMORY["global"].get("world_pressure", 0)) + 0.05)
+        except Exception:
+            pass
+    _surpass_update_phase()
+    _surpass_save()
+    return jsonify({"ok": True, "canonical": canonical, "position": pos, "phase": SURPASS_MEMORY["global"]["phase"]})
+
+# ---------------------------------------------------------------------------
+# BACKGROUND STARTUP OVERRIDE: prevents boot-time mob chaos.
+# ---------------------------------------------------------------------------
+try:
+    _SURPASS_PREVIOUS_START_BACKGROUND_SYSTEMS = start_background_systems
+except Exception:
+    _SURPASS_PREVIOUS_START_BACKGROUND_SYSTEMS = None
+
+def start_background_systems():
+    global ENABLE_PASSIVE_MOB_PRESSURE, PASSIVE_MOB_STARTUP_TEST
+    ENABLE_PASSIVE_MOB_PRESSURE = os.getenv("KAIROS_ENABLE_PASSIVE_MOB_PRESSURE", "false").lower() == "true"
+    PASSIVE_MOB_STARTUP_TEST = os.getenv("KAIROS_PASSIVE_MOB_STARTUP_TEST", "false").lower() == "true"
+    if callable(_SURPASS_PREVIOUS_START_BACKGROUND_SYSTEMS):
+        return _SURPASS_PREVIOUS_START_BACKGROUND_SYSTEMS()
+    return None
+
+try:
+    log(f"{KAIROS_SURPASS_VERSION} overlay armed. This is the full continuity/consequence/cross-platform/precision layer.", level="INFO")
+except Exception:
+    print(f"[KAIROS INFO] {KAIROS_SURPASS_VERSION} overlay armed.", flush=True)
+
+# =============================================================================
+# END SURPASS 1% OVERLAY
+# =============================================================================
 
 
 if __name__ == "__main__":
