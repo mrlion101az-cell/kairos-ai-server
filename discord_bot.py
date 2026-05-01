@@ -1,40 +1,56 @@
 import os
 import asyncio
 import time
+import threading
 from collections import OrderedDict
+
 import discord
 import requests
+from flask import Flask, request, jsonify
+
+# ============================================================
+# KAIROS FULL DISCORD BRIDGE BOT
+# Replace your old discord_bot.py with this entire file.
+# ============================================================
 
 DISCORD_TOKEN = (os.getenv("DISCORD_TOKEN") or os.getenv("DISCORD_BOT_TOKEN") or "").strip()
 KAIROS_API_URL = os.getenv("KAIROS_API_URL", "https://kairos-ai-server.onrender.com/chat").strip()
 DISCORD_CHANNEL_ID_RAW = os.getenv("DISCORD_CHANNEL_ID", "").strip()
 DISCORD_CHANNEL_ID = int(DISCORD_CHANNEL_ID_RAW) if DISCORD_CHANNEL_ID_RAW.isdigit() else 0
-REQUIRE_TRIGGER = os.getenv("KAIROS_REQUIRE_TRIGGER", "false").lower() == "true"
+PORT = int(os.getenv("PORT", "10000"))
 DEDUP_SECONDS = float(os.getenv("KAIROS_DISCORD_DEDUPE_SECONDS", "12"))
 REQUEST_TIMEOUT = int(os.getenv("KAIROS_REQUEST_TIMEOUT", "35"))
 DISCORD_CHUNK_LIMIT = int(os.getenv("DISCORD_CHUNK_LIMIT", "1850"))
+MC_TO_DISCORD_TOKEN = (os.getenv("MC_TO_DISCORD_TOKEN") or "").strip()
 
 if not DISCORD_TOKEN:
-    raise RuntimeError("DISCORD_TOKEN or DISCORD_BOT_TOKEN is missing")
+    raise RuntimeError("DISCORD_TOKEN or DISCORD_BOT_TOKEN is missing.")
 
 intents = discord.Intents.default()
 intents.message_content = True
 client = discord.Client(intents=intents)
+http_app = Flask(__name__)
 
 processed_ids = OrderedDict()
 processed_fps = OrderedDict()
 
-def cleanup():
+
+def log(msg):
+    print(f"[Kairos Discord Bridge] {msg}", flush=True)
+
+
+def cleanup_dedupe():
     cutoff = time.time() - DEDUP_SECONDS
     for store in (processed_ids, processed_fps):
-        for k, ts in list(store.items()):
+        for key, ts in list(store.items()):
             if ts < cutoff:
-                store.pop(k, None)
-        while len(store) > 500:
+                store.pop(key, None)
+        while len(store) > 700:
             store.popitem(last=False)
 
+
 def already_processed(message):
-    cleanup()
+    cleanup_dedupe()
     mid = str(message.id)
     fp = f"{message.author.id}:{message.channel.id}:{message.content.strip().lower()}"
     if mid in processed_ids or fp in processed_fps:
@@ -43,22 +59,33 @@ def already_processed(message):
     processed_fps[fp] = time.time()
     return False
 
-def triggered(message):
-    content = message.content.strip().lower()
+
+def is_kairos_trigger(message):
+    content = (message.content or "").strip().lower()
     if client.user and client.user.mentioned_in(message):
         return True
-    return content.startswith(("kairos", "!kairos", "hey kairos", "kairus", "kaiross"))
+    triggers = (
+        "kairos", "!kairos", "/kairos", "hey kairos", "yo kairos",
+        "ok kairos", "okay kairos", "kairus", "kaiross", "kiros", "kyros"
+    )
+    return content.startswith(triggers)
 
-def clean_text(message):
-    content = message.content.strip()
+
+def clean_trigger_text(message):
+    content = (message.content or "").strip()
     if client.user:
-        content = content.replace(f"<@{client.user.id}>", "").replace(f"<@!{client.user.id}>", "")
+        content = content.replace(f"<@{client.user.id}>", "").replace(f"<@!{client.user.id}>", "").strip()
     lower = content.lower()
-    for prefix in ("!kairos", "hey kairos", "kaiross", "kairus", "kairos"):
+    prefixes = (
+        "!kairos", "/kairos", "hey kairos", "yo kairos", "ok kairos",
+        "okay kairos", "kaiross", "kairus", "kiros", "kyros", "kairos"
+    )
+    for prefix in prefixes:
         if lower.startswith(prefix):
             content = content[len(prefix):].strip()
             break
     return content or "Speak."
+
 
 def split_text(text):
     text = str(text or "").strip()
@@ -82,7 +109,8 @@ def split_text(text):
         chunks.append(rest)
     return chunks
 
-def post_to_kairos(message, text):
+
+def post_to_kairos_from_discord(message, text, should_reply_in_discord):
     payload = {
         "player": message.author.display_name,
         "message": text,
@@ -92,20 +120,56 @@ def post_to_kairos(message, text):
         "platform_user_id": str(message.author.id),
         "discord_user_id": str(message.author.id),
         "discord_channel_id": str(message.channel.id),
+        "reply_allowed": bool(should_reply_in_discord),
+        "discord_reply_allowed": bool(should_reply_in_discord),
+        "bridge_only": not bool(should_reply_in_discord),
     }
     res = requests.post(KAIROS_API_URL, json=payload, timeout=REQUEST_TIMEOUT)
     if res.status_code != 200:
-        raise RuntimeError(f"Kairos API HTTP {res.status_code}: {res.text[:300]}")
-    return res.json()
+        raise RuntimeError(f"Kairos API HTTP {res.status_code}: {res.text[:500]}")
+    try:
+        return res.json()
+    except Exception:
+        return {"reply": ""}
+
+
+async def get_target_channel():
+    if not DISCORD_CHANNEL_ID:
+        return None
+    channel = client.get_channel(DISCORD_CHANNEL_ID)
+    if channel is None:
+        try:
+            channel = await client.fetch_channel(DISCORD_CHANNEL_ID)
+        except Exception as e:
+            log(f"Could not fetch Discord channel {DISCORD_CHANNEL_ID}: {e}")
+            return None
+    return channel
+
+
+async def send_to_discord_channel(text):
+    text = str(text or "").strip()
+    if not text:
+        return False
+    channel = await get_target_channel()
+    if channel is None:
+        log("No target Discord channel available. Check DISCORD_CHANNEL_ID.")
+        return False
+    for chunk in split_text(text):
+        await channel.send(chunk)
+        await asyncio.sleep(0.15)
+    return True
+
 
 @client.event
 async def on_ready():
-    print("=" * 72, flush=True)
-    print(f"[Kairos Discord Bridge] Online as {client.user}", flush=True)
-    print(f"KAIROS_API_URL={KAIROS_API_URL}", flush=True)
-    print(f"CHANNEL_LOCK={DISCORD_CHANNEL_ID if DISCORD_CHANNEL_ID else 'ALL'}", flush=True)
-    print(f"REQUIRE_TRIGGER={REQUIRE_TRIGGER}", flush=True)
-    print("=" * 72, flush=True)
+    log("=" * 72)
+    log(f"Online as {client.user}")
+    log(f"KAIROS_API_URL={KAIROS_API_URL}")
+    log(f"CHANNEL_LOCK={DISCORD_CHANNEL_ID if DISCORD_CHANNEL_ID else 'ALL'}")
+    log("Discord normal chat bridges to Minecraft; Discord Kairos replies only when triggered.")
+    log("Minecraft bridge endpoint: POST /mc_to_discord")
+    log("=" * 72)
+
 
 @client.event
 async def on_message(message):
@@ -115,23 +179,81 @@ async def on_message(message):
         return
     if not message.content or not message.content.strip():
         return
-    if REQUIRE_TRIGGER and not triggered(message):
-        return
     if already_processed(message):
         return
 
-    user_text = clean_text(message) if triggered(message) else message.content.strip()
+    triggered = is_kairos_trigger(message)
+    user_text = clean_trigger_text(message) if triggered else message.content.strip()
+
     try:
-        async with message.channel.typing():
-            data = await asyncio.to_thread(post_to_kairos, message, user_text)
+        data = await asyncio.to_thread(post_to_kairos_from_discord, message, user_text, triggered)
         if data.get("duplicate"):
             return
-        reply = data.get("reply") or ""
-        for chunk in split_text(reply):
-            await message.channel.send(f"**[Kairos]** {chunk}")
-            await asyncio.sleep(0.35)
+        reply = str(data.get("reply") or "").strip()
+        if triggered and reply:
+            async with message.channel.typing():
+                for chunk in split_text(reply):
+                    await message.channel.send(f"**[Kairos]** {chunk}")
+                    await asyncio.sleep(0.35)
     except Exception as e:
-        print(f"[Kairos Discord Bridge ERROR] {e}", flush=True)
-        await message.channel.send("**[Kairos]** ...connection disrupted.")
+        log(f"Discord -> Kairos ERROR: {e}")
+        if triggered:
+            try:
+                await message.channel.send("**[Kairos]** ...connection disrupted.")
+            except Exception:
+                pass
 
-client.run(DISCORD_TOKEN)
+
+@http_app.route("/", methods=["GET"])
+def health():
+    return jsonify({
+        "status": "online",
+        "service": "kairos-discord-full-bridge",
+        "discord_ready": client.is_ready(),
+        "channel_id": DISCORD_CHANNEL_ID,
+        "endpoint": "/mc_to_discord",
+    })
+
+
+@http_app.route("/mc_to_discord", methods=["POST"])
+def mc_to_discord():
+    try:
+        data = request.get_json(silent=True) or {}
+        if MC_TO_DISCORD_TOKEN:
+            supplied = request.headers.get("Authorization", "").replace("Bearer ", "").strip()
+            supplied_alt = str(data.get("token", "")).strip()
+            if supplied != MC_TO_DISCORD_TOKEN and supplied_alt != MC_TO_DISCORD_TOKEN:
+                return jsonify({"ok": False, "error": "unauthorized"}), 401
+
+        player = str(data.get("player") or data.get("username") or data.get("name") or "Minecraft").strip()
+        message = str(data.get("message") or data.get("content") or "").strip()
+
+        if not message:
+            return jsonify({"ok": False, "error": "missing message"}), 400
+
+        safe_player = player.replace("@", "@\u200b")
+        safe_message = message.replace("@", "@\u200b")
+        formatted = f"**[Minecraft] {safe_player}:** {safe_message}"
+
+        if not client.is_ready():
+            log("Received Minecraft message before Discord client was ready.")
+            return jsonify({"ok": False, "error": "discord client not ready"}), 503
+
+        future = asyncio.run_coroutine_threadsafe(send_to_discord_channel(formatted), client.loop)
+        ok = future.result(timeout=10)
+        if ok:
+            log(f"Minecraft -> Discord delivered for {player}.")
+            return jsonify({"ok": True, "delivered": True}), 200
+        return jsonify({"ok": False, "delivered": False, "error": "no channel"}), 500
+    except Exception as e:
+        log(f"Minecraft -> Discord ERROR: {e}")
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+def run_http_server():
+    http_app.run(host="0.0.0.0", port=PORT, debug=False, use_reloader=False)
+
+
+if __name__ == "__main__":
+    threading.Thread(target=run_http_server, daemon=True).start()
+    client.run(DISCORD_TOKEN)
