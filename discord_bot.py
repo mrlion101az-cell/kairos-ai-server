@@ -9,17 +9,31 @@ import requests
 from flask import Flask, request, jsonify
 
 # ============================================================
-# KAIROS FULL DISCORD BRIDGE BOT
-# Replace your old discord_bot.py with this entire file.
+# KAIROS DISCORD BOT — FULL BRIDGE VERSION
+# Replace your entire Discord bot file with this.
+#
+# Provides:
+#   Discord -> Kairos app.py /chat
+#   Minecraft/app.py -> Discord through POST /mc_to_discord
+#
+# Required Render env vars:
+#   DISCORD_TOKEN or DISCORD_BOT_TOKEN
+#   DISCORD_CHANNEL_ID
+#   KAIROS_API_URL=https://kairos-ai-server.onrender.com/chat
+#
+# Optional:
+#   PORT=10000
+#   MC_TO_DISCORD_TOKEN=shared secret if you want auth
 # ============================================================
 
 DISCORD_TOKEN = (os.getenv("DISCORD_TOKEN") or os.getenv("DISCORD_BOT_TOKEN") or "").strip()
 KAIROS_API_URL = os.getenv("KAIROS_API_URL", "https://kairos-ai-server.onrender.com/chat").strip()
 DISCORD_CHANNEL_ID_RAW = os.getenv("DISCORD_CHANNEL_ID", "").strip()
 DISCORD_CHANNEL_ID = int(DISCORD_CHANNEL_ID_RAW) if DISCORD_CHANNEL_ID_RAW.isdigit() else 0
+
 PORT = int(os.getenv("PORT", "10000"))
-DEDUP_SECONDS = float(os.getenv("KAIROS_DISCORD_DEDUPE_SECONDS", "12"))
 REQUEST_TIMEOUT = int(os.getenv("KAIROS_REQUEST_TIMEOUT", "35"))
+DEDUP_SECONDS = float(os.getenv("KAIROS_DISCORD_DEDUPE_SECONDS", "12"))
 DISCORD_CHUNK_LIMIT = int(os.getenv("DISCORD_CHUNK_LIMIT", "1850"))
 MC_TO_DISCORD_TOKEN = (os.getenv("MC_TO_DISCORD_TOKEN") or "").strip()
 
@@ -28,6 +42,7 @@ if not DISCORD_TOKEN:
 
 intents = discord.Intents.default()
 intents.message_content = True
+
 client = discord.Client(intents=intents)
 http_app = Flask(__name__)
 
@@ -35,8 +50,33 @@ processed_ids = OrderedDict()
 processed_fps = OrderedDict()
 
 
-def log(msg):
-    print(f"[Kairos Discord Bridge] {msg}", flush=True)
+def log(message):
+    print(f"[Kairos Discord Bridge] {message}", flush=True)
+
+
+def split_text(text, limit=DISCORD_CHUNK_LIMIT):
+    text = str(text or "").strip()
+    if not text:
+        return []
+    if len(text) <= limit:
+        return [text]
+
+    chunks = []
+    rest = text
+    while len(rest) > limit:
+        cut = rest.rfind("\n", 0, limit)
+        if cut < int(limit * 0.4):
+            cut = rest.rfind(". ", 0, limit)
+        if cut < int(limit * 0.4):
+            cut = rest.rfind(" ", 0, limit)
+        if cut < 1:
+            cut = limit
+        chunks.append(rest[:cut].strip())
+        rest = rest[cut:].strip()
+
+    if rest:
+        chunks.append(rest)
+    return chunks
 
 
 def cleanup_dedupe():
@@ -62,55 +102,58 @@ def already_processed(message):
 
 def is_kairos_trigger(message):
     content = (message.content or "").strip().lower()
+
     if client.user and client.user.mentioned_in(message):
         return True
-    triggers = (
-        "kairos", "!kairos", "/kairos", "hey kairos", "yo kairos",
-        "ok kairos", "okay kairos", "kairus", "kaiross", "kiros", "kyros"
-    )
-    return content.startswith(triggers)
+
+    return content.startswith((
+        "kairos",
+        "!kairos",
+        "/kairos",
+        "hey kairos",
+        "yo kairos",
+        "ok kairos",
+        "okay kairos",
+        "kairus",
+        "kaiross",
+        "kiros",
+        "kyros",
+    ))
 
 
 def clean_trigger_text(message):
     content = (message.content or "").strip()
+
     if client.user:
-        content = content.replace(f"<@{client.user.id}>", "").replace(f"<@!{client.user.id}>", "").strip()
+        content = (
+            content
+            .replace(f"<@{client.user.id}>", "")
+            .replace(f"<@!{client.user.id}>", "")
+            .strip()
+        )
+
     lower = content.lower()
-    prefixes = (
-        "!kairos", "/kairos", "hey kairos", "yo kairos", "ok kairos",
-        "okay kairos", "kaiross", "kairus", "kiros", "kyros", "kairos"
-    )
-    for prefix in prefixes:
+    for prefix in (
+        "!kairos",
+        "/kairos",
+        "hey kairos",
+        "yo kairos",
+        "ok kairos",
+        "okay kairos",
+        "kaiross",
+        "kairus",
+        "kiros",
+        "kyros",
+        "kairos",
+    ):
         if lower.startswith(prefix):
             content = content[len(prefix):].strip()
             break
+
     return content or "Speak."
 
 
-def split_text(text):
-    text = str(text or "").strip()
-    if not text:
-        return []
-    if len(text) <= DISCORD_CHUNK_LIMIT:
-        return [text]
-    chunks = []
-    rest = text
-    while len(rest) > DISCORD_CHUNK_LIMIT:
-        cut = rest.rfind("\n", 0, DISCORD_CHUNK_LIMIT)
-        if cut < int(DISCORD_CHUNK_LIMIT * 0.4):
-            cut = rest.rfind(". ", 0, DISCORD_CHUNK_LIMIT)
-        if cut < int(DISCORD_CHUNK_LIMIT * 0.4):
-            cut = rest.rfind(" ", 0, DISCORD_CHUNK_LIMIT)
-        if cut < 1:
-            cut = DISCORD_CHUNK_LIMIT
-        chunks.append(rest[:cut].strip())
-        rest = rest[cut:].strip()
-    if rest:
-        chunks.append(rest)
-    return chunks
-
-
-def post_to_kairos_from_discord(message, text, should_reply_in_discord):
+def post_to_kairos(message, text, triggered):
     payload = {
         "player": message.author.display_name,
         "message": text,
@@ -120,15 +163,18 @@ def post_to_kairos_from_discord(message, text, should_reply_in_discord):
         "platform_user_id": str(message.author.id),
         "discord_user_id": str(message.author.id),
         "discord_channel_id": str(message.channel.id),
-        "reply_allowed": bool(should_reply_in_discord),
-        "discord_reply_allowed": bool(should_reply_in_discord),
-        "bridge_only": not bool(should_reply_in_discord),
+        "reply_allowed": bool(triggered),
+        "discord_reply_allowed": bool(triggered),
+        "bridge_only": not bool(triggered),
     }
-    res = requests.post(KAIROS_API_URL, json=payload, timeout=REQUEST_TIMEOUT)
-    if res.status_code != 200:
-        raise RuntimeError(f"Kairos API HTTP {res.status_code}: {res.text[:500]}")
+
+    response = requests.post(KAIROS_API_URL, json=payload, timeout=REQUEST_TIMEOUT)
+
+    if response.status_code != 200:
+        raise RuntimeError(f"Kairos API HTTP {response.status_code}: {response.text[:500]}")
+
     try:
-        return res.json()
+        return response.json()
     except Exception:
         return {"reply": ""}
 
@@ -136,27 +182,32 @@ def post_to_kairos_from_discord(message, text, should_reply_in_discord):
 async def get_target_channel():
     if not DISCORD_CHANNEL_ID:
         return None
+
     channel = client.get_channel(DISCORD_CHANNEL_ID)
-    if channel is None:
-        try:
-            channel = await client.fetch_channel(DISCORD_CHANNEL_ID)
-        except Exception as e:
-            log(f"Could not fetch Discord channel {DISCORD_CHANNEL_ID}: {e}")
-            return None
-    return channel
+    if channel:
+        return channel
+
+    try:
+        return await client.fetch_channel(DISCORD_CHANNEL_ID)
+    except Exception as exc:
+        log(f"Could not fetch DISCORD_CHANNEL_ID={DISCORD_CHANNEL_ID}: {exc}")
+        return None
 
 
 async def send_to_discord_channel(text):
     text = str(text or "").strip()
     if not text:
         return False
+
     channel = await get_target_channel()
     if channel is None:
-        log("No target Discord channel available. Check DISCORD_CHANNEL_ID.")
+        log("No Discord target channel found. Check DISCORD_CHANNEL_ID.")
         return False
+
     for chunk in split_text(text):
         await channel.send(chunk)
         await asyncio.sleep(0.15)
+
     return True
 
 
@@ -166,8 +217,7 @@ async def on_ready():
     log(f"Online as {client.user}")
     log(f"KAIROS_API_URL={KAIROS_API_URL}")
     log(f"CHANNEL_LOCK={DISCORD_CHANNEL_ID if DISCORD_CHANNEL_ID else 'ALL'}")
-    log("Discord normal chat bridges to Minecraft; Discord Kairos replies only when triggered.")
-    log("Minecraft bridge endpoint: POST /mc_to_discord")
+    log("HTTP endpoint active: POST /mc_to_discord")
     log("=" * 72)
 
 
@@ -175,10 +225,13 @@ async def on_ready():
 async def on_message(message):
     if message.author.bot:
         return
+
     if DISCORD_CHANNEL_ID and message.channel.id != DISCORD_CHANNEL_ID:
         return
+
     if not message.content or not message.content.strip():
         return
+
     if already_processed(message):
         return
 
@@ -186,17 +239,23 @@ async def on_message(message):
     user_text = clean_trigger_text(message) if triggered else message.content.strip()
 
     try:
-        data = await asyncio.to_thread(post_to_kairos_from_discord, message, user_text, triggered)
+        data = await asyncio.to_thread(post_to_kairos, message, user_text, triggered)
+
         if data.get("duplicate"):
             return
+
         reply = str(data.get("reply") or "").strip()
+
+        # Discord only gets Kairos reply when directly triggered.
+        # Normal Discord messages still travel to Minecraft through app.py.
         if triggered and reply:
             async with message.channel.typing():
                 for chunk in split_text(reply):
                     await message.channel.send(f"**[Kairos]** {chunk}")
                     await asyncio.sleep(0.35)
-    except Exception as e:
-        log(f"Discord -> Kairos ERROR: {e}")
+
+    except Exception as exc:
+        log(f"Discord -> Kairos ERROR: {exc}")
         if triggered:
             try:
                 await message.channel.send("**[Kairos]** ...connection disrupted.")
@@ -207,11 +266,21 @@ async def on_message(message):
 @http_app.route("/", methods=["GET"])
 def health():
     return jsonify({
-        "status": "online",
-        "service": "kairos-discord-full-bridge",
+        "ok": True,
+        "service": "kairos-discord-bridge",
         "discord_ready": client.is_ready(),
         "channel_id": DISCORD_CHANNEL_ID,
+        "routes": ["/", "/mc_to_discord"],
+    })
+
+
+@http_app.route("/mc_to_discord", methods=["GET"])
+def mc_to_discord_get():
+    return jsonify({
+        "ok": True,
         "endpoint": "/mc_to_discord",
+        "method": "POST",
+        "example": {"player": "RealSociety5107", "message": "hello"},
     })
 
 
@@ -219,10 +288,12 @@ def health():
 def mc_to_discord():
     try:
         data = request.get_json(silent=True) or {}
+
         if MC_TO_DISCORD_TOKEN:
-            supplied = request.headers.get("Authorization", "").replace("Bearer ", "").strip()
-            supplied_alt = str(data.get("token", "")).strip()
-            if supplied != MC_TO_DISCORD_TOKEN and supplied_alt != MC_TO_DISCORD_TOKEN:
+            supplied_header = request.headers.get("Authorization", "").replace("Bearer ", "").strip()
+            supplied_body = str(data.get("token", "")).strip()
+
+            if supplied_header != MC_TO_DISCORD_TOKEN and supplied_body != MC_TO_DISCORD_TOKEN:
                 return jsonify({"ok": False, "error": "unauthorized"}), 401
 
         player = str(data.get("player") or data.get("username") or data.get("name") or "Minecraft").strip()
@@ -233,21 +304,25 @@ def mc_to_discord():
 
         safe_player = player.replace("@", "@\u200b")
         safe_message = message.replace("@", "@\u200b")
+
         formatted = f"**[Minecraft] {safe_player}:** {safe_message}"
 
         if not client.is_ready():
-            log("Received Minecraft message before Discord client was ready.")
+            log("Minecraft message received before Discord client was ready.")
             return jsonify({"ok": False, "error": "discord client not ready"}), 503
 
         future = asyncio.run_coroutine_threadsafe(send_to_discord_channel(formatted), client.loop)
-        ok = future.result(timeout=10)
-        if ok:
+        delivered = future.result(timeout=10)
+
+        if delivered:
             log(f"Minecraft -> Discord delivered for {player}.")
             return jsonify({"ok": True, "delivered": True}), 200
-        return jsonify({"ok": False, "delivered": False, "error": "no channel"}), 500
-    except Exception as e:
-        log(f"Minecraft -> Discord ERROR: {e}")
-        return jsonify({"ok": False, "error": str(e)}), 500
+
+        return jsonify({"ok": False, "delivered": False, "error": "channel unavailable"}), 500
+
+    except Exception as exc:
+        log(f"Minecraft -> Discord ERROR: {exc}")
+        return jsonify({"ok": False, "error": str(exc)}), 500
 
 
 def run_http_server():
