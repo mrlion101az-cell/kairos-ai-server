@@ -8918,6 +8918,16 @@ def chat_1():
     _force_bridge_minecraft_to_discord_from_request()
     try:
         data = request.get_json(force=True) or {}
+        # ============================================
+        # FORCE MINECRAFT CHAT TO ALLOW KAIROS REPLIES
+        # ============================================
+        try:
+            __kairos_source = str(data.get("source", "")).lower()
+            if __kairos_source == "minecraft":
+                data["reply_allowed"] = True
+                data["minecraft_reply_allowed"] = True
+        except Exception as e:
+            log_exception("Minecraft reply_allowed force failed", e)
         source = normalize_source(data.get("source"))
         player_name = normalize_name(data.get("player_name") or data.get("name") or data.get("player") or data.get("username") or "unknown")
         message = data.get("message") or data.get("content") or data.get("text") or ""
