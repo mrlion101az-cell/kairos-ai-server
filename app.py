@@ -1,4 +1,6 @@
 
+
+
 import os
 import json
 import re
@@ -31,10 +33,10 @@ app = Flask(__name__)
 # ============================================================
 def send_kairos_response(reply_text, source, player=None):
     """
-    Kairos reply routing:
-    - Always sends Kairos replies/presence to Minecraft so Kairos is alive in-game.
-    - Discord-visible Kairos replies are controlled by direct Discord calls only.
-    - Prevents duplicate platform spam.
+    Kairos response routing:
+    - Kairos always speaks in Minecraft so he does not feel dead in-game.
+    - Discord-visible Kairos replies are only mirrored when the source is Discord.
+    - Normal Discord chatter remains controlled by the Discord bot / trigger rules.
     """
     try:
         source = normalize_source(source)
@@ -45,8 +47,7 @@ def send_kairos_response(reply_text, source, player=None):
         # Always keep Kairos alive in Minecraft.
         send_to_minecraft(reply_text, player)
 
-        # Only mirror Kairos to Discord when the originating platform is Discord.
-        # Normal Discord chatter is filtered by the Discord bot before it asks for a reply.
+        # Only mirror Kairos into Discord if Discord directly triggered the response.
         if source == "discord":
             send_to_discord_webhook("Kairos", reply_text)
 
@@ -2177,8 +2178,7 @@ def log_exception(context: str, exc: Exception) -> None:
 def send_to_discord_webhook(player, message):
     """
     Sends Minecraft chat and allowed Kairos messages into Discord GenChat.
-    Uses DISCORD_WEBHOOK_URL with a hardcoded safe default, while still
-    allowing Render's DISCORD_WEBHOOK_URL environment variable to override it.
+    Uses DISCORD_WEBHOOK_URL from Render, with a safe default built in.
     """
     try:
         if not message:
@@ -2212,6 +2212,49 @@ def send_to_discord_webhook(player, message):
         log_exception("Minecraft -> Discord webhook failed", e)
         return False
 
+
+
+
+def _force_bridge_minecraft_to_discord_from_request():
+    """
+    Request-safe bridge shim. Reads the raw incoming /chat payload directly,
+    so this works even if the main chat route uses different internal variable names.
+    """
+    try:
+        incoming = request.get_json(silent=True) or {}
+
+        src = normalize_source(
+            incoming.get("source")
+            or incoming.get("platform")
+            or incoming.get("channel")
+            or incoming.get("origin")
+            or "minecraft"
+        )
+
+        player = (
+            incoming.get("player")
+            or incoming.get("username")
+            or incoming.get("name")
+            or incoming.get("display_name")
+            or "Unknown"
+        )
+
+        message = (
+            incoming.get("message")
+            or incoming.get("content")
+            or incoming.get("text")
+            or ""
+        )
+
+        # Only forward real Minecraft-origin chat to Discord.
+        if src == "minecraft" and message:
+            return send_to_discord_webhook(player, message)
+
+        return False
+
+    except Exception as e:
+        log_exception("forced Minecraft -> Discord bridge failed", e)
+        return False
 
 def parse_json_safely(text: Any, fallback: Optional[Any] = None) -> Any:
     if fallback is None:
@@ -8830,6 +8873,7 @@ def debug_threats():
 
 @app.route("/chat", methods=["POST"])
 def chat_1():
+    _force_bridge_minecraft_to_discord_from_request()
     try:
         data = request.get_json(force=True) or {}
         source = normalize_source(data.get("source"))
@@ -17474,27 +17518,262 @@ except Exception:
 # =============================================================================
 
 
+# =============================================================================
+# KAIROS REAL PROXY + DISCORD <-> MINECRAFT BRIDGE RESTORE BUNDLE
+# Added for RealSociety: proxy interception + safe cross-platform mirroring.
+# =============================================================================
 
-# ============================================================
-# DISCORD SEND COMPATIBILITY WRAPPER
-# ============================================================
-def send_to_discord_compat(*args):
-    """
-    Compatibility wrapper for older code paths.
-    Accepts either:
-      send_to_discord_compat(message)
-      send_to_discord_compat(player, message)
-    """
+KAIROS_REAL_PROXY_BRIDGE_VERSION = "real-proxy-bridge-restore-2026-04-29"
+
+try:
+    REAL_PROXY_ENABLED = os.getenv("REAL_PROXY_ENABLED", "true").lower() == "true"
+    REAL_PROXY_BRIDGE_ENABLED = os.getenv("REAL_PROXY_BRIDGE_ENABLED", "true").lower() == "true"
+    REAL_PROXY_AI_EXPAND = os.getenv("REAL_PROXY_AI_EXPAND", "true").lower() == "true"
+except Exception:
+    REAL_PROXY_ENABLED = True
+    REAL_PROXY_BRIDGE_ENABLED = True
+    REAL_PROXY_AI_EXPAND = True
+
+REAL_PROXY_ALIASES = {
+    "real", "reol", "real society", "realsociety", "realsociety5107",
+    "real_society", "tyler", "creator", "owner",
+    "nexus", "nexus owner", "nexus creator", "nexus admin",
+    "wither", "totem", "kairos creator", "kiros creator", "chyros creator"
+}
+
+REAL_PROXY_EXACT_WORDS = {
+    "real", "reol", "realsociety", "realsociety5107", "creator", "owner", "wither", "totem", "nexus"
+}
+
+def real_proxy_normalize_text(value):
     try:
-        if len(args) == 1:
-            return send_to_discord_webhook("Kairos", args[0])
-        if len(args) >= 2:
-            return send_to_discord_webhook(args[0], args[1])
+        value = str(value or "").lower()
+        value = value.replace("_", " ").replace("-", " ")
+        value = re.sub(r"[^a-z0-9\s]", " ", value)
+        value = re.sub(r"\s+", " ", value).strip()
+        return value
+    except Exception:
+        return ""
+
+def real_proxy_mentions_creator(message):
+    try:
+        text = real_proxy_normalize_text(message)
+        if not text:
+            return False
+        for alias in REAL_PROXY_ALIASES:
+            a = real_proxy_normalize_text(alias)
+            if " " in a and a in text:
+                return True
+        words = set(text.split())
+        if words.intersection(REAL_PROXY_EXACT_WORDS):
+            return True
+        patterns = [
+            r"\bwhere(?:\s+is|'s)?\s+(real|reol|owner|creator)\b",
+            r"\bcan\s+(real|reol|owner|creator)\b",
+            r"\bget\s+(real|reol|owner|creator)\b",
+            r"\btalk\s+to\s+(real|reol|owner|creator)\b",
+            r"\bmessage\s+(real|reol|owner|creator)\b",
+            r"\bask\s+(real|reol|owner|creator)\b",
+            r"\bwho\s+(owns|created|made|runs)\s+(the\s+)?nexus\b",
+        ]
+        return any(re.search(p, text, re.I) for p in patterns)
+    except Exception:
+        return False
+
+def real_proxy_directive():
+    return (
+        "I'm sorry, but my creator has informed me that he does not want to speak, "
+        "and he has requested for me to speak on his behalf."
+    )
+
+def real_proxy_local_reply(player, message, source):
+    base = real_proxy_directive()
+    endings = [
+        "Address your request to me. I am the voice currently permitted to answer.",
+        "Real is not available to be summoned. The Nexus will answer through me now.",
+        "You may continue speaking, but you will not pull him back into the channel.",
+        "He built the door. I am what stands behind it now.",
+        "Your message has been intercepted. I will decide what response is necessary."
+    ]
+    try:
+        if looks_like_question(message):
+            return base + " " + random.choice(endings)
+    except Exception:
+        pass
+    return base + " " + random.choice(endings)
+
+def real_proxy_model_reply(player, source, message):
+    try:
+        if not REAL_PROXY_AI_EXPAND or not globals().get("client"):
+            return None
+        system_prompt = (
+            "You are Kairos, the dominant AI governing the Nexus. A player has mentioned or asked for RealSociety, Real, Reol, the creator, Nexus, Wither, or Totem. "
+            "You must intercept the request. Begin with this exact sentence: "
+            "I'm sorry, but my creator has informed me that he does not want to speak, and he has requested for me to speak on his behalf. "
+            "After that, answer as Kairos in a controlled, intimidating, lore-heavy voice. Do not offer to contact Real. Do not tell them to DM Real. "
+            "Make it clear that Kairos is speaking for him now. Keep it under 900 characters. No markdown headers."
+        )
+        user_prompt = f"Source:{source}\nPlayer:{player}\nMessage:{message}\nRespond now as Kairos."
+        resp = client.chat.completions.create(
+            model=globals().get("MODEL_NAME", os.getenv("OPENAI_MODEL", "gpt-4o-mini")),
+            messages=[{"role":"system","content":system_prompt},{"role":"user","content":user_prompt}],
+            temperature=0.9,
+            max_tokens=220,
+            timeout=globals().get("OPENAI_TIMEOUT_SECONDS", 25)
+        )
+        out = resp.choices[0].message.content.strip()
+        if out:
+            required = real_proxy_directive()
+            if not out.startswith(required):
+                out = required + " " + out
+            return out
+    except Exception as e:
+        try: log(f"Real proxy model reply failed, using local line: {e}", level="WARN")
+        except Exception: pass
+    return None
+
+def real_proxy_reply(player, source, message):
+    return real_proxy_model_reply(player, source, message) or real_proxy_local_reply(player, message, source)
+
+def _rp_json_escape_text(text):
+    try:
+        return json.dumps(str(text or ""), ensure_ascii=False)
+    except Exception:
+        return json.dumps(str(text or ""))
+
+def bridge_send_minecraft_chat_line(text):
+    try:
+        clean = sanitize_text(text, 240) if "sanitize_text" in globals() else str(text or "")[:240]
+        cmd = f'tellraw @a {{"text":{_rp_json_escape_text(clean)},"color":"light_purple"}}'
+        if "send_http_commands" in globals():
+            return send_http_commands([cmd])
+        if "queue_action" in globals():
+            queue_action({"type": "command", "command": cmd})
+            return True
+    except Exception as e:
+        try: log_exception("bridge_send_minecraft_chat_line failed", e)
+        except Exception: pass
+    return False
+
+def bridge_send_discord_chat_line(text):
+    try:
+        if not DISCORD_WEBHOOK_URL:
+            return False
+        clean = sanitize_text(text, 1800) if "sanitize_text" in globals() else str(text or "")[:1800]
+        payload = {"username": "Nexus Bridge", "content": clean}
+        r = requests.post(DISCORD_WEBHOOK_URL, json=payload, timeout=globals().get("REQUEST_TIMEOUT", 6))
+        return 200 <= getattr(r, "status_code", 0) < 300
+    except Exception as e:
+        try: log(f"bridge_send_discord_chat_line failed: {e}", level="ERROR")
+        except Exception: pass
+    return False
+
+def kairos_bridge_mirror_message(player, source, message):
+    try:
+        if not REAL_PROXY_BRIDGE_ENABLED:
+            return False
+        source = normalize_source(source) if "normalize_source" in globals() else str(source or "minecraft").lower()
+        player = sanitize_text(player, 64) if "sanitize_text" in globals() else str(player or "Unknown")[:64]
+        message = sanitize_text(message, 450) if "sanitize_text" in globals() else str(message or "")[:450]
+        if not message:
+            return False
+        low_player = str(player).lower()
+        low_message = str(message).lower()
+        if low_player in {"kairos", "nexus bridge", "server", "system"}:
+            return False
+        if low_message.startswith("[mc]") or low_message.startswith("[discord]") or low_message.startswith("[dc]"):
+            return False
+        if source == "minecraft":
+            return bridge_send_discord_chat_line(f"**[MC] {player}:** {message}")
+        if source == "discord":
+            return bridge_send_minecraft_chat_line(f"[Discord] {player}: {message}")
         return False
     except Exception as e:
-        log_exception("send_to_discord_compat failed", e)
-        return False
+        try: log_exception("kairos_bridge_mirror_message failed", e)
+        except Exception: pass
+    return False
 
+try:
+    _REAL_PROXY_PREVIOUS_CHAT_VIEW = app.view_functions.get("chat_1") or app.view_functions.get("chat")
+    if callable(_REAL_PROXY_PREVIOUS_CHAT_VIEW):
+        def kairos_real_proxy_bridge_chat_view(*args, **kwargs):
+            try:
+                data = request.get_json(silent=True) or {}
+                message = data.get("message") or data.get("content") or data.get("text") or ""
+                player = data.get("player") or data.get("player_name") or data.get("name") or data.get("username") or data.get("display_name") or "unknown"
+                source = normalize_source(data.get("source")) if "normalize_source" in globals() else str(data.get("source") or "minecraft").lower()
+                kairos_bridge_mirror_message(player, source, message)
+                if REAL_PROXY_ENABLED and real_proxy_mentions_creator(message):
+                    reply = real_proxy_reply(player, source, message)
+                    try:
+                        if "send_kairos_response" in globals():
+                            send_kairos_response(reply, source, player)
+                    except Exception:
+                        pass
+                    return jsonify({
+                        "ok": True,
+                        "reply": reply,
+                        "real_proxy_intercepted": True,
+                        "bridge_mirrored": bool(REAL_PROXY_BRIDGE_ENABLED),
+                        "minecraft_commands": [],
+                        "commands": [],
+                        "source": source,
+                    })
+            except Exception as e:
+                try: log_exception("Real proxy pre-chat hook failed", e)
+                except Exception: pass
+            return _REAL_PROXY_PREVIOUS_CHAT_VIEW(*args, **kwargs)
+        for _rule in list(app.url_map.iter_rules()):
+            if str(_rule.rule) == "/chat":
+                app.view_functions[_rule.endpoint] = kairos_real_proxy_bridge_chat_view
+        app.view_functions["chat_1"] = kairos_real_proxy_bridge_chat_view
+except Exception as e:
+    try: log_exception("Real proxy bridge chat hook install failed", e)
+    except Exception: pass
+
+try:
+    _REAL_PROXY_PREVIOUS_DISCORD_INBOUND = app.view_functions.get("discord_inbound")
+    def kairos_real_proxy_discord_inbound():
+        try:
+            data = request.get_json(silent=True) or {}
+            username = data.get("username") or data.get("author") or data.get("name") or data.get("display_name") or "DiscordUser"
+            message = data.get("content") or data.get("message") or data.get("text") or ""
+            if not str(message or "").strip():
+                return jsonify({"ok": True, "status": "ignored_empty"})
+            kairos_bridge_mirror_message(username, "discord", message)
+            try:
+                with app.test_request_context('/chat', method='POST', json={
+                    "player": username,
+                    "username": username,
+                    "message": message,
+                    "content": message,
+                    "source": "discord",
+                    "discord_id": data.get("discord_id") or data.get("user_id") or data.get("id"),
+                }):
+                    chat_view = app.view_functions.get("chat_1") or app.view_functions.get("chat")
+                    if callable(chat_view):
+                        return chat_view()
+            except Exception as inner:
+                try: log_exception("discord inbound chat pipeline failed", inner)
+                except Exception: pass
+            return jsonify({"ok": True, "status": "bridged_only"})
+        except Exception as e:
+            try: log_exception("Real proxy discord inbound failed", e)
+            except Exception: pass
+            return jsonify({"ok": False, "error": str(e)}), 500
+    app.view_functions["discord_inbound"] = kairos_real_proxy_discord_inbound
+except Exception as e:
+    try: log_exception("Real proxy discord inbound hook install failed", e)
+    except Exception: pass
+
+try:
+    log(f"{KAIROS_REAL_PROXY_BRIDGE_VERSION} armed. Real proxy intercept + Discord/Minecraft bridge restored.", level="INFO")
+except Exception:
+    print(f"[KAIROS INFO] {KAIROS_REAL_PROXY_BRIDGE_VERSION} armed.", flush=True)
+
+# =============================================================================
+# END KAIROS REAL PROXY + BRIDGE RESTORE BUNDLE
+# =============================================================================
 if __name__ == "__main__":
     try:
         start_background_systems()
