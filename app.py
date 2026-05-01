@@ -8783,6 +8783,11 @@ def debug_threats():
 def chat_1():
     try:
         data = request.get_json(force=True) or {}
+        # ============================================
+        # FORCE MINECRAFT CHAT TO ALLOW KAIROS REPLIES
+        # ============================================
+        if str(data.get("source","")).lower() == "minecraft":
+            data["reply_allowed"] = True
         source = normalize_source(data.get("source"))
         player_name = normalize_name(data.get("player_name") or data.get("name") or data.get("player") or data.get("username") or "unknown")
         message = data.get("message") or data.get("content") or data.get("text") or ""
@@ -8857,14 +8862,12 @@ def chat_1():
 
         delivered = send_to_source(source, reply) if reply else False
 
-        # ============================================
         # FORCE KAIROS TO SPEAK IN MINECRAFT
-        # ============================================
-        try:
-            if reply:
+        if reply:
+            try:
                 send_to_minecraft(reply)
-        except Exception as e:
-            log_exception("FORCED MC OUTPUT FAIL", e)
+            except Exception as e:
+                log_exception("FORCED MC OUTPUT FAIL", e)
         if reply:
             if delivered:
                 log(f"Reply delivered for {player_name} via {source}", level="INFO")
