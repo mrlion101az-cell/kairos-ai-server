@@ -35,17 +35,21 @@ def send_kairos_response(reply_text, source, player=None):
     try:
         source = normalize_source(source)
 
+        if not reply_text:
+            return False
+
         if source == "minecraft":
-            send_to_minecraft(reply_text, player)
+            return send_to_minecraft(reply_text)
 
         elif source == "discord":
-            send_to_discord(reply_text)
+            return send_to_discord(reply_text)
 
         else:
-            send_to_minecraft(reply_text, player)
+            return send_to_minecraft(reply_text)
 
     except Exception as e:
         log_exception("send_kairos_response failed", e)
+        return False
 
 # ================================
 # COMMAND CLEAN FIX (SAFE)
@@ -18336,6 +18340,119 @@ except Exception as e:
 
 # =============================================================================
 # END FINAL KAIROS BRIDGE CONTROL OVERLAY
+# =============================================================================
+
+
+# =============================================================================
+# FINAL SURGICAL MINECRAFT KAIROS VOICE RESTORE
+# =============================================================================
+# Purpose:
+# - Do NOT rewrite the AP system.
+# - Do NOT touch Discord bridge behavior.
+# - Do NOT touch army, memory, war engine, NPCs, threat, overlays, or loops.
+# - Let the existing /chat route do everything first.
+# - Then, if the request came from Minecraft and the existing route returned a
+#   Kairos reply, force that reply into Minecraft chat.
+#
+# This fixes the exact failure mode where Minecraft -> Discord works, /chat
+# returns 200, but Kairos stays silent in-game.
+# =============================================================================
+
+try:
+    _kairos_voice_previous_chat_view = app.view_functions.get("chat_1") or app.view_functions.get("chat")
+
+    def _kairos_voice_extract_reply(response_obj):
+        try:
+            payload = response_obj
+
+            # Flask route may return (response, status)
+            if isinstance(payload, tuple) and payload:
+                payload = payload[0]
+
+            # Flask Response object
+            if hasattr(payload, "get_json"):
+                try:
+                    payload = payload.get_json(silent=True)
+                except TypeError:
+                    payload = payload.get_json()
+
+            if isinstance(payload, (bytes, bytearray)):
+                payload = payload.decode("utf-8", errors="replace")
+
+            if isinstance(payload, str):
+                try:
+                    payload = json.loads(payload)
+                except Exception:
+                    return payload.strip()
+
+            if isinstance(payload, dict):
+                for key in ("reply", "response", "message", "text", "content"):
+                    value = payload.get(key)
+                    if isinstance(value, str) and value.strip():
+                        return value.strip()
+
+            return ""
+        except Exception:
+            return ""
+
+    if callable(_kairos_voice_previous_chat_view):
+        def kairos_voice_restore_chat_wrapper(*args, **kwargs):
+            data = request.get_json(silent=True) or {}
+            source = normalize_source(data.get("source"))
+            player_name = normalize_name(
+                data.get("player_name")
+                or data.get("name")
+                or data.get("player")
+                or data.get("username")
+                or "unknown"
+            )
+
+            # Force Minecraft to be reply-eligible before the real pipeline runs.
+            if source == "minecraft":
+                try:
+                    data["reply_allowed"] = True
+                    data["minecraft_reply_allowed"] = True
+                except Exception:
+                    pass
+
+            response_obj = _kairos_voice_previous_chat_view(*args, **kwargs)
+
+            if source == "minecraft":
+                try:
+                    reply_text = _kairos_voice_extract_reply(response_obj)
+                    if reply_text:
+                        delivered = send_to_minecraft(reply_text)
+                        if delivered:
+                            log(f"Kairos -> Minecraft voice restore delivered for {player_name}.", level="INFO")
+                        else:
+                            log(f"Kairos -> Minecraft voice restore failed for {player_name}.", level="WARN")
+                    else:
+                        log(f"Kairos voice restore found no reply for {player_name}.", level="WARN")
+                except Exception as e:
+                    log_exception("Kairos voice restore failed", e)
+
+            return response_obj
+
+        # Replace every /chat endpoint with the voice-restoring wrapper.
+        for _rule in list(app.url_map.iter_rules()):
+            if str(_rule.rule) == "/chat":
+                app.view_functions[_rule.endpoint] = kairos_voice_restore_chat_wrapper
+
+        app.view_functions["chat_1"] = kairos_voice_restore_chat_wrapper
+
+        try:
+            log("Final Minecraft Kairos voice restore armed.", level="INFO")
+        except Exception:
+            print("[KAIROS INFO] Final Minecraft Kairos voice restore armed.", flush=True)
+
+except Exception as e:
+    try:
+        log_exception("Final Minecraft Kairos voice restore install failed", e)
+    except Exception:
+        print("[KAIROS ERROR] Final Minecraft Kairos voice restore install failed:", e, flush=True)
+
+# =============================================================================
+# END FINAL SURGICAL MINECRAFT KAIROS VOICE RESTORE
 # =============================================================================
 
 
