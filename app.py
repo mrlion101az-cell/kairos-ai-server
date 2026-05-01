@@ -17941,6 +17941,42 @@ except Exception as e:
 # =============================================================================
 
 
+
+
+# ================================
+# V3 FIX: MINECRAFT <-> DISCORD BRIDGE (CORRECT PLACEMENT)
+# ================================
+
+def kairos_mirror_minecraft_chat_to_discord(player, message):
+    try:
+        if not DISCORD_WEBHOOK_URL:
+            return
+        payload = {
+            "content": f"[{player}] {message}"
+        }
+        requests.post(DISCORD_WEBHOOK_URL, json=payload, timeout=5)
+    except Exception as e:
+        print("Bridge error:", e)
+
+# Wrap EXISTING chat_1 (REAL endpoint)
+_original_chat_1 = app.view_functions.get("chat_1")
+
+if _original_chat_1:
+    def chat_1_v3_wrapper():
+        data = request.json or {}
+
+        player = data.get("player", "Unknown")
+        message = data.get("message", "")
+        source = data.get("source", "minecraft")
+
+        # Minecraft -> Discord mirror
+        if source == "minecraft" and message:
+            kairos_mirror_minecraft_chat_to_discord(player, message)
+
+        return _original_chat_1()
+
+    app.view_functions["chat_1"] = chat_1_v3_wrapper
+
 if __name__ == "__main__":
     try:
         start_background_systems()
