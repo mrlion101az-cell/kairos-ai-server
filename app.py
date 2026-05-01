@@ -17681,6 +17681,266 @@ except Exception:
 # =============================================================================
 # END KAIROS REAL PROXY + BRIDGE RESTORE BUNDLE
 # =============================================================================
+
+
+# =============================================================================
+# KAIROS MINECRAFT -> DISCORD BRIDGE FIX
+# Added by ChatGPT on 2026-05-01.
+#
+# Purpose:
+# - Keep the entire existing Kairos app intact.
+# - Add a direct Minecraft chat inbound endpoint for plugins that are NOT hitting
+#   the main /chat route correctly.
+# - Mirror Minecraft chat to Discord without requiring Kairos to reply twice.
+#
+# Endpoints added:
+#   POST /minecraft_chat
+#   POST /mc_chat
+#   POST /minecraft_inbound
+#   POST /bridge/minecraft
+#
+# Accepted JSON keys:
+#   player / player_name / username / name / author
+#   message / content / text
+# =============================================================================
+
+def kairos_clean_bridge_text(value, max_len=1800):
+    try:
+        if "sanitize_text" in globals():
+            return sanitize_text(value, max_len)
+    except Exception:
+        pass
+    value = str(value or "").replace("\r", " ").replace("\n", " ").strip()
+    value = re.sub(r"\s+", " ", value)
+    if len(value) > max_len:
+        value = value[:max_len - 3] + "..."
+    return value
+
+def kairos_discord_webhook_send_raw(content, username="Nexus Bridge"):
+    try:
+        if not DISCORD_WEBHOOK_URL:
+            try:
+                log("Minecraft -> Discord bridge skipped: DISCORD_WEBHOOK_URL not configured.", level="WARN")
+            except Exception:
+                print("[KAIROS WARN] Minecraft -> Discord bridge skipped: DISCORD_WEBHOOK_URL not configured.", flush=True)
+            return False
+
+        content = kairos_clean_bridge_text(content, 1800)
+        if not content:
+            return False
+
+        payload = {
+            "username": kairos_clean_bridge_text(username, 80),
+            "content": content
+        }
+
+        timeout = globals().get("REQUEST_TIMEOUT", 6)
+        for attempt in range(1, 4):
+            try:
+                r = requests.post(DISCORD_WEBHOOK_URL, json=payload, timeout=timeout)
+                if 200 <= getattr(r, "status_code", 0) < 300:
+                    try:
+                        log(f"Minecraft -> Discord bridge delivered on attempt {attempt}.", level="INFO")
+                    except Exception:
+                        pass
+                    return True
+
+                body = ""
+                try:
+                    body = r.text[:300]
+                except Exception:
+                    body = ""
+                try:
+                    log(f"Minecraft -> Discord bridge webhook error HTTP {getattr(r, 'status_code', 'unknown')}: {body}", level="WARN")
+                except Exception:
+                    pass
+
+            except Exception as e:
+                try:
+                    log(f"Minecraft -> Discord bridge send failed attempt {attempt}: {e}", level="ERROR")
+                except Exception:
+                    print(f"[KAIROS ERROR] Minecraft -> Discord bridge send failed attempt {attempt}: {e}", flush=True)
+
+            try:
+                time.sleep(min(1.5, 0.35 * attempt))
+            except Exception:
+                pass
+
+        return False
+    except Exception as e:
+        try:
+            log_exception("kairos_discord_webhook_send_raw failed", e)
+        except Exception:
+            print("[KAIROS ERROR] kairos_discord_webhook_send_raw failed:", e, flush=True)
+        return False
+
+def kairos_extract_minecraft_chat_payload(data):
+    data = data if isinstance(data, dict) else {}
+    player = (
+        data.get("player")
+        or data.get("player_name")
+        or data.get("username")
+        or data.get("name")
+        or data.get("author")
+        or data.get("display_name")
+        or "Minecraft"
+    )
+    message = (
+        data.get("message")
+        or data.get("content")
+        or data.get("text")
+        or data.get("chat")
+        or ""
+    )
+    player = kairos_clean_bridge_text(player, 64)
+    message = kairos_clean_bridge_text(message, 1800)
+    return player, message
+
+def kairos_should_skip_bridge_echo(player, message):
+    try:
+        p = str(player or "").strip().lower()
+        m = str(message or "").strip().lower()
+        if not m:
+            return True
+        if p in {"kairos", "nexus bridge", "discord", "server", "system"}:
+            return True
+        if m.startswith("[dc]") or m.startswith("[discord]") or m.startswith("[mc]"):
+            return True
+        if "**[mc]" in m or "**[discord]" in m:
+            return True
+    except Exception:
+        pass
+    return False
+
+def kairos_forward_minecraft_chat_to_discord(player, message):
+    try:
+        if kairos_should_skip_bridge_echo(player, message):
+            return False
+        return kairos_discord_webhook_send_raw(f"**[MC] {player}:** {message}", username="Nexus Bridge")
+    except Exception as e:
+        try:
+            log_exception("kairos_forward_minecraft_chat_to_discord failed", e)
+        except Exception:
+            pass
+        return False
+
+def kairos_minecraft_chat_bridge_route():
+    try:
+        data = request.get_json(silent=True) or {}
+        player, message = kairos_extract_minecraft_chat_payload(data)
+
+        if not message:
+            return jsonify({
+                "ok": True,
+                "status": "ignored_empty",
+                "bridge": "minecraft_to_discord"
+            })
+
+        delivered = kairos_forward_minecraft_chat_to_discord(player, message)
+
+        return jsonify({
+            "ok": bool(delivered),
+            "status": "delivered" if delivered else "failed_or_skipped",
+            "bridge": "minecraft_to_discord",
+            "player": player
+        }), 200
+
+    except Exception as e:
+        try:
+            log_exception("kairos_minecraft_chat_bridge_route failed", e)
+        except Exception:
+            print("[KAIROS ERROR] kairos_minecraft_chat_bridge_route failed:", e, flush=True)
+        return jsonify({
+            "ok": False,
+            "status": "error",
+            "error": str(e),
+            "bridge": "minecraft_to_discord"
+        }), 500
+
+# Register multiple route names safely. This avoids Flask endpoint collisions
+# and gives you several URLs that can be used by ChatHook / bridge plugins.
+try:
+    if "kairos_minecraft_chat_bridge_route_minecraft_chat" not in app.view_functions:
+        app.add_url_rule(
+            "/minecraft_chat",
+            endpoint="kairos_minecraft_chat_bridge_route_minecraft_chat",
+            view_func=kairos_minecraft_chat_bridge_route,
+            methods=["POST"]
+        )
+    if "kairos_minecraft_chat_bridge_route_mc_chat" not in app.view_functions:
+        app.add_url_rule(
+            "/mc_chat",
+            endpoint="kairos_minecraft_chat_bridge_route_mc_chat",
+            view_func=kairos_minecraft_chat_bridge_route,
+            methods=["POST"]
+        )
+    if "kairos_minecraft_chat_bridge_route_minecraft_inbound" not in app.view_functions:
+        app.add_url_rule(
+            "/minecraft_inbound",
+            endpoint="kairos_minecraft_chat_bridge_route_minecraft_inbound",
+            view_func=kairos_minecraft_chat_bridge_route,
+            methods=["POST"]
+        )
+    if "kairos_minecraft_chat_bridge_route_bridge_minecraft" not in app.view_functions:
+        app.add_url_rule(
+            "/bridge/minecraft",
+            endpoint="kairos_minecraft_chat_bridge_route_bridge_minecraft",
+            view_func=kairos_minecraft_chat_bridge_route,
+            methods=["POST"]
+        )
+    try:
+        log("Minecraft -> Discord direct bridge endpoints armed: /minecraft_chat, /mc_chat, /minecraft_inbound, /bridge/minecraft", level="INFO")
+    except Exception:
+        print("[KAIROS INFO] Minecraft -> Discord direct bridge endpoints armed.", flush=True)
+except Exception as e:
+    try:
+        log_exception("Minecraft -> Discord direct bridge route install failed", e)
+    except Exception:
+        print("[KAIROS ERROR] Minecraft -> Discord direct bridge route install failed:", e, flush=True)
+
+# Extra safety: if your Minecraft plugin posts normal chat to /chat, this wrapper
+# mirrors Minecraft chat to Discord before Kairos processes it. It does not change
+# the original /chat behavior and does not make Kairos reply twice.
+try:
+    _KAIROS_MC_TO_DC_PREVIOUS_CHAT_VIEW = app.view_functions.get("chat_1") or app.view_functions.get("chat")
+    if callable(_KAIROS_MC_TO_DC_PREVIOUS_CHAT_VIEW):
+        def kairos_mc_to_dc_chat_wrapper(*args, **kwargs):
+            try:
+                data = request.get_json(silent=True) or {}
+                source = data.get("source") or data.get("platform") or "minecraft"
+                try:
+                    source = normalize_source(source)
+                except Exception:
+                    source = str(source or "minecraft").lower()
+                if source == "minecraft":
+                    player, message = kairos_extract_minecraft_chat_payload(data)
+                    kairos_forward_minecraft_chat_to_discord(player, message)
+            except Exception as e:
+                try:
+                    log_exception("Minecraft -> Discord /chat mirror failed", e)
+                except Exception:
+                    pass
+            return _KAIROS_MC_TO_DC_PREVIOUS_CHAT_VIEW(*args, **kwargs)
+
+        for _rule in list(app.url_map.iter_rules()):
+            if str(_rule.rule) == "/chat":
+                app.view_functions[_rule.endpoint] = kairos_mc_to_dc_chat_wrapper
+        app.view_functions["chat_1"] = kairos_mc_to_dc_chat_wrapper
+        try:
+            log("Minecraft -> Discord /chat mirror wrapper armed.", level="INFO")
+        except Exception:
+            pass
+except Exception as e:
+    try:
+        log_exception("Minecraft -> Discord /chat wrapper install failed", e)
+    except Exception:
+        pass
+
+# =============================================================================
+# END KAIROS MINECRAFT -> DISCORD BRIDGE FIX
+# =============================================================================
+
+
 if __name__ == "__main__":
     try:
         start_background_systems()
@@ -17695,3 +17955,80 @@ if __name__ == "__main__":
         print("[KAIROS INFO] Starting Kairos AI server...", flush=True)
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", "10000")), threaded=True)
 
+
+
+# ================================
+# KAIROS BEHAVIOR FILTER (DISCORD CONTROL)
+# ================================
+last_kairos_discord_time = 0
+kairos_silenced_until = 0
+
+def should_kairos_respond(message, source):
+    global last_kairos_discord_time, kairos_silenced_until
+    msg = (message or "").lower()
+    now = time.time()
+
+    if source == "minecraft":
+        return True
+
+    if source == "discord":
+        if now < kairos_silenced_until:
+            return False
+
+        if "stop talking" in msg or "shut up" in msg:
+            kairos_silenced_until = now + 60
+            return False
+
+        if "kairos" in msg:
+            return True
+
+        if now - last_kairos_discord_time < 15:
+            return True
+
+        return False
+
+    return True
+
+
+# ================================
+# FIX: MINECRAFT -> DISCORD BRIDGE
+# ================================
+@app.route("/minecraft_chat", methods=["POST"])
+def minecraft_chat():
+    data = request.json or {}
+    player = data.get("player", "Unknown")
+    message = data.get("message", "")
+
+    formatted = f"[{player}] {message}"
+
+    try:
+        if DISCORD_WEBHOOK_URL:
+            requests.post(DISCORD_WEBHOOK_URL, json={"content": formatted}, timeout=5)
+    except Exception as e:
+        print("Bridge error:", e)
+
+    return jsonify({"status": "ok"})
+
+
+# ================================
+# PATCH EXISTING CHAT HANDLER (SAFE WRAP)
+# ================================
+_original_chat = app.view_functions.get("chat")
+
+if _original_chat:
+    def wrapped_chat():
+        data = request.json or {}
+        message = data.get("message", "")
+        source = data.get("source", "minecraft")
+
+        if not should_kairos_respond(message, source):
+            return jsonify({"reply": None, "minecraft_commands": []})
+
+        result = _original_chat()
+
+        if source == "discord":
+            globals()["last_kairos_discord_time"] = time.time()
+
+        return result
+
+    app.view_functions["chat"] = wrapped_chat
