@@ -7029,6 +7029,12 @@ def parse_kairos_response(raw_text):
     # -----------------------------
     if isinstance(parsed, dict) and ("reply" in parsed or "actions" in parsed):
         reply = sanitize_text(parsed.get("reply", ""), 500)
+        # FORCE MINECRAFT ALWAYS RESPOND
+        if str(source).lower() == "minecraft":
+            try:
+                send_to_minecraft(reply)
+            except Exception as e:
+                log_exception("MC FORCE REPLY FAIL", e)
         raw_actions = parsed.get("actions", [])
         if isinstance(parsed.get("action"), dict):
             raw_actions = [parsed.get("action")] + (raw_actions if isinstance(raw_actions, list) else [])
@@ -8783,11 +8789,8 @@ def debug_threats():
 def chat_1():
     try:
         data = request.get_json(force=True) or {}
-        # ============================================
-        # FORCE MINECRAFT CHAT TO ALLOW KAIROS REPLIES
-        # ============================================
-        if str(data.get("source","")).lower() == "minecraft":
-            data["reply_allowed"] = True
+        if str(data.get("source","")).lower()=="minecraft":
+            data["reply_allowed"]=True
         source = normalize_source(data.get("source"))
         player_name = normalize_name(data.get("player_name") or data.get("name") or data.get("player") or data.get("username") or "unknown")
         message = data.get("message") or data.get("content") or data.get("text") or ""
@@ -8861,13 +8864,6 @@ def chat_1():
             queued_actions.append(action)
 
         delivered = send_to_source(source, reply) if reply else False
-
-        # FORCE KAIROS TO SPEAK IN MINECRAFT
-        if reply:
-            try:
-                send_to_minecraft(reply)
-            except Exception as e:
-                log_exception("FORCED MC OUTPUT FAIL", e)
         if reply:
             if delivered:
                 log(f"Reply delivered for {player_name} via {source}", level="INFO")
