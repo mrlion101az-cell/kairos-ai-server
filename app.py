@@ -1,6 +1,4 @@
 
-
-
 import os
 import json
 import re
@@ -32,17 +30,25 @@ app = Flask(__name__)
 # PLATFORM-SAFE RESPONSE (NO DUPLICATES)
 # ============================================================
 def send_kairos_response(reply_text, source, player=None):
+    """
+    Kairos reply routing:
+    - Always sends Kairos replies/presence to Minecraft so Kairos is alive in-game.
+    - Discord-visible Kairos replies are controlled by direct Discord calls only.
+    - Prevents duplicate platform spam.
+    """
     try:
         source = normalize_source(source)
 
-        if source == "minecraft":
-            send_to_minecraft(reply_text, player)
+        if not reply_text:
+            return
 
-        elif source == "discord":
-            send_to_discord(reply_text)
+        # Always keep Kairos alive in Minecraft.
+        send_to_minecraft(reply_text, player)
 
-        else:
-            send_to_minecraft(reply_text, player)
+        # Only mirror Kairos to Discord when the originating platform is Discord.
+        # Normal Discord chatter is filtered by the Discord bot before it asks for a reply.
+        if source == "discord":
+            send_to_discord_webhook("Kairos", reply_text)
 
     except Exception as e:
         log_exception("send_kairos_response failed", e)
@@ -195,8 +201,7 @@ MODEL_NAME = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 
 MC_HTTP_URL = os.getenv("MC_HTTP_URL")
 MC_HTTP_TOKEN = os.getenv("MC_HTTP_TOKEN")
-DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
-DISCORD_BOT_BRIDGE_URL = os.getenv("DISCORD_BOT_BRIDGE_URL", "https://kairos-discord.onrender.com/mc_to_discord")
+DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL", "https://discord.com/api/webhooks/1499879373988302918/8reOrX6ey8ZSgHUDC9_me8Pr24zSjPTjx6zrZuHhaaTQxpkPkp7G4aHUEWSHWzQ9Co4g")
 
 # Pull-bridge fallback (Minecraft polls Render when inbound HTTP is blocked)
 COMMAND_PULL_TOKEN = os.getenv("COMMAND_PULL_TOKEN", os.getenv("MC_HTTP_TOKEN", ""))
@@ -2165,6 +2170,49 @@ def log(message: str, level: str = "INFO") -> None:
 def log_exception(context: str, exc: Exception) -> None:
     log(f"{context}: {exc}\n{traceback.format_exc()}", level="ERROR")
 
+
+# ============================================================
+# CLEAN DISCORD WEBHOOK BRIDGE (MINECRAFT -> DISCORD)
+# ============================================================
+def send_to_discord_webhook(player, message):
+    """
+    Sends Minecraft chat and allowed Kairos messages into Discord GenChat.
+    Uses DISCORD_WEBHOOK_URL with a hardcoded safe default, while still
+    allowing Render's DISCORD_WEBHOOK_URL environment variable to override it.
+    """
+    try:
+        if not message:
+            return False
+
+        webhook = os.getenv("DISCORD_WEBHOOK_URL", globals().get("DISCORD_WEBHOOK_URL", "https://discord.com/api/webhooks/1499879373988302918/8reOrX6ey8ZSgHUDC9_me8Pr24zSjPTjx6zrZuHhaaTQxpkPkp7G4aHUEWSHWzQ9Co4g"))
+        if not webhook:
+            log("Discord webhook URL missing; Minecraft -> Discord skipped.", level="WARN")
+            return False
+
+        safe_player = str(player or "Minecraft").replace("@", "@\u200b")
+        safe_message = str(message or "").replace("@", "@\u200b").strip()
+
+        if not safe_message:
+            return False
+
+        payload = {
+            "content": f"**[Minecraft] {safe_player}:** {safe_message}"[:1900]
+        }
+
+        res = requests.post(webhook, json=payload, timeout=REQUEST_TIMEOUT)
+
+        if res.status_code in (200, 204):
+            log(f"Minecraft -> Discord webhook delivered for {safe_player}.")
+            return True
+
+        log(f"Minecraft -> Discord webhook HTTP {res.status_code}: {res.text[:300]}", level="WARN")
+        return False
+
+    except Exception as e:
+        log_exception("Minecraft -> Discord webhook failed", e)
+        return False
+
+
 def parse_json_safely(text: Any, fallback: Optional[Any] = None) -> Any:
     if fallback is None:
         fallback = {}
@@ -2221,43 +2269,6 @@ def normalize_source(source: Any) -> str:
     if source not in {"minecraft", "discord", "system", "web", "telemetry"}:
         return "minecraft"
     return source
-
-
-def send_to_discord_bot_bridge(player, message):
-    """
-    Sends Minecraft chat into the Discord bot service.
-    The bot service must expose POST /mc_to_discord.
-    Falls back to False so existing webhook fallback logic can still run.
-    """
-    try:
-        if not message:
-            return False
-
-        url = os.getenv("DISCORD_BOT_BRIDGE_URL", globals().get("DISCORD_BOT_BRIDGE_URL", "https://kairos-discord.onrender.com/mc_to_discord"))
-        if not url:
-            return False
-
-        payload = {
-            "player": str(player or "Minecraft"),
-            "message": str(message or "")
-        }
-
-        token = os.getenv("MC_TO_DISCORD_TOKEN", "").strip()
-        headers = {}
-        if token:
-            headers["Authorization"] = f"Bearer {token}"
-
-        res = requests.post(url, json=payload, headers=headers, timeout=REQUEST_TIMEOUT)
-        if 200 <= res.status_code < 300:
-            log(f"Minecraft -> Discord bot bridge delivered for {player}.")
-            return True
-
-        log(f"Minecraft -> Discord bot bridge HTTP {res.status_code}: {res.text[:300]}", level="WARN")
-        return False
-
-    except Exception as e:
-        log_exception("Minecraft -> Discord bot bridge failed", e)
-        return False
 
 def normalize_player_key(name: Any) -> str:
     return re.sub(r"[^a-z0-9_]", "", (name or "").strip().lower())
@@ -17465,32 +17476,24 @@ except Exception:
 
 
 # ============================================================
-# SURGICAL BRIDGE COMPATIBILITY LAYER
+# DISCORD SEND COMPATIBILITY WRAPPER
 # ============================================================
-def bridge_minecraft_chat_to_discord(player, message):
+def send_to_discord_compat(*args):
     """
-    Preferred path: app.py -> Discord bot /mc_to_discord.
-    Fallback path: existing Discord webhook, if configured.
+    Compatibility wrapper for older code paths.
+    Accepts either:
+      send_to_discord_compat(message)
+      send_to_discord_compat(player, message)
     """
     try:
-        if send_to_discord_bot_bridge(player, message):
-            return True
+        if len(args) == 1:
+            return send_to_discord_webhook("Kairos", args[0])
+        if len(args) >= 2:
+            return send_to_discord_webhook(args[0], args[1])
+        return False
     except Exception as e:
-        log_exception("bot bridge compatibility failed", e)
-
-    try:
-        webhook = os.getenv("DISCORD_WEBHOOK_URL", globals().get("DISCORD_WEBHOOK_URL", ""))
-        if webhook and message:
-            payload = {"content": f"**[Minecraft] {player}:** {message}"[:1900]}
-            res = requests.post(webhook, json=payload, timeout=REQUEST_TIMEOUT)
-            if 200 <= res.status_code < 300:
-                log(f"Minecraft -> Discord webhook fallback delivered for {player}.")
-                return True
-            log(f"Minecraft -> Discord webhook fallback HTTP {res.status_code}: {res.text[:300]}", level="WARN")
-    except Exception as e:
-        log_exception("webhook fallback failed", e)
-
-    return False
+        log_exception("send_to_discord_compat failed", e)
+        return False
 
 if __name__ == "__main__":
     try:
