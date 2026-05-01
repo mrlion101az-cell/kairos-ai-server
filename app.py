@@ -33,15 +33,12 @@ app = Flask(__name__)
 # ============================================================
 def send_kairos_response(reply_text, source, player=None):
     try:
+        # Kairos must always keep his in-game presence.
+        # Discord reply display is handled by the Discord bot only when Kairos is directly called.
+        # This prevents duplicate Discord replies while keeping Minecraft fully alive.
         source = normalize_source(source)
 
-        if source == "minecraft":
-            send_to_minecraft(reply_text, player)
-
-        elif source == "discord":
-            send_to_discord(reply_text)
-
-        else:
+        if reply_text:
             send_to_minecraft(reply_text, player)
 
     except Exception as e:
@@ -196,6 +193,7 @@ MODEL_NAME = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 MC_HTTP_URL = os.getenv("MC_HTTP_URL")
 MC_HTTP_TOKEN = os.getenv("MC_HTTP_TOKEN")
 DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
+DISCORD_BOT_BRIDGE_URL = os.getenv("DISCORD_BOT_BRIDGE_URL", "https://kairos-discord.onrender.com/mc_to_discord")
 
 # Pull-bridge fallback (Minecraft polls Render when inbound HTTP is blocked)
 COMMAND_PULL_TOKEN = os.getenv("COMMAND_PULL_TOKEN", os.getenv("MC_HTTP_TOKEN", ""))
@@ -17717,21 +17715,61 @@ def kairos_clean_bridge_text(value, max_len=1800):
     return value
 
 def kairos_discord_webhook_send_raw(content, username="Nexus Bridge"):
+    """
+    Minecraft -> Discord bridge sender.
+    Primary path: Discord bot HTTP endpoint (/mc_to_discord).
+    Fallback path: DISCORD_WEBHOOK_URL only if the bot endpoint is unavailable.
+    Kept under the old function name so the rest of Kairos stays untouched.
+    """
     try:
-        if not DISCORD_WEBHOOK_URL:
-            try:
-                log("Minecraft -> Discord bridge skipped: DISCORD_WEBHOOK_URL not configured.", level="WARN")
-            except Exception:
-                print("[KAIROS WARN] Minecraft -> Discord bridge skipped: DISCORD_WEBHOOK_URL not configured.", flush=True)
-            return False
-
         content = kairos_clean_bridge_text(content, 1800)
         if not content:
             return False
 
+        player = username or "Minecraft"
+        message = content
+        try:
+            m = re.match(r"^\*\*\[MC\]\s*(.*?):\*\*\s*(.*)$", content)
+            if m:
+                player = kairos_clean_bridge_text(m.group(1), 64)
+                message = kairos_clean_bridge_text(m.group(2), 1800)
+        except Exception:
+            pass
+
+        bot_url = globals().get("DISCORD_BOT_BRIDGE_URL") or os.getenv("DISCORD_BOT_BRIDGE_URL", "https://kairos-discord.onrender.com/mc_to_discord")
+        if bot_url:
+            try:
+                r = requests.post(
+                    bot_url,
+                    json={"player": player, "message": message},
+                    timeout=globals().get("REQUEST_TIMEOUT", 6),
+                )
+                if 200 <= getattr(r, "status_code", 0) < 300:
+                    try:
+                        log(f"Minecraft -> Discord bot bridge delivered for {player}.", level="INFO")
+                    except Exception:
+                        pass
+                    return True
+                try:
+                    log(f"Minecraft -> Discord bot bridge HTTP {getattr(r, 'status_code', 'unknown')}: {getattr(r, 'text', '')[:250]}", level="WARN")
+                except Exception:
+                    pass
+            except Exception as e:
+                try:
+                    log(f"Minecraft -> Discord bot bridge failed: {e}", level="WARN")
+                except Exception:
+                    pass
+
+        if not DISCORD_WEBHOOK_URL:
+            try:
+                log("Minecraft -> Discord bridge skipped: no bot endpoint success and DISCORD_WEBHOOK_URL not configured.", level="WARN")
+            except Exception:
+                pass
+            return False
+
         payload = {
             "username": kairos_clean_bridge_text(username, 80),
-            "content": content
+            "content": content,
         }
 
         timeout = globals().get("REQUEST_TIMEOUT", 6)
@@ -17740,27 +17778,19 @@ def kairos_discord_webhook_send_raw(content, username="Nexus Bridge"):
                 r = requests.post(DISCORD_WEBHOOK_URL, json=payload, timeout=timeout)
                 if 200 <= getattr(r, "status_code", 0) < 300:
                     try:
-                        log(f"Minecraft -> Discord bridge delivered on attempt {attempt}.", level="INFO")
+                        log(f"Minecraft -> Discord webhook fallback delivered on attempt {attempt}.", level="INFO")
                     except Exception:
                         pass
                     return True
-
-                body = ""
                 try:
-                    body = r.text[:300]
-                except Exception:
-                    body = ""
-                try:
-                    log(f"Minecraft -> Discord bridge webhook error HTTP {getattr(r, 'status_code', 'unknown')}: {body}", level="WARN")
+                    log(f"Minecraft -> Discord webhook fallback HTTP {getattr(r, 'status_code', 'unknown')}: {getattr(r, 'text', '')[:250]}", level="WARN")
                 except Exception:
                     pass
-
             except Exception as e:
                 try:
-                    log(f"Minecraft -> Discord bridge send failed attempt {attempt}: {e}", level="ERROR")
+                    log(f"Minecraft -> Discord webhook fallback failed attempt {attempt}: {e}", level="WARN")
                 except Exception:
-                    print(f"[KAIROS ERROR] Minecraft -> Discord bridge send failed attempt {attempt}: {e}", flush=True)
-
+                    pass
             try:
                 time.sleep(min(1.5, 0.35 * attempt))
             except Exception:
@@ -17949,14 +17979,12 @@ except Exception as e:
 
 def kairos_mirror_minecraft_chat_to_discord(player, message):
     try:
-        if not DISCORD_WEBHOOK_URL:
-            return
-        payload = {
-            "content": f"[{player}] {message}"
-        }
-        requests.post(DISCORD_WEBHOOK_URL, json=payload, timeout=5)
+        if "kairos_final_send_minecraft_to_discord" in globals():
+            return kairos_final_send_minecraft_to_discord(player, message)
+        return kairos_discord_webhook_send_raw(f"**[MC] {player}:** {message}", username="Nexus Bridge")
     except Exception as e:
         print("Bridge error:", e)
+        return False
 
 # Wrap EXISTING chat_1 (REAL endpoint)
 _original_chat_1 = app.view_functions.get("chat_1")
@@ -18147,12 +18175,47 @@ def kairos_final_send_minecraft_to_discord(player, message):
 
     safe_player = kairos_final_bridge_clean(player, 64)
     safe_message = kairos_final_bridge_clean(message, 1800)
-    content = f"**[MC] {safe_player}:** {safe_message}"
 
+    # Primary path: send to the Discord bot's /mc_to_discord route.
+    # This matches the replacement discord bot and avoids webhook/channel mismatch.
+    try:
+        bot_url = globals().get("DISCORD_BOT_BRIDGE_URL") or os.getenv("DISCORD_BOT_BRIDGE_URL", "https://kairos-discord.onrender.com/mc_to_discord")
+        if bot_url:
+            for attempt in range(1, 4):
+                try:
+                    r = requests.post(
+                        bot_url,
+                        json={"player": safe_player, "message": safe_message},
+                        timeout=REQUEST_TIMEOUT,
+                    )
+                    if 200 <= getattr(r, "status_code", 0) < 300:
+                        try:
+                            log(f"Minecraft -> Discord bot bridge delivered for {safe_player}.", level="INFO")
+                        except Exception:
+                            pass
+                        return True
+                    try:
+                        log(f"Minecraft -> Discord bot bridge HTTP {getattr(r, 'status_code', 'unknown')}: {getattr(r, 'text', '')[:250]}", level="WARN")
+                    except Exception:
+                        pass
+                except Exception as inner:
+                    try:
+                        log(f"Minecraft -> Discord bot bridge attempt {attempt} failed: {inner}", level="WARN")
+                    except Exception:
+                        pass
+                time.sleep(min(1.5, 0.35 * attempt))
+    except Exception as e:
+        try:
+            log_exception("Minecraft -> Discord bot bridge failed", e)
+        except Exception:
+            print("[KAIROS ERROR] Minecraft -> Discord bot bridge failed:", e, flush=True)
+
+    # Emergency fallback: old webhook path, preserved so nothing hard-crashes.
+    content = f"**[MC] {safe_player}:** {safe_message}"
     try:
         if "DISCORD_WEBHOOK_URL" not in globals() or not DISCORD_WEBHOOK_URL:
             try:
-                log("Minecraft -> Discord bridge skipped: DISCORD_WEBHOOK_URL not configured.", level="WARN")
+                log("Minecraft -> Discord bridge skipped: bot bridge failed and DISCORD_WEBHOOK_URL not configured.", level="WARN")
             except Exception:
                 pass
             return False
@@ -18163,25 +18226,26 @@ def kairos_final_send_minecraft_to_discord(player, message):
                 r = requests.post(DISCORD_WEBHOOK_URL, json=payload, timeout=REQUEST_TIMEOUT)
                 if 200 <= getattr(r, "status_code", 0) < 300:
                     try:
-                        log(f"Minecraft -> Discord bridge delivered for {safe_player}.", level="INFO")
+                        log(f"Minecraft -> Discord webhook fallback delivered for {safe_player}.", level="INFO")
                     except Exception:
                         pass
                     return True
                 try:
-                    log(f"Minecraft -> Discord bridge webhook HTTP {getattr(r, 'status_code', 'unknown')}: {getattr(r, 'text', '')[:250]}", level="WARN")
+                    log(f"Minecraft -> Discord webhook fallback HTTP {getattr(r, 'status_code', 'unknown')}: {getattr(r, 'text', '')[:250]}", level="WARN")
                 except Exception:
                     pass
             except Exception as inner:
                 try:
-                    log(f"Minecraft -> Discord bridge attempt {attempt} failed: {inner}", level="WARN")
+                    log(f"Minecraft -> Discord webhook fallback attempt {attempt} failed: {inner}", level="WARN")
                 except Exception:
                     pass
             time.sleep(min(1.5, 0.35 * attempt))
     except Exception as e:
         try:
-            log_exception("Minecraft -> Discord bridge failed", e)
+            log_exception("Minecraft -> Discord webhook fallback failed", e)
         except Exception:
-            print("[KAIROS ERROR] Minecraft -> Discord bridge failed:", e, flush=True)
+            print("[KAIROS ERROR] Minecraft -> Discord webhook fallback failed:", e, flush=True)
+
     return False
 
 
@@ -18325,6 +18389,27 @@ except Exception as e:
         log_exception("Final bridge chat wrapper install failed", e)
     except Exception:
         print("[KAIROS ERROR] Final bridge chat wrapper install failed:", e, flush=True)
+
+# =============================================================================
+# FINAL RESPONSE ROUTING OVERRIDE - PRESERVE SYSTEM, FIX OUTPUT
+# =============================================================================
+def send_kairos_response(reply_text, source, player=None):
+    try:
+        source = normalize_source(source)
+
+        # Kairos always keeps his voice inside Minecraft.
+        # Discord message display is handled by the Discord bot when the bot decides
+        # the Discord user directly called Kairos. This avoids duplicate Discord
+        # replies and keeps Minecraft alive.
+        if reply_text:
+            send_to_minecraft(reply_text, player)
+
+    except Exception as e:
+        log_exception("send_kairos_response failed", e)
+
+# =============================================================================
+# END FINAL RESPONSE ROUTING OVERRIDE
+# =============================================================================
 
 # =============================================================================
 # END FINAL KAIROS BRIDGE CONTROL OVERLAY
