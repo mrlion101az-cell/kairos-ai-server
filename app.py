@@ -34,25 +34,29 @@ app = Flask(__name__)
 def send_kairos_response(reply_text, source, player=None):
     """
     Kairos response routing:
-    - Kairos always speaks in Minecraft so he does not feel dead in-game.
-    - Discord-visible Kairos replies are only mirrored when the source is Discord.
-    - Normal Discord chatter remains controlled by the Discord bot / trigger rules.
+    - Always sends Kairos replies into Minecraft so he is not silent in-game.
+    - Does not change Discord bridge behavior.
+    - Uses the real send_to_minecraft(reply) signature from this file.
     """
     try:
         source = normalize_source(source)
 
         if not reply_text:
-            return
+            return False
 
-        # Always keep Kairos alive in Minecraft.
-        send_to_minecraft(reply_text, player)
+        # IMPORTANT: this app's real send_to_minecraft only accepts ONE argument.
+        delivered_mc = send_to_minecraft(reply_text)
 
-        # Only mirror Kairos into Discord if Discord directly triggered the response.
-        if source == "discord":
-            send_to_discord_webhook("Kairos", reply_text)
+        if delivered_mc:
+            log(f"Kairos -> Minecraft delivered for {player or 'all'} via response router.")
+        else:
+            log(f"Kairos -> Minecraft delivery failed for {player or 'all'} via response router.", level="WARN")
+
+        return delivered_mc
 
     except Exception as e:
         log_exception("send_kairos_response failed", e)
+        return False
 
 # ================================
 # COMMAND CLEAN FIX (SAFE)
@@ -2170,6 +2174,44 @@ def log(message: str, level: str = "INFO") -> None:
 
 def log_exception(context: str, exc: Exception) -> None:
     log(f"{context}: {exc}\n{traceback.format_exc()}", level="ERROR")
+
+
+# ============================================================
+# SURGICAL KAIROS MINECRAFT OUTPUT GUARANTEE
+# ============================================================
+def force_kairos_minecraft_reply(reply_text, source=None, player=None, already_delivered=False):
+    """
+    Minecraft-only safety net for Kairos replies.
+    - If source is minecraft and send_to_source already delivered, do nothing.
+    - If source is discord, also echo Kairos into Minecraft so in-game players hear him.
+    - If Minecraft delivery failed, retry once directly.
+    - Does not change Discord bridge behavior.
+    """
+    try:
+        if not reply_text:
+            return False
+
+        reply_text = str(reply_text).strip()
+        if not reply_text:
+            return False
+
+        src = normalize_source(source)
+
+        if src == "minecraft" and already_delivered:
+            return True
+
+        ok = send_to_minecraft(reply_text)
+        if ok:
+            log(f"Kairos -> Minecraft forced output delivered for {player or 'all'}.")
+            return True
+
+        log(f"Kairos -> Minecraft forced output failed for {player or 'all'}.", level="WARN")
+        return False
+
+    except Exception as e:
+        log_exception("force_kairos_minecraft_reply failed", e)
+        return False
+
 
 
 # ============================================================
@@ -8950,6 +8992,15 @@ def chat_1():
 
         delivered = send_to_source(source, reply) if reply else False
         if reply:
+            # Minecraft-only safety net: restores Kairos speaking in-game.
+            # Does not alter Discord delivery.
+            force_kairos_minecraft_reply(
+                reply_text=reply,
+                source=source,
+                player=player_name,
+                already_delivered=bool(delivered and source == "minecraft")
+            )
+
             if delivered:
                 log(f"Reply delivered for {player_name} via {source}", level="INFO")
             else:
