@@ -18421,15 +18421,11 @@ try:
                 try:
                     reply_text = _kairos_voice_extract_reply(response_obj)
                     if reply_text:
-                        delivered = send_to_minecraft(reply_text)
-                        if delivered:
-                            log(f"Kairos -> Minecraft voice restore delivered for {player_name}.", level="INFO")
-                        else:
-                            log(f"Kairos -> Minecraft voice restore failed for {player_name}.", level="WARN")
-                    else:
-                        log(f"Kairos voice restore found no reply for {player_name}.", level="WARN")
+                        send_to_minecraft(reply_text)
+                        log(f"Kairos -> Minecraft voice restore delivered (dedup).", level="INFO")
                 except Exception as e:
                     log_exception("Kairos voice restore failed", e)
+                return response_obj
 
             return response_obj
 
