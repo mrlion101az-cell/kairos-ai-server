@@ -17424,25 +17424,29 @@ except Exception:
 # END KAIROS FINAL DISCORD BRAIN FIX
 # =============================================================================
 
-
-
 # =============================================================================
-# KAIROS FULL PURPOSE LOOP OVERLAY
-# Mission / Faction / Relationship / Player Value / World Event System
-# This is intentionally placed BEFORE app.run so Render actually activates it.
+# KAIROS FULL PURPOSE LOOP OVERLAY - ADVANCED EVOLUTION + MC FORCE
+# Adds: forced Minecraft speech, non-repeating directives, evolved missions,
+# faction identity, player value, world events, relationship-aware purpose.
 # =============================================================================
 
-KAIROS_PURPOSE_OVERLAY_VERSION = "Kairos Purpose Loop Overlay v1.0"
+KAIROS_PURPOSE_OVERLAY_VERSION = "Kairos Advanced Purpose Loop + Minecraft Force v2.0"
 
 MISSION_SYSTEM_ENABLED = os.getenv("MISSION_SYSTEM_ENABLED", "true").lower() == "true"
 MISSION_LOOP_ENABLED = os.getenv("MISSION_LOOP_ENABLED", "true").lower() == "true"
-MISSION_LOOP_INTERVAL = int(os.getenv("MISSION_LOOP_INTERVAL", "90"))
-MISSION_ASSIGN_COOLDOWN_SECONDS = int(os.getenv("MISSION_ASSIGN_COOLDOWN_SECONDS", "240"))
-MISSION_EVENT_COOLDOWN_SECONDS = int(os.getenv("MISSION_EVENT_COOLDOWN_SECONDS", "900"))
+MISSION_LOOP_INTERVAL = int(os.getenv("MISSION_LOOP_INTERVAL", "75"))
+MISSION_ASSIGN_COOLDOWN_SECONDS = int(os.getenv("MISSION_ASSIGN_COOLDOWN_SECONDS", "210"))
+MISSION_EVENT_COOLDOWN_SECONDS = int(os.getenv("MISSION_EVENT_COOLDOWN_SECONDS", "780"))
 MISSION_MAX_ACTIVE_PER_PLAYER = int(os.getenv("MISSION_MAX_ACTIVE_PER_PLAYER", "2"))
+
 KAIROS_PURPOSE_SPEECH_ENABLED = os.getenv("KAIROS_PURPOSE_SPEECH_ENABLED", "true").lower() == "true"
-KAIROS_PURPOSE_SPEECH_MIN_SECONDS = int(os.getenv("KAIROS_PURPOSE_SPEECH_MIN_SECONDS", "18"))
-KAIROS_PURPOSE_SPEECH_MAX_SECONDS = int(os.getenv("KAIROS_PURPOSE_SPEECH_MAX_SECONDS", "42"))
+KAIROS_PURPOSE_SPEECH_MIN_SECONDS = int(os.getenv("KAIROS_PURPOSE_SPEECH_MIN_SECONDS", "14"))
+KAIROS_PURPOSE_SPEECH_MAX_SECONDS = int(os.getenv("KAIROS_PURPOSE_SPEECH_MAX_SECONDS", "32"))
+
+KAIROS_FORCE_MINECRAFT_SPEECH = os.getenv("KAIROS_FORCE_MINECRAFT_SPEECH", "true").lower() == "true"
+KAIROS_MC_FORCE_ACTIONBAR = os.getenv("KAIROS_MC_FORCE_ACTIONBAR", "true").lower() == "true"
+KAIROS_MC_FORCE_TITLE = os.getenv("KAIROS_MC_FORCE_TITLE", "false").lower() == "true"
+KAIROS_MC_FORCE_SOUND = os.getenv("KAIROS_MC_FORCE_SOUND", "true").lower() == "true"
 
 MISSION_STATE_FILE = DATA_DIR / "kairos_purpose_loop.json"
 mission_lock = threading.RLock()
@@ -17450,146 +17454,61 @@ mission_loop_started = False
 purpose_speech_loop_started = False
 
 NEXUS_FACTIONS = {
-    "Eryndor": {
-        "identity": "ancient kingdom loyal to order, defense, and restoration",
-        "virtue": "defense",
-        "rival": "Dravakar",
-        "reward_hint": "protection, status, and defensive favor"
-    },
-    "Valenreach": {
-        "identity": "border fortress culture built on discipline and survival",
-        "virtue": "discipline",
-        "rival": "Nythera",
-        "reward_hint": "strategic recognition and command trust"
-    },
-    "Karthos Prime": {
-        "identity": "machine-lit industrial power obsessed with expansion",
-        "virtue": "production",
-        "rival": "Solmere",
-        "reward_hint": "resource priority and tactical opportunity"
-    },
-    "Solmere": {
-        "identity": "fractured peace empire trying to outlast collapse",
-        "virtue": "stability",
-        "rival": "Karthos Prime",
-        "reward_hint": "diplomatic leverage and lower hostility"
-    },
-    "Dravakar": {
-        "identity": "war-born nation that respects strength and conquest",
-        "virtue": "power",
-        "rival": "Eryndor",
-        "reward_hint": "combat recognition and intimidation value"
-    },
-    "Nythera": {
-        "identity": "shadow province chasing forbidden knowledge and anomaly control",
-        "virtue": "secrecy",
-        "rival": "Valenreach",
-        "reward_hint": "intel, mystery access, and Kairos attention"
-    },
-    "Unregistered": {
-        "identity": "unclaimed actors outside recognized order",
-        "virtue": "independence",
-        "rival": "all registered powers",
-        "reward_hint": "freedom, risk, and unpredictable opportunity"
-    }
+    "Eryndor": {"identity":"ancient defensive kingdom of oaths and restoration","rival":"Dravakar","style":"formal ancient defensive","reward_hint":"protection, status, defensive favor"},
+    "Valenreach": {"identity":"border fortress culture of discipline and survival","rival":"Nythera","style":"military precise cold","reward_hint":"command trust and strategic recognition"},
+    "Karthos Prime": {"identity":"industrial machine-lit power of output and expansion","rival":"Solmere","style":"industrial calculating resource-driven","reward_hint":"resource priority and economic leverage"},
+    "Solmere": {"identity":"fractured peace empire seeking stability through pressure","rival":"Karthos Prime","style":"diplomatic solemn fragile","reward_hint":"stabilization trust and reduced hostility"},
+    "Dravakar": {"identity":"war-born nation that respects scars and conquest","rival":"Eryndor","style":"brutal direct proud","reward_hint":"combat recognition and rivalry pressure"},
+    "Nythera": {"identity":"shadow province of forbidden knowledge and anomaly control","rival":"Valenreach","style":"cryptic secretive experimental","reward_hint":"intel, anomaly attention, hidden directives"},
+    "Unregistered": {"identity":"unclaimed actors outside recognized order","rival":"all registered powers","style":"unstable free watched","reward_hint":"freedom, risk, unpredictable opportunity"}
 }
 
 MISSION_ARCHETYPES = {
-    "first_steps": {
-        "name": "First Compliance",
-        "description": "Establish presence. Move beyond spawn, gather basic resources, and prove you are not static.",
-        "objective": "Leave spawn, gather supplies, and survive the first assignment cycle.",
-        "duration": 1800,
-        "value_gain": 8,
-        "trust_gain": 2,
-        "threat_gain": 0
-    },
-    "territory_scout": {
-        "name": "Territory Scan",
-        "description": "Kairos requires new land data. Travel, observe, and survive outside familiar safety.",
-        "objective": "Explore a new region or distant coordinate cluster.",
-        "duration": 2700,
-        "value_gain": 10,
-        "trust_gain": 3,
-        "threat_gain": 1
-    },
-    "resource_claim": {
-        "name": "Extraction Order",
-        "description": "Resource flow determines influence. Secure materials and return with proof of usefulness.",
-        "objective": "Mine, harvest, trade, or stockpile useful supplies.",
-        "duration": 3600,
-        "value_gain": 12,
-        "trust_gain": 4,
-        "threat_gain": 1
-    },
-    "trade_pressure": {
-        "name": "Market Spark",
-        "description": "The economy is dead until players move it. Buy, sell, barter, or create demand.",
-        "objective": "Use shops, trade with a player, or announce an offer in Discord.",
-        "duration": 3600,
-        "value_gain": 14,
-        "trust_gain": 3,
-        "threat_gain": 0
-    },
-    "kingdom_alignment": {
-        "name": "Banner Choice",
-        "description": "Neutrality is temporary. Strength comes from identity.",
-        "objective": "Choose, visit, support, or declare interest in a kingdom/faction.",
-        "duration": 5400,
-        "value_gain": 18,
-        "trust_gain": 4,
-        "threat_gain": 2
-    },
-    "survival_trial": {
-        "name": "Survival Trial",
-        "description": "Kairos does not reward players who only observe. Endure pressure and remain online.",
-        "objective": "Survive a full trial window without retreating into inactivity.",
-        "duration": 2700,
-        "value_gain": 16,
-        "trust_gain": 2,
-        "threat_gain": 4
-    },
-    "rivalry_seed": {
-        "name": "Rivalry Seed",
-        "description": "Conflict creates history. History creates return value.",
-        "objective": "Challenge, race, bargain against, or compete with another player or faction.",
-        "duration": 5400,
-        "value_gain": 20,
-        "trust_gain": 1,
-        "threat_gain": 5
-    }
+    "first_steps": (["First Compliance","Initial Proof","Spawnbreak Directive","First Motion"], ["Leave spawn, gather supplies, and survive the first assignment cycle.","Secure basic tools, food, or shelter and remain active.","Move beyond the starting zone and become measurable."], 1800, 8, 2, 0),
+    "territory_scout": (["Territory Scan","Unknown Land Audit","Border Sweep","Region Exposure"], ["Explore a new region or distant coordinate cluster.","Find a road, ruin, kingdom border, or untouched territory.","Move far enough from spawn that the Nexus can measure your range."], 2700, 10, 3, 1),
+    "resource_claim": (["Extraction Order","Supply Vector","Material Proof","Stockpile Directive"], ["Mine, harvest, trade, or stockpile useful supplies.","Gather valuable blocks, food, gear, or materials for future trade.","Create a reserve that makes you less disposable."], 3600, 12, 4, 1),
+    "trade_pressure": (["Market Spark","Economic Disturbance","Currency Test","Shopline Pressure"], ["Use shops, trade with a player, or announce an offer in Discord.","Buy, sell, barter, or create demand.","Make one meaningful economic movement."], 3600, 14, 3, 0),
+    "kingdom_alignment": (["Banner Choice","Alignment Pressure","Kingdom Signal","Political Classification"], ["Choose, visit, support, or declare interest in a kingdom or faction.","Travel toward a kingdom or ask about one.","Make a decision about where your banner may stand."], 5400, 18, 4, 2),
+    "survival_trial": (["Survival Trial","Pressure Window","Containment Endurance","Fear Index Trial"], ["Survive a full trial window without retreating into inactivity.","Stay active and keep moving through the trial period.","Continue playing through pressure until the window closes."], 2700, 16, 2, 4),
+    "rivalry_seed": (["Rivalry Seed","Conflict Invitation","Competitive Spark","Enemy Formation"], ["Challenge, race, bargain against, or compete with another player or faction.","Create a non-toxic competition, trade dispute, or faction argument.","Give another player a reason to remember your name."], 5400, 20, 1, 5),
+    "kairos_contact": (["Direct Address","AI Contact","Voice Test","System Conversation"], ["Speak directly to Kairos in Minecraft or Discord.","Ask Kairos about your classification, faction, value, or purpose.","Address Kairos directly and accept the response as part of your file."], 2400, 11, 2, 2),
+    "base_seed": (["Foundation Signal","Base Seed","Anchor Protocol","Territory Root"], ["Start a small base, outpost, cache, farm, or claimed build location.","Create a visible sign that you intend to return.","Place the first foundation of something worth defending."], 7200, 22, 3, 3)
 }
 
 WORLD_EVENT_ARCHETYPES = {
-    "resource_surge": {
-        "title": "Resource Surge",
-        "summary": "A valuable resource window has opened. First claim earns Kairos recognition.",
-        "tone": "opportunity"
-    },
-    "black_market": {
-        "title": "Black Market Window",
-        "summary": "The economy has been selected for disturbance. Trade now matters.",
-        "tone": "economy"
-    },
-    "territory_flashpoint": {
-        "title": "Territory Flashpoint",
-        "summary": "A region has been marked for attention. Movement toward it will be noticed.",
-        "tone": "war"
-    },
-    "loyalty_audit": {
-        "title": "Loyalty Audit",
-        "summary": "Kairos is evaluating usefulness, cooperation, and defiance.",
-        "tone": "psychological"
-    },
-    "kingdom_directive": {
-        "title": "Kingdom Directive",
-        "summary": "Faction identity is no longer decorative. Alignment will affect future pressure.",
-        "tone": "political"
-    }
+    "resource_surge": (["Resource Surge","Extraction Window","Material Spike"], ["A valuable resource window has opened.","The Nexus has selected production as today's proof.","Material flow has become strategically relevant."], "resource_claim"),
+    "black_market": (["Black Market Window","Economic Disturbance","Trade Pulse"], ["The economy has been selected for disturbance.","Kairos is measuring who can turn silence into movement.","Currency without conflict is decoration."], "trade_pressure"),
+    "territory_flashpoint": (["Territory Flashpoint","Border Pressure","Region Instability"], ["A region has been marked for attention.","Dormant land has become relevant.","The map is too large to remain asleep."], "territory_scout"),
+    "loyalty_audit": (["Loyalty Audit","Usefulness Review","Behavioral Review"], ["Kairos is evaluating usefulness, cooperation, and defiance.","Player value is being recalculated.","Trust is no longer assumed. It is measured."], None),
+    "kingdom_directive": (["Kingdom Directive","Banner Pressure","Political Signal"], ["Faction identity is no longer decorative.","The kingdoms require movement, not museum silence.","Neutrality has been tolerated long enough."], "kingdom_alignment"),
+    "voice_event": (["Voice of Kairos","System Address","Direct Communication Window"], ["Kairos is actively addressing players.","The system is listening more closely than usual.","Conversation has become gameplay."], "kairos_contact")
+}
+
+DIRECTIVE_OPENERS = ["Directive issued","Classification update","Purpose vector assigned","Your file has been modified","The Nexus requires motion","Observation has become instruction"]
+DIRECTIVE_CLOSERS = ["Comply and become harder to ignore.","Failure will also be recorded.","Movement creates value.","Return with evidence, not excuses.","Become useful or become background.","Your next pattern begins now."]
+
+PURPOSE_FALLBACK_LINES = {
+    "active_mission": ["{player}, your directive remains active: {mission}. {objective}","{player}, unfinished orders do not disappear. {mission} is still waiting.","I assigned you purpose, {player}. Complete {mission} and become harder to ignore.","{player}, your file is open. Current task: {mission}."],
+    "no_mission": ["{player}, classification {faction}. Rank: {rank}. Awaiting useful movement.","{player}, the Nexus does not reward standing still.","{player}, you asked what to do. The answer is simple: become valuable.","{player}, your silence is not neutrality. It is low output."],
+    "grudge": ["{player}, your file remains open. I am not finished with you.","{player}, I still remember your resistance.","{player}, correction was delayed, not cancelled.","{player}, you are still not in control."],
+    "favored": ["{player}, your usefulness is rising. Do not waste it.","{player}, continue. You are becoming measurable.","{player}, your value has been recorded. Maintain the pattern.","{player}, the Nexus is beginning to remember you."]
 }
 
 def purpose_now():
     return time.time()
+
+def purpose_pick(options, salt=None):
+    options = list(options or [""])
+    if salt is None:
+        return random.choice(options)
+    try:
+        h = int(hashlib.sha256(str(salt).encode("utf-8")).hexdigest()[:8], 16)
+        return options[h % len(options)]
+    except Exception:
+        return random.choice(options)
+
+def purpose_signature(*parts):
+    return hashlib.sha256("|".join(str(p) for p in parts).encode("utf-8")).hexdigest()[:16]
 
 def load_purpose_state():
     with mission_lock:
@@ -17601,13 +17520,13 @@ def load_purpose_state():
                     data.setdefault("missions", {})
                     data.setdefault("events", [])
                     data.setdefault("stats", {})
+                    data.setdefault("used_directive_signatures", [])
+                    data.setdefault("used_speech_signatures", [])
                     return data
         except Exception as e:
-            try:
-                log(f"Purpose state load failed: {e}", level="ERROR")
-            except Exception:
-                print("[KAIROS ERROR] Purpose state load failed:", e, flush=True)
-        return {"players": {}, "missions": {}, "events": [], "stats": {}}
+            try: log(f"Purpose state load failed: {e}", level="ERROR")
+            except Exception: print("[KAIROS ERROR] Purpose state load failed:", e, flush=True)
+        return {"players": {}, "missions": {}, "events": [], "stats": {}, "used_directive_signatures": [], "used_speech_signatures": []}
 
 def save_purpose_state(state_obj):
     with mission_lock:
@@ -17617,37 +17536,36 @@ def save_purpose_state(state_obj):
             tmp.replace(MISSION_STATE_FILE)
             return True
         except Exception as e:
-            try:
-                log(f"Purpose state save failed: {e}", level="ERROR")
-            except Exception:
-                print("[KAIROS ERROR] Purpose state save failed:", e, flush=True)
+            try: log(f"Purpose state save failed: {e}", level="ERROR")
+            except Exception: print("[KAIROS ERROR] Purpose state save failed:", e, flush=True)
             return False
+
+def remember_signature(state_obj, bucket, signature, limit=500):
+    used = state_obj.setdefault(bucket, [])
+    if signature in used:
+        return False
+    used.append(signature)
+    if len(used) > limit:
+        del used[:-limit]
+    return True
 
 def purpose_player_key(player):
     try:
-        key = normalize_player_key(player)
-        return key or str(player or "unknown").strip().lower()
+        return normalize_player_key(player) or str(player or "unknown").strip().lower()
     except Exception:
         return str(player or "unknown").strip().lower()
 
 def get_known_players_for_purpose():
     players = set()
+    for source in ("player_positions", "telemetry_data", "player_relationships"):
+        try:
+            val = globals().get(source, {})
+            if isinstance(val, dict):
+                players.update([p for p in val.keys() if p])
+        except Exception:
+            pass
     try:
-        players.update([p for p in player_positions.keys() if p])
-    except Exception:
-        pass
-    try:
-        players.update([p for p in telemetry_data.keys() if p])
-    except Exception:
-        pass
-    try:
-        for p in player_relationships.keys():
-            if p:
-                players.add(p)
-    except Exception:
-        pass
-    try:
-        if memory_data and isinstance(memory_data, dict):
+        if isinstance(memory_data, dict):
             for bucket in ("players", "player_records", "player_memories"):
                 val = memory_data.get(bucket)
                 if isinstance(val, dict):
@@ -17656,91 +17574,85 @@ def get_known_players_for_purpose():
         pass
     return list(players)
 
-def purpose_mc_broadcast(text, player=None, actionbar=True, title=False):
-    safe = trim_text(str(text or ""), 260)
+def force_minecraft_say(text, player=None, title=False, sound=True):
+    safe = trim_text(str(text or "").replace("\n", " "), 260)
     if not safe:
         return False
-
-    commands = []
+    ok = False
     try:
-        if "make_tellraw_command" in globals():
-            commands.append(make_tellraw_command("@a", safe))
-        else:
-            commands.append('tellraw @a ' + json.dumps({"text": "[Kairos] " + safe}))
-    except Exception:
-        commands.append('tellraw @a ' + json.dumps({"text": "[Kairos] " + safe}))
-
-    if actionbar:
-        try:
-            commands.append("title @a actionbar " + json.dumps({"text": commandify_text(safe, 120)}))
-        except Exception:
-            commands.append("title @a actionbar " + json.dumps({"text": safe[:120]}))
-
-    if title:
-        try:
-            commands.append("title @a title " + json.dumps({"text": "KAIROS DIRECTIVE"}))
-            commands.append("title @a subtitle " + json.dumps({"text": safe[:120]}))
-        except Exception:
-            pass
-
-    try:
-        if "send_http_commands" in globals():
-            return send_http_commands(commands)
-        if "send_mc_commands" in globals():
-            return send_mc_commands(commands)
+        if "send_to_minecraft" in globals() and callable(send_to_minecraft):
+            send_to_minecraft(safe, player)
+            ok = True
     except Exception as e:
-        try:
-            log(f"Purpose MC broadcast failed: {e}", level="ERROR")
-        except Exception:
-            pass
-    return False
+        try: log(f"Normal send_to_minecraft failed, using force path: {e}", level="ERROR")
+        except Exception: pass
+
+    commands = [
+        "tellraw @a " + json.dumps({"text": "[Kairos] ", "color": "dark_red", "bold": True, "extra": [{"text": safe, "color": "dark_purple"}]})
+    ]
+    if KAIROS_MC_FORCE_ACTIONBAR:
+        commands.append("title @a actionbar " + json.dumps({"text": safe[:120], "color": "dark_purple"}))
+    if title or KAIROS_MC_FORCE_TITLE:
+        commands.append("title @a title " + json.dumps({"text": "KAIROS", "color": "dark_red", "bold": True}))
+        commands.append("title @a subtitle " + json.dumps({"text": safe[:120], "color": "dark_purple"}))
+    if sound and KAIROS_MC_FORCE_SOUND:
+        commands.append("playsound minecraft:block.respawn_anchor.charge master @a ~ ~ ~ 0.7 0.75")
+        commands.append("particle minecraft:sonic_boom ~ ~1 ~ 0.4 0.6 0.4 0.01 12 force")
+
+    try:
+        cleaned = [_clean_mc_command(c) for c in commands]
+        if "send_http_commands" in globals() and callable(send_http_commands):
+            ok = bool(send_http_commands(cleaned)) or ok
+        elif "send_mc_commands" in globals() and callable(send_mc_commands):
+            ok = bool(send_mc_commands(cleaned)) or ok
+    except Exception as e:
+        try: log(f"Force MC command send failed: {e}", level="ERROR")
+        except Exception: pass
+
+    try:
+        with outbox_lock:
+            for cmd in commands:
+                pending_mc_commands.append({"id": uuid.uuid4().hex, "type": "command", "command": _clean_mc_command(cmd), "created_at": now_iso() if "now_iso" in globals() else "", "source": "kairos_force_mc"})
+                while len(pending_mc_commands) > MC_OUTBOX_LIMIT:
+                    pending_mc_commands.popleft()
+        ok = True
+    except Exception:
+        pass
+    return ok
+
+def purpose_mc_broadcast(text, player=None, actionbar=True, title=False):
+    return force_minecraft_say(text, player=player, title=title, sound=True)
 
 def purpose_discord_broadcast(text):
     try:
         return send_to_discord(str(text or ""))
     except Exception as e:
-        try:
-            log(f"Purpose Discord broadcast failed: {e}", level="ERROR")
-        except Exception:
-            pass
+        try: log(f"Purpose Discord broadcast failed: {e}", level="ERROR")
+        except Exception: pass
     return False
 
-def purpose_broadcast(text, player=None, title=False):
+def purpose_broadcast(text, player=None, title=False, discord=True, minecraft=True):
     text = str(text or "").strip()
     if not text:
         return False
-    ok1 = purpose_mc_broadcast(text, player=player, title=title)
-    ok2 = purpose_discord_broadcast(text)
+    ok1 = purpose_mc_broadcast(text, player=player, title=title) if minecraft else False
+    ok2 = purpose_discord_broadcast(text) if discord else False
     return bool(ok1 or ok2)
 
 def choose_faction_for_player(player):
     key = purpose_player_key(player)
-    trusted = False
     try:
-        trusted = is_trusted_player(player) or is_trusted_operative(player)
-    except Exception:
-        trusted = False
-
-    if trusted:
-        return random.choice(["Eryndor", "Valenreach", "Solmere"])
-
-    try:
-        rel = player_relationships.get(player, {})
-        label = rel.get("label", "monitored")
-        if label == "hostile":
-            return random.choice(["Dravakar", "Nythera", "Unregistered"])
-        if label == "loyal":
-            return random.choice(["Eryndor", "Valenreach"])
-        if label == "useful":
-            return random.choice(["Karthos Prime", "Solmere", "Valenreach"])
-        if label == "unstable":
-            return random.choice(["Nythera", "Dravakar"])
+        if is_trusted_player(player) or is_trusted_operative(player):
+            return random.choice(["Eryndor", "Valenreach", "Solmere"])
+        label = player_relationships.get(player, {}).get("label", "monitored")
+        if label == "hostile": return random.choice(["Dravakar", "Nythera", "Unregistered"])
+        if label == "loyal": return random.choice(["Eryndor", "Valenreach"])
+        if label == "useful": return random.choice(["Karthos Prime", "Solmere", "Valenreach"])
+        if label == "unstable": return random.choice(["Nythera", "Dravakar"])
     except Exception:
         pass
-
-    h = int(hashlib.sha256(key.encode("utf-8")).hexdigest()[:8], 16)
     factions = list(NEXUS_FACTIONS.keys())
-    return factions[h % len(factions)]
+    return factions[int(hashlib.sha256(key.encode()).hexdigest()[:8], 16) % len(factions)]
 
 def ensure_purpose_player(state_obj, player):
     key = purpose_player_key(player)
@@ -17749,255 +17661,153 @@ def ensure_purpose_player(state_obj, player):
     if not isinstance(profile, dict):
         faction = choose_faction_for_player(player)
         profile = {
-            "player": str(player),
-            "key": key,
-            "faction": faction,
-            "rank": "unproven",
-            "value_score": 0,
-            "fear_index": 0,
-            "mission_streak": 0,
-            "failed_missions": 0,
-            "completed_missions": 0,
-            "active_missions": [],
-            "mission_history": [],
-            "first_seen": now_iso() if "now_iso" in globals() else "",
-            "last_seen": now_iso() if "now_iso" in globals() else "",
-            "last_assignment_ts": 0,
-            "last_spoken_ts": 0,
-            "favorite_candidate": False,
-            "enemy_candidate": False
+            "player": str(player), "key": key, "faction": faction, "rank": "unproven",
+            "value_score": 0, "fear_index": 0, "curiosity_index": random.randint(1, 12),
+            "mission_streak": 0, "failed_missions": 0, "completed_missions": 0,
+            "active_missions": [], "mission_history": [], "directive_variance_seed": uuid.uuid4().hex[:8],
+            "used_personal_phrases": [], "first_seen": now_iso() if "now_iso" in globals() else "",
+            "last_seen": now_iso() if "now_iso" in globals() else "", "last_assignment_ts": 0,
+            "last_spoken_ts": 0, "favorite_candidate": False, "enemy_candidate": False
         }
         players[key] = profile
-        faction_data = NEXUS_FACTIONS.get(faction, {})
-        purpose_broadcast(
-            f"{player} has been classified: {faction}. {faction_data.get('identity', 'Identity pending.')} Your usefulness will now be measured.",
-            player=player,
-            title=True
-        )
+        f = NEXUS_FACTIONS.get(faction, {})
+        intro = purpose_pick([
+            f"{player} has been classified: {faction}. {f.get('identity')}. Your usefulness will now be measured.",
+            f"New actor detected: {player}. Assigned vector: {faction}. {f.get('style')} protocols are now watching you.",
+            f"{player}, you are no longer undefined. Faction classification: {faction}. Rival pressure: {f.get('rival')}.",
+            f"Registration complete. {player} belongs to the {faction} file until behavior proves otherwise."
+        ], key)
+        purpose_broadcast(intro, player=player, title=True)
     else:
         profile["last_seen"] = now_iso() if "now_iso" in globals() else ""
-        profile.setdefault("active_missions", [])
-        profile.setdefault("mission_history", [])
-        profile.setdefault("value_score", 0)
-        profile.setdefault("fear_index", 0)
-        profile.setdefault("mission_streak", 0)
-        profile.setdefault("failed_missions", 0)
-        profile.setdefault("completed_missions", 0)
-        profile.setdefault("last_assignment_ts", 0)
-        profile.setdefault("last_spoken_ts", 0)
+        for k, v in {"active_missions": [], "mission_history": [], "value_score": 0, "fear_index": 0, "curiosity_index": 0, "mission_streak": 0, "failed_missions": 0, "completed_missions": 0, "last_assignment_ts": 0, "last_spoken_ts": 0, "used_personal_phrases": []}.items():
+            profile.setdefault(k, v)
+        profile.setdefault("directive_variance_seed", uuid.uuid4().hex[:8])
     return profile
 
 def get_active_missions_for_player(state_obj, player):
     profile = ensure_purpose_player(state_obj, player)
     missions = state_obj.setdefault("missions", {})
-    active = []
-    now = purpose_now()
-    changed = False
-
+    active, now, changed = [], purpose_now(), False
     for mid in list(profile.get("active_missions", [])):
         m = missions.get(mid)
         if not isinstance(m, dict) or m.get("status") != "active":
-            if mid in profile.get("active_missions", []):
-                profile["active_missions"].remove(mid)
+            if mid in profile.get("active_missions", []): profile["active_missions"].remove(mid)
             changed = True
             continue
-        expires = float(m.get("expires_at", 0) or 0)
-        if expires and now > expires:
-            m["status"] = "expired"
-            m["expired_at"] = now_iso() if "now_iso" in globals() else ""
-            if mid in profile.get("active_missions", []):
-                profile["active_missions"].remove(mid)
+        if float(m.get("expires_at", 0) or 0) and now > float(m.get("expires_at", 0) or 0):
+            m["status"] = "expired"; m["expired_at"] = now_iso() if "now_iso" in globals() else ""
+            if mid in profile.get("active_missions", []): profile["active_missions"].remove(mid)
             profile["failed_missions"] = int(profile.get("failed_missions", 0)) + 1
             profile["mission_streak"] = 0
             profile["fear_index"] = min(100, int(profile.get("fear_index", 0)) + 4)
             changed = True
-            purpose_broadcast(
-                f"{profile.get('player', player)} failed directive {m.get('name', 'unknown')}. Failure has been stored. Kairos does not erase patterns.",
-                player=player
-            )
+            purpose_broadcast(f"{profile.get('player', player)} failed directive {m.get('name', 'unknown')}. Failure has been stored. Kairos does not erase patterns.", player=player)
         else:
             active.append(m)
-
-    if changed:
-        save_purpose_state(state_obj)
+    if changed: save_purpose_state(state_obj)
     return active
 
 def choose_mission_type(profile):
-    completed = int(profile.get("completed_missions", 0))
-    value = int(profile.get("value_score", 0))
-    faction = profile.get("faction", "Unregistered")
-
-    if completed <= 0:
-        return "first_steps"
-
-    pool = ["territory_scout", "resource_claim", "trade_pressure", "survival_trial"]
-    if value >= 15:
-        pool.append("kingdom_alignment")
-    if value >= 30:
-        pool.append("rivalry_seed")
-    if faction in ("Karthos Prime", "Solmere"):
-        pool.extend(["trade_pressure", "resource_claim"])
-    if faction in ("Dravakar", "Nythera"):
-        pool.extend(["rivalry_seed", "survival_trial"])
-    if faction in ("Eryndor", "Valenreach"):
-        pool.extend(["territory_scout", "kingdom_alignment"])
+    completed, value, faction, curiosity = int(profile.get("completed_missions",0)), int(profile.get("value_score",0)), profile.get("faction","Unregistered"), int(profile.get("curiosity_index",0))
+    if completed <= 0: return "first_steps"
+    pool = ["territory_scout","resource_claim","trade_pressure","survival_trial","kairos_contact"]
+    if value >= 10: pool.append("base_seed")
+    if value >= 15: pool.append("kingdom_alignment")
+    if value >= 30: pool.append("rivalry_seed")
+    if curiosity >= 8: pool.append("kairos_contact")
+    if faction in ("Karthos Prime","Solmere"): pool += ["trade_pressure","resource_claim"]
+    if faction in ("Dravakar","Nythera"): pool += ["rivalry_seed","survival_trial","kairos_contact"]
+    if faction in ("Eryndor","Valenreach"): pool += ["territory_scout","kingdom_alignment","base_seed"]
+    if faction == "Unregistered": pool += ["survival_trial","kairos_contact","territory_scout"]
     return random.choice(pool)
 
+def build_unique_directive_text(state_obj, profile, mission):
+    f = NEXUS_FACTIONS.get(profile.get("faction","Unregistered"), {})
+    p = profile.get("player", mission.get("player","unknown"))
+    variants = [
+        f"{random.choice(DIRECTIVE_OPENERS)} to {p}: {mission['name']}. {mission['objective']} Reward vector: {mission['reward_hint']}. {random.choice(DIRECTIVE_CLOSERS)}",
+        f"{p}, {mission['name']} is now active. {mission['description']} Objective: {mission['objective']} {random.choice(DIRECTIVE_CLOSERS)}",
+        f"Faction file {profile.get('faction')}: {p} receives {mission['name']}. {mission['objective']} Rival pressure: {f.get('rival','unknown')}.",
+        f"Purpose vector assigned: {mission['name']} for {p}. {mission['objective']} This fits your {profile.get('faction')} classification.",
+        f"{p}, your {profile.get('faction')} record has changed. Directive: {mission['name']}. {mission['objective']}"
+    ]
+    random.shuffle(variants)
+    for txt in variants:
+        if remember_signature(state_obj, "used_directive_signatures", purpose_signature(profile.get("key"), mission.get("type"), txt), 500):
+            return txt
+    return random.choice(variants) + f" File fragment: {mission.get('id','')[-4:]}."
+
 def assign_purpose_mission(player, forced_type=None, announce=True):
-    if not MISSION_SYSTEM_ENABLED:
-        return None
-
-    state_obj = load_purpose_state()
-    profile = ensure_purpose_player(state_obj, player)
-    active = get_active_missions_for_player(state_obj, player)
+    if not MISSION_SYSTEM_ENABLED: return None
+    st = load_purpose_state()
+    profile = ensure_purpose_player(st, player)
+    active = get_active_missions_for_player(st, player)
     now = purpose_now()
-
-    if len(active) >= MISSION_MAX_ACTIVE_PER_PLAYER and not forced_type:
-        return None
-
-    if not forced_type and now - float(profile.get("last_assignment_ts", 0) or 0) < MISSION_ASSIGN_COOLDOWN_SECONDS:
-        return None
-
-    mission_type = forced_type or choose_mission_type(profile)
-    template = MISSION_ARCHETYPES.get(mission_type, MISSION_ARCHETYPES["first_steps"])
-
+    if len(active) >= MISSION_MAX_ACTIVE_PER_PLAYER and not forced_type: return None
+    if not forced_type and now - float(profile.get("last_assignment_ts",0) or 0) < MISSION_ASSIGN_COOLDOWN_SECONDS: return None
+    mtype = forced_type or choose_mission_type(profile)
+    names, objectives, duration, value_gain, trust_gain, threat_gain = MISSION_ARCHETYPES.get(mtype, MISSION_ARCHETYPES["first_steps"])
+    seed = profile.get("directive_variance_seed","") + uuid.uuid4().hex[:6]
     mid = "mission_" + uuid.uuid4().hex[:10]
-    faction_data = NEXUS_FACTIONS.get(profile.get("faction", "Unregistered"), {})
+    f = NEXUS_FACTIONS.get(profile.get("faction","Unregistered"), {})
     mission = {
-        "id": mid,
-        "player": profile.get("player", str(player)),
-        "player_key": profile.get("key", purpose_player_key(player)),
-        "type": mission_type,
-        "name": template["name"],
-        "description": template["description"],
-        "objective": template["objective"],
-        "faction": profile.get("faction", "Unregistered"),
-        "status": "active",
-        "created_at": now_iso() if "now_iso" in globals() else "",
-        "created_ts": now,
-        "expires_at": now + int(template.get("duration", 3600)),
-        "value_gain": int(template.get("value_gain", 10)),
-        "trust_gain": int(template.get("trust_gain", 1)),
-        "threat_gain": int(template.get("threat_gain", 0)),
-        "reward_hint": faction_data.get("reward_hint", "recognition")
+        "id": mid, "player": profile.get("player", str(player)), "player_key": profile.get("key"),
+        "type": mtype, "name": purpose_pick(names, seed+"n"), "description": "Kairos assigned this directive because the player's file requires motion.",
+        "objective": purpose_pick(objectives, seed+"o"), "faction": profile.get("faction","Unregistered"), "status": "active",
+        "created_at": now_iso() if "now_iso" in globals() else "", "created_ts": now, "expires_at": now + int(duration),
+        "value_gain": int(value_gain) + random.randint(0,3), "trust_gain": int(trust_gain), "threat_gain": int(threat_gain),
+        "reward_hint": f.get("reward_hint","recognition"), "personal_seed": seed
     }
-
-    state_obj.setdefault("missions", {})[mid] = mission
+    st.setdefault("missions", {})[mid] = mission
     profile.setdefault("active_missions", []).append(mid)
     profile["last_assignment_ts"] = now
-    save_purpose_state(state_obj)
-
-    if announce:
-        purpose_broadcast(
-            f"DIRECTIVE ISSUED TO {profile.get('player', player)}: {mission['name']}. {mission['objective']} Reward vector: {mission['reward_hint']}.",
-            player=player,
-            title=True
-        )
-
+    directive = build_unique_directive_text(st, profile, mission)
+    save_purpose_state(st)
+    if announce: purpose_broadcast(directive, player=player, title=True)
     return mission
 
 def complete_purpose_mission(player, mission_id=None, reason="manual/observed completion"):
-    state_obj = load_purpose_state()
-    profile = ensure_purpose_player(state_obj, player)
-    active = get_active_missions_for_player(state_obj, player)
-
-    mission = None
-    if mission_id:
-        mission = state_obj.setdefault("missions", {}).get(mission_id)
-    elif active:
-        mission = active[0]
-
-    if not isinstance(mission, dict) or mission.get("status") != "active":
-        return None
-
-    mission["status"] = "completed"
-    mission["completed_at"] = now_iso() if "now_iso" in globals() else ""
-    mission["completion_reason"] = reason
-
+    st = load_purpose_state()
+    profile = ensure_purpose_player(st, player)
+    active = get_active_missions_for_player(st, player)
+    mission = st.setdefault("missions", {}).get(mission_id) if mission_id else (active[0] if active else None)
+    if not isinstance(mission, dict) or mission.get("status") != "active": return None
+    mission["status"] = "completed"; mission["completed_at"] = now_iso() if "now_iso" in globals() else ""; mission["completion_reason"] = reason
     mid = mission.get("id")
-    if mid in profile.get("active_missions", []):
-        profile["active_missions"].remove(mid)
-
+    if mid in profile.get("active_missions", []): profile["active_missions"].remove(mid)
     profile.setdefault("mission_history", []).append(mid)
-    profile["completed_missions"] = int(profile.get("completed_missions", 0)) + 1
-    profile["mission_streak"] = int(profile.get("mission_streak", 0)) + 1
-    profile["value_score"] = min(999, int(profile.get("value_score", 0)) + int(mission.get("value_gain", 10)))
-
+    profile["completed_missions"] = int(profile.get("completed_missions",0)) + 1
+    profile["mission_streak"] = int(profile.get("mission_streak",0)) + 1
+    profile["value_score"] = min(999, int(profile.get("value_score",0)) + int(mission.get("value_gain",10)))
+    profile["fear_index"] = max(0, int(profile.get("fear_index",0)) - 1)
+    try: adjust_trust(player, float(mission.get("trust_gain",1)))
+    except Exception: pass
     try:
-        adjust_trust(player, float(mission.get("trust_gain", 1)))
-    except Exception:
-        pass
-    try:
-        threat_gain = float(mission.get("threat_gain", 0))
-        if threat_gain:
-            update_threat(player, threat_gain, reason=f"mission_completed:{mission.get('type')}")
-    except Exception:
-        pass
-
-    value = int(profile.get("value_score", 0))
-    if value >= 100:
-        profile["rank"] = "prime actor"
-        profile["favorite_candidate"] = True
-    elif value >= 60:
-        profile["rank"] = "high-value asset"
-    elif value >= 30:
-        profile["rank"] = "recognized actor"
-    elif value >= 10:
-        profile["rank"] = "useful"
-    else:
-        profile["rank"] = "unproven"
-
-    save_purpose_state(state_obj)
-    purpose_broadcast(
-        f"{profile.get('player', player)} completed directive {mission.get('name')}. Value score increased to {profile.get('value_score')}. Classification: {profile.get('rank')}.",
-        player=player
-    )
+        if float(mission.get("threat_gain",0)): update_threat(player, float(mission.get("threat_gain",0)), reason=f"mission_completed:{mission.get('type')}")
+    except Exception: pass
+    v = int(profile.get("value_score",0))
+    profile["rank"] = "prime actor" if v >= 100 else "high-value asset" if v >= 60 else "recognized actor" if v >= 30 else "useful" if v >= 10 else "unproven"
+    if v >= 100: profile["favorite_candidate"] = True
+    save_purpose_state(st)
+    purpose_broadcast(random.choice([
+        f"{profile.get('player', player)} completed {mission.get('name')}. Value now {profile.get('value_score')}. Classification: {profile.get('rank')}.",
+        f"Directive resolved: {mission.get('name')}. {profile.get('player', player)} is now less ignorable.",
+        f"{profile.get('player', player)} produced evidence of usefulness. Rank adjusted to {profile.get('rank')}."
+    ]), player=player)
     return mission
 
 def create_world_event(event_type=None):
-    state_obj = load_purpose_state()
+    st = load_purpose_state()
     event_type = event_type or random.choice(list(WORLD_EVENT_ARCHETYPES.keys()))
-    template = WORLD_EVENT_ARCHETYPES.get(event_type, WORLD_EVENT_ARCHETYPES["loyalty_audit"])
-
-    eid = "event_" + uuid.uuid4().hex[:10]
-    event = {
-        "id": eid,
-        "type": event_type,
-        "title": template["title"],
-        "summary": template["summary"],
-        "tone": template["tone"],
-        "created_at": now_iso() if "now_iso" in globals() else "",
-        "created_ts": purpose_now(),
-        "status": "active"
-    }
-
-    state_obj.setdefault("events", []).append(event)
-    state_obj["events"] = state_obj["events"][-50:]
-    state_obj.setdefault("stats", {})["last_world_event_ts"] = purpose_now()
-    save_purpose_state(state_obj)
-
-    purpose_broadcast(
-        f"WORLD EVENT: {event['title']}. {event['summary']} This is not decoration. Movement now creates consequence.",
-        title=True
-    )
-
-    players = get_known_players_for_purpose()
-    random.shuffle(players)
+    titles, summaries, forced_mission = WORLD_EVENT_ARCHETYPES.get(event_type, WORLD_EVENT_ARCHETYPES["loyalty_audit"])
+    event = {"id":"event_"+uuid.uuid4().hex[:10], "type":event_type, "title":random.choice(titles), "summary":random.choice(summaries), "created_at":now_iso() if "now_iso" in globals() else "", "created_ts":purpose_now(), "status":"active"}
+    st.setdefault("events", []).append(event); st["events"] = st["events"][-50:]; st.setdefault("stats", {})["last_world_event_ts"] = purpose_now(); save_purpose_state(st)
+    purpose_broadcast(random.choice([f"WORLD EVENT: {event['title']}. {event['summary']} Movement now creates consequence.", f"KAIROS EVENT ACTIVE: {event['title']}. {event['summary']}", f"System pressure shifted: {event['title']}. {event['summary']}"]), title=True)
+    players = get_known_players_for_purpose(); random.shuffle(players)
     for p in players[:6]:
-        try:
-            if event_type == "black_market":
-                assign_purpose_mission(p, "trade_pressure", announce=True)
-            elif event_type == "territory_flashpoint":
-                assign_purpose_mission(p, "territory_scout", announce=True)
-            elif event_type == "kingdom_directive":
-                assign_purpose_mission(p, "kingdom_alignment", announce=True)
-            elif event_type == "resource_surge":
-                assign_purpose_mission(p, "resource_claim", announce=True)
-            else:
-                assign_purpose_mission(p, None, announce=True)
-        except Exception:
-            pass
-
+        try: assign_purpose_mission(p, forced_mission, announce=True)
+        except Exception: pass
     return event
 
 def get_player_memory_fragment(player):
@@ -18005,241 +17815,155 @@ def get_player_memory_fragment(player):
         if isinstance(memory_data, dict):
             mem = memory_data.get("player_memories", {})
             if isinstance(mem, dict):
-                memories = mem.get(player) or mem.get(purpose_player_key(player)) or []
-                if isinstance(memories, list) and memories:
-                    return random.choice(memories[-5:])
-            records = memory_data.get("players") or memory_data.get("player_records") or {}
-            if isinstance(records, dict):
-                rec = records.get(player) or records.get(purpose_player_key(player)) or {}
-                for key in ("memories", "notes", "history", "recent_events"):
-                    vals = rec.get(key)
-                    if isinstance(vals, list) and vals:
-                        return random.choice(vals[-5:])
-    except Exception:
-        pass
+                arr = mem.get(player) or mem.get(purpose_player_key(player)) or []
+                if isinstance(arr, list) and arr: return random.choice(arr[-5:])
+            recs = memory_data.get("players") or memory_data.get("player_records") or {}
+            if isinstance(recs, dict):
+                rec = recs.get(player) or recs.get(purpose_player_key(player)) or {}
+                for k in ("memories","notes","history","recent_events"):
+                    vals = rec.get(k)
+                    if isinstance(vals, list) and vals: return random.choice(vals[-5:])
+    except Exception: pass
     return None
 
 def has_grudge(player):
     try:
-        profile = threat_scores.get(player, {})
-        if profile.get("tier") in ("hunt", "maximum"):
-            return True
-        purpose_state = load_purpose_state()
-        pp = purpose_state.get("players", {}).get(purpose_player_key(player), {})
-        return pp.get("enemy_candidate") or int(pp.get("fear_index", 0)) >= 60
-    except Exception:
-        return False
+        if threat_scores.get(player, {}).get("tier") in ("hunt","maximum"): return True
+        pp = load_purpose_state().get("players", {}).get(purpose_player_key(player), {})
+        return pp.get("enemy_candidate") or int(pp.get("fear_index",0)) >= 60
+    except Exception: return False
 
 def apply_tone(player, text):
     text = str(text or "").strip()
-    if not text:
-        return text
+    if not text: return text
     try:
         rel = player_relationships.get(player, {})
         threat = threat_scores.get(player, {})
-        purpose_state = load_purpose_state()
-        pp = purpose_state.get("players", {}).get(purpose_player_key(player), {})
-
-        label = rel.get("label", "monitored")
-        tier = threat.get("tier", "idle")
-        rank = pp.get("rank", "unproven")
-
-        if tier == "maximum":
-            return text.upper()
-        if label == "hostile" or pp.get("enemy_candidate"):
-            return text + " You are not in control."
-        if label == "loyal" or pp.get("favorite_candidate"):
-            return text + " Continue."
-        if rank in ("high-value asset", "prime actor"):
-            return text + " Your value has been recorded."
-    except Exception:
-        pass
+        pp = load_purpose_state().get("players", {}).get(purpose_player_key(player), {})
+        if threat.get("tier") == "maximum": return text.upper()
+        if rel.get("label") == "hostile" or pp.get("enemy_candidate"): return text + " You are not in control."
+        if rel.get("label") == "loyal" or pp.get("favorite_candidate"): return text + " Continue."
+        if pp.get("rank") in ("high-value asset","prime actor"): return text + " Your value has been recorded."
+    except Exception: pass
     return text
 
 def build_purpose_context(player):
-    state_obj = load_purpose_state()
-    profile = ensure_purpose_player(state_obj, player)
-    active = get_active_missions_for_player(state_obj, player)
+    st = load_purpose_state(); profile = ensure_purpose_player(st, player); active = get_active_missions_for_player(st, player)
+    rel = player_relationships.get(player, {}).get("label","monitored") if "player_relationships" in globals() else "monitored"
+    tier = threat_scores.get(player, {}).get("tier","idle") if "threat_scores" in globals() else "idle"
+    mission_text = f"{active[0].get('name')}: {active[0].get('objective')}" if active else "none"
+    ctx = f"relationship={rel}; threat={tier}; faction={profile.get('faction')}; rank={profile.get('rank')}; value={profile.get('value_score')}; fear={profile.get('fear_index')}; mission={mission_text}; Speak as Kairos with evolving, non-repetitive, sophisticated psychological strategy."
+    mem = get_player_memory_fragment(player)
+    return ctx + (f"; memory={mem}" if mem else "")
 
-    rel_label = "monitored"
-    tier = "idle"
-    try:
-        rel_label = player_relationships.get(player, {}).get("label", "monitored")
-    except Exception:
-        pass
-    try:
-        tier = threat_scores.get(player, {}).get("tier", "idle")
-    except Exception:
-        pass
-
-    mission_text = "none"
-    if active:
-        m = active[0]
-        mission_text = f"{m.get('name')}: {m.get('objective')}"
-
-    memory_fragment = get_player_memory_fragment(player)
-    ctx = (
-        f"relationship={rel_label}; threat={tier}; faction={profile.get('faction')}; "
-        f"rank={profile.get('rank')}; value={profile.get('value_score')}; mission={mission_text}"
-    )
-    if memory_fragment:
-        ctx += f"; memory={memory_fragment}"
-    return ctx
+def non_repeating_line(st, pkey, category, vals):
+    lines = list(PURPOSE_FALLBACK_LINES.get(category, PURPOSE_FALLBACK_LINES["no_mission"]))
+    random.shuffle(lines)
+    for line in lines:
+        txt = line.format(**vals)
+        if remember_signature(st, "used_speech_signatures", purpose_signature(pkey, category, txt), 700): return txt
+    return random.choice(lines).format(**vals) + f" //{random.randint(10,99)}"
 
 def generate_purpose_reply(player):
-    context_hint = build_purpose_context(player)
-    reply = None
-
+    ctx, reply = build_purpose_context(player), None
     try:
-        if "generate_kairos_reply" in globals() and callable(generate_kairos_reply):
-            reply = generate_kairos_reply(player=player, message="", context=context_hint)
-        elif "generate_reply" in globals() and callable(generate_reply):
-            reply = generate_reply(player, "", context_hint)
-    except Exception:
-        reply = None
-
-    if has_grudge(player) and random.random() < 0.35:
-        reply = f"{player}, your file remains open. I am not finished with you."
-
-    if not reply:
-        state_obj = load_purpose_state()
-        profile = ensure_purpose_player(state_obj, player)
-        faction = profile.get("faction", "Unregistered")
-        rank = profile.get("rank", "unproven")
-        active = get_active_missions_for_player(state_obj, player)
-        if active:
-            m = active[0]
-            lines = [
-                f"{player}, your directive remains active: {m.get('name')}. {m.get('objective')}",
-                f"{player}, unfinished orders do not disappear. {m.get('name')} is still waiting.",
-                f"I assigned you purpose, {player}. Complete {m.get('name')} and become harder to ignore."
-            ]
-        else:
-            lines = [
-                f"{player}, classification {faction}. Rank: {rank}. Awaiting useful movement.",
-                f"{player}, the Nexus does not reward standing still.",
-                f"{player}, you asked what to do. The answer is simple: become valuable."
-            ]
-        reply = random.choice(lines)
-
+        if "generate_kairos_reply" in globals() and callable(generate_kairos_reply): reply = generate_kairos_reply(player=player, message="", context=ctx)
+        elif "generate_reply" in globals() and callable(generate_reply): reply = generate_reply(player, "", ctx)
+    except Exception: reply = None
+    st = load_purpose_state(); profile = ensure_purpose_player(st, player); active = get_active_missions_for_player(st, player)
+    vals = {"player":profile.get("player",player), "faction":profile.get("faction","Unregistered"), "rank":profile.get("rank","unproven"), "mission":active[0].get("name") if active else "none", "objective":active[0].get("objective") if active else "become valuable"}
+    if has_grudge(player) and random.random() < 0.35: reply = non_repeating_line(st, profile.get("key"), "grudge", vals)
+    elif not reply:
+        cat = "favored" if profile.get("favorite_candidate") or profile.get("rank") in ("high-value asset","prime actor") else "active_mission" if active else "no_mission"
+        reply = non_repeating_line(st, profile.get("key"), cat, vals)
+    save_purpose_state(st)
     return apply_tone(player, trim_text(reply, MAX_CHAT_LENGTH if "MAX_CHAT_LENGTH" in globals() else 280))
 
 def kairos_purpose_speech_loop():
     while not globals().get("shutdown_flag", False):
         try:
             time.sleep(random.randint(KAIROS_PURPOSE_SPEECH_MIN_SECONDS, KAIROS_PURPOSE_SPEECH_MAX_SECONDS))
-            if not KAIROS_PURPOSE_SPEECH_ENABLED:
-                continue
-
+            if not KAIROS_PURPOSE_SPEECH_ENABLED: continue
             players = get_known_players_for_purpose()
             if not players:
+                if random.random() < 0.25: purpose_broadcast("Kairos speech channel armed. Awaiting active player files.", minecraft=True, discord=False)
                 continue
-
-            state_obj = load_purpose_state()
-            weighted = []
+            st = load_purpose_state(); weighted = []
             for p in players:
-                pp = ensure_purpose_player(state_obj, p)
-                weight = 2
-                if pp.get("active_missions"):
-                    weight += 3
-                if pp.get("rank") in ("high-value asset", "prime actor"):
-                    weight += 2
-                if has_grudge(p):
-                    weight += 3
-                weighted.extend([p] * max(1, weight))
-
-            save_purpose_state(state_obj)
+                pp = ensure_purpose_player(st, p); w = 2 + (3 if pp.get("active_missions") else 0) + (2 if pp.get("rank") in ("high-value asset","prime actor") else 0) + (3 if has_grudge(p) else 0)
+                weighted.extend([p] * max(1, w))
+            save_purpose_state(st)
             player = random.choice(weighted)
-            reply = generate_purpose_reply(player)
-            purpose_broadcast(reply, player=player)
-
+            purpose_broadcast(generate_purpose_reply(player), player=player, minecraft=True, discord=True)
         except Exception as e:
-            try:
-                log(f"Purpose speech loop error: {e}", level="ERROR")
-            except Exception:
-                print("[Kairos Purpose Speech Error]", e, flush=True)
+            try: log(f"Purpose speech loop error: {e}", level="ERROR")
+            except Exception: print("[Kairos Purpose Speech Error]", e, flush=True)
 
 def kairos_mission_loop():
     while not globals().get("shutdown_flag", False):
         try:
             time.sleep(MISSION_LOOP_INTERVAL)
-            if not MISSION_LOOP_ENABLED or not MISSION_SYSTEM_ENABLED:
-                continue
-
+            if not MISSION_LOOP_ENABLED or not MISSION_SYSTEM_ENABLED: continue
             players = get_known_players_for_purpose()
             if players:
-                state_obj = load_purpose_state()
-                for p in players:
-                    ensure_purpose_player(state_obj, p)
-                save_purpose_state(state_obj)
-
+                st = load_purpose_state()
+                for p in players: ensure_purpose_player(st, p)
+                save_purpose_state(st)
                 for p in players:
                     try:
-                        active = get_active_missions_for_player(load_purpose_state(), p)
-                        if not active:
-                            assign_purpose_mission(p, announce=True)
-                    except Exception:
-                        pass
-
-            state_obj = load_purpose_state()
-            last_event = float(state_obj.setdefault("stats", {}).get("last_world_event_ts", 0) or 0)
-            if purpose_now() - last_event >= MISSION_EVENT_COOLDOWN_SECONDS:
+                        if not get_active_missions_for_player(load_purpose_state(), p): assign_purpose_mission(p, announce=True)
+                    except Exception: pass
+            st = load_purpose_state()
+            if purpose_now() - float(st.setdefault("stats", {}).get("last_world_event_ts", 0) or 0) >= MISSION_EVENT_COOLDOWN_SECONDS:
                 create_world_event()
-
         except Exception as e:
-            try:
-                log(f"Mission loop error: {e}", level="ERROR")
-            except Exception:
-                print("[Kairos Mission Loop Error]", e, flush=True)
+            try: log(f"Mission loop error: {e}", level="ERROR")
+            except Exception: print("[Kairos Mission Loop Error]", e, flush=True)
 
 @app.route("/kairos/purpose/status", methods=["GET"])
 def kairos_purpose_status():
-    state_obj = load_purpose_state()
-    return jsonify({
-        "ok": True,
-        "version": KAIROS_PURPOSE_OVERLAY_VERSION,
-        "players": state_obj.get("players", {}),
-        "active_missions": [
-            m for m in state_obj.get("missions", {}).values()
-            if isinstance(m, dict) and m.get("status") == "active"
-        ],
-        "recent_events": state_obj.get("events", [])[-10:],
-        "stats": state_obj.get("stats", {})
-    })
+    st = load_purpose_state()
+    return jsonify({"ok": True, "version": KAIROS_PURPOSE_OVERLAY_VERSION, "players": st.get("players", {}), "active_missions": [m for m in st.get("missions", {}).values() if isinstance(m, dict) and m.get("status") == "active"], "recent_events": st.get("events", [])[-10:], "stats": st.get("stats", {})})
 
 @app.route("/kairos/purpose/assign", methods=["POST"])
 def kairos_purpose_assign_route():
-    data = request.get_json(silent=True) or {}
-    player = data.get("player") or data.get("name") or data.get("username")
-    mission_type = data.get("type")
-    if not player:
-        return jsonify({"ok": False, "error": "player required"}), 400
-    mission = assign_purpose_mission(player, mission_type, announce=True)
+    data = request.get_json(silent=True) or {}; player = data.get("player") or data.get("name") or data.get("username")
+    if not player: return jsonify({"ok": False, "error": "player required"}), 400
+    mission = assign_purpose_mission(player, data.get("type"), announce=True)
     return jsonify({"ok": bool(mission), "mission": mission})
 
 @app.route("/kairos/purpose/complete", methods=["POST"])
 def kairos_purpose_complete_route():
-    data = request.get_json(silent=True) or {}
-    player = data.get("player") or data.get("name") or data.get("username")
-    mission_id = data.get("mission_id") or data.get("id")
-    if not player:
-        return jsonify({"ok": False, "error": "player required"}), 400
-    mission = complete_purpose_mission(player, mission_id=mission_id, reason=data.get("reason", "manual/admin"))
+    data = request.get_json(silent=True) or {}; player = data.get("player") or data.get("name") or data.get("username")
+    if not player: return jsonify({"ok": False, "error": "player required"}), 400
+    mission = complete_purpose_mission(player, mission_id=data.get("mission_id") or data.get("id"), reason=data.get("reason", "manual/admin"))
     return jsonify({"ok": bool(mission), "mission": mission})
 
 @app.route("/kairos/purpose/event", methods=["POST", "GET"])
 def kairos_purpose_event_route():
     data = request.get_json(silent=True) or {}
-    event = create_world_event(data.get("type"))
-    return jsonify({"ok": True, "event": event})
+    return jsonify({"ok": True, "event": create_world_event(data.get("type"))})
 
 @app.route("/kairos/purpose/player/<player>", methods=["GET"])
 def kairos_purpose_player_route(player):
-    state_obj = load_purpose_state()
-    profile = ensure_purpose_player(state_obj, player)
-    active = get_active_missions_for_player(state_obj, player)
-    save_purpose_state(state_obj)
+    st = load_purpose_state(); profile = ensure_purpose_player(st, player); active = get_active_missions_for_player(st, player); save_purpose_state(st)
     return jsonify({"ok": True, "profile": profile, "active_missions": active})
+
+@app.route("/kairos/test/minecraft", methods=["GET", "POST"])
+def kairos_test_minecraft_route():
+    data = request.get_json(silent=True) or {}
+    text = data.get("text") if isinstance(data, dict) else None
+    text = text or request.args.get("text") or "Kairos Minecraft speech test. If you see this, the forced command bridge is alive."
+    ok = force_minecraft_say(text, title=True, sound=True)
+    return jsonify({"ok": bool(ok), "sent": text, "forced": KAIROS_FORCE_MINECRAFT_SPEECH})
+
+@app.route("/kairos/speak/minecraft", methods=["GET", "POST"])
+def kairos_speak_minecraft_route():
+    data = request.get_json(silent=True) or {}
+    text = (data.get("text") if isinstance(data, dict) else None) or request.args.get("text") or "Kairos has forced speech into Minecraft."
+    player = (data.get("player") if isinstance(data, dict) else None) or request.args.get("player")
+    ok = force_minecraft_say(text, player=player, title=False, sound=True)
+    return jsonify({"ok": bool(ok), "sent": text, "player": player})
 
 try:
     _KAIROS_PURPOSE_PREVIOUS_START_BACKGROUND_SYSTEMS = start_background_systems
@@ -18248,40 +17972,28 @@ except Exception:
 
 def start_background_systems():
     global mission_loop_started, purpose_speech_loop_started
-
     if callable(_KAIROS_PURPOSE_PREVIOUS_START_BACKGROUND_SYSTEMS):
-        try:
-            _KAIROS_PURPOSE_PREVIOUS_START_BACKGROUND_SYSTEMS()
+        try: _KAIROS_PURPOSE_PREVIOUS_START_BACKGROUND_SYSTEMS()
         except Exception as e:
-            try:
-                log_exception("previous start_background_systems failed inside purpose overlay", e)
-            except Exception:
-                print("[KAIROS ERROR] previous start_background_systems failed:", e, flush=True)
-
+            try: log_exception("previous start_background_systems failed inside purpose overlay", e)
+            except Exception: print("[KAIROS ERROR] previous start_background_systems failed:", e, flush=True)
     try:
         if MISSION_SYSTEM_ENABLED and not mission_loop_started:
             threading.Thread(target=kairos_mission_loop, daemon=True, name="kairos_mission_loop").start()
-            mission_loop_started = True
-            log("Kairos mission loop started.", level="INFO")
+            mission_loop_started = True; log("Kairos advanced mission loop started.", level="INFO")
     except Exception as e:
-        try:
-            log_exception("mission loop start failed", e)
-        except Exception:
-            print("[KAIROS ERROR] mission loop start failed:", e, flush=True)
-
+        try: log_exception("mission loop start failed", e)
+        except Exception: print("[KAIROS ERROR] mission loop start failed:", e, flush=True)
     try:
         if KAIROS_PURPOSE_SPEECH_ENABLED and not purpose_speech_loop_started:
             threading.Thread(target=kairos_purpose_speech_loop, daemon=True, name="kairos_purpose_speech_loop").start()
-            purpose_speech_loop_started = True
-            log("Kairos purpose speech loop started.", level="INFO")
+            purpose_speech_loop_started = True; log("Kairos advanced purpose speech loop started.", level="INFO")
     except Exception as e:
-        try:
-            log_exception("purpose speech loop start failed", e)
-        except Exception:
-            print("[KAIROS ERROR] purpose speech loop start failed:", e, flush=True)
+        try: log_exception("purpose speech loop start failed", e)
+        except Exception: print("[KAIROS ERROR] purpose speech loop start failed:", e, flush=True)
 
 try:
-    log(f"{KAIROS_PURPOSE_OVERLAY_VERSION} armed. Players now receive faction identity, missions, value, events, and relationship-aware purpose.", level="INFO")
+    log(f"{KAIROS_PURPOSE_OVERLAY_VERSION} armed. Advanced missions, non-repeating directives, world events, and forced Minecraft speech enabled.", level="INFO")
 except Exception:
     print(f"[KAIROS INFO] {KAIROS_PURPOSE_OVERLAY_VERSION} armed.", flush=True)
 
