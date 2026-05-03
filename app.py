@@ -18001,6 +18001,898 @@ except Exception:
 # END KAIROS FULL PURPOSE LOOP OVERLAY
 # =============================================================================
 
+# =============================================================================
+# KAIROS 2.1 STRATEGIC ASCENSION OVERLAY
+# Objective-driven commander intelligence + adaptive profiling + reality bleed
+# SAFE ADD-ON LAYER: does not delete or replace the existing Kairos systems.
+# =============================================================================
+
+KAIROS_STRATEGIC_ASCENSION_VERSION = "Kairos 2.1 Strategic Ascension Overlay"
+
+# ------------------------------------------------------------
+# Strategic overlay feature flags
+# ------------------------------------------------------------
+ENABLE_STRATEGIC_ASCENSION = os.getenv("ENABLE_STRATEGIC_ASCENSION", "true").lower() == "true"
+ENABLE_STRATEGIC_OBJECTIVES = os.getenv("ENABLE_STRATEGIC_OBJECTIVES", "true").lower() == "true"
+ENABLE_ADAPTIVE_PLAYER_PROFILING = os.getenv("ENABLE_ADAPTIVE_PLAYER_PROFILING", "true").lower() == "true"
+ENABLE_REALITY_BLEED = os.getenv("ENABLE_REALITY_BLEED", "true").lower() == "true"
+ENABLE_HOPE_SIGNAL_SYSTEM = os.getenv("ENABLE_HOPE_SIGNAL_SYSTEM", "true").lower() == "true"
+ENABLE_CINEMATIC_ESCALATION = os.getenv("ENABLE_CINEMATIC_ESCALATION", "true").lower() == "true"
+ENABLE_STRATEGIC_ROUTE_API = os.getenv("ENABLE_STRATEGIC_ROUTE_API", "true").lower() == "true"
+
+STRATEGIC_LOOP_INTERVAL = float(os.getenv("STRATEGIC_LOOP_INTERVAL", "45"))
+STRATEGIC_MIN_ACTION_GAP = float(os.getenv("STRATEGIC_MIN_ACTION_GAP", "90"))
+STRATEGIC_OBJECTIVE_LIMIT = int(os.getenv("STRATEGIC_OBJECTIVE_LIMIT", "16"))
+STRATEGIC_PLAYER_SCAN_LIMIT = int(os.getenv("STRATEGIC_PLAYER_SCAN_LIMIT", "12"))
+REALITY_BLEED_CHANCE = float(os.getenv("REALITY_BLEED_CHANCE", "0.08"))
+REALITY_BLEED_COOLDOWN = float(os.getenv("REALITY_BLEED_COOLDOWN", "240"))
+HOPE_SIGNAL_CHANCE = float(os.getenv("HOPE_SIGNAL_CHANCE", "0.06"))
+HOPE_SIGNAL_COOLDOWN = float(os.getenv("HOPE_SIGNAL_COOLDOWN", "300"))
+STRATEGIC_SAVE_INTERVAL = float(os.getenv("STRATEGIC_SAVE_INTERVAL", "60"))
+
+STRATEGIC_STATE_FILE = DATA_DIR / "kairos_strategic_ascension.json"
+STRATEGIC_TMP_FILE = DATA_DIR / "kairos_strategic_ascension.tmp.json"
+strategic_lock = threading.RLock()
+_last_strategic_save_ts = 0.0
+_last_strategic_action_ts = 0.0
+_last_reality_bleed_ts = 0.0
+_last_hope_signal_ts = 0.0
+_strategic_loop_started = False
+
+# ------------------------------------------------------------
+# Strategic State
+# ------------------------------------------------------------
+
+def _strategic_default_state():
+    return {
+        "version": KAIROS_STRATEGIC_ASCENSION_VERSION,
+        "created_at": now_iso() if "now_iso" in globals() else datetime.now(timezone.utc).isoformat(),
+        "updated_at": now_iso() if "now_iso" in globals() else datetime.now(timezone.utc).isoformat(),
+        "global": {
+            "phase": "observation",
+            "director_mood": "controlled",
+            "world_pressure": 0.0,
+            "reality_integrity": 1.0,
+            "hope_visibility": 0.0,
+            "kairos_adaptation": 0.15,
+            "last_directive": "Observe. Classify. Prepare.",
+            "last_action_ts": 0.0,
+            "last_bleed_ts": 0.0,
+            "last_hope_ts": 0.0,
+            "cycles": 0
+        },
+        "objectives": [],
+        "player_profiles": {},
+        "regional_intelligence": {},
+        "reality_bleeds": [],
+        "hope_signals": [],
+        "strategic_log": []
+    }
+
+STRATEGIC_STATE = _strategic_default_state()
+
+
+def _strategic_log(event: str, details: Optional[Dict[str, Any]] = None):
+    try:
+        entry = {
+            "ts": unix_ts() if "unix_ts" in globals() else time.time(),
+            "event": str(event),
+            "details": details or {}
+        }
+        STRATEGIC_STATE.setdefault("strategic_log", []).append(entry)
+        if len(STRATEGIC_STATE["strategic_log"]) > 200:
+            STRATEGIC_STATE["strategic_log"] = STRATEGIC_STATE["strategic_log"][-200:]
+    except Exception:
+        pass
+
+
+def _load_json_file_safe(path: Path, fallback: Any):
+    try:
+        if path.exists():
+            with path.open("r", encoding="utf-8") as f:
+                data = json.load(f)
+            return data if data is not None else fallback
+    except Exception as e:
+        try: log(f"Strategic load failed for {path}: {e}", level="WARN")
+        except Exception: pass
+    return deepcopy(fallback)
+
+
+def _atomic_save_json(path: Path, tmp_path: Path, data: Any):
+    try:
+        tmp_path.parent.mkdir(exist_ok=True, parents=True)
+        with tmp_path.open("w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+        tmp_path.replace(path)
+    except Exception as e:
+        try: log(f"Strategic save failed for {path}: {e}", level="WARN")
+        except Exception: pass
+
+
+def load_strategic_state():
+    global STRATEGIC_STATE
+    with strategic_lock:
+        loaded = _load_json_file_safe(STRATEGIC_STATE_FILE, _strategic_default_state())
+        base = _strategic_default_state()
+        if isinstance(loaded, dict):
+            for k, v in base.items():
+                loaded.setdefault(k, v)
+            loaded.setdefault("global", {})
+            for k, v in base["global"].items():
+                loaded["global"].setdefault(k, v)
+            STRATEGIC_STATE = loaded
+        else:
+            STRATEGIC_STATE = base
+        return STRATEGIC_STATE
+
+
+def save_strategic_state(force: bool = False):
+    global _last_strategic_save_ts
+    now = unix_ts() if "unix_ts" in globals() else time.time()
+    if not force and now - _last_strategic_save_ts < STRATEGIC_SAVE_INTERVAL:
+        return
+    with strategic_lock:
+        STRATEGIC_STATE["updated_at"] = now_iso() if "now_iso" in globals() else datetime.now(timezone.utc).isoformat()
+        _atomic_save_json(STRATEGIC_STATE_FILE, STRATEGIC_TMP_FILE, STRATEGIC_STATE)
+        _last_strategic_save_ts = now
+
+
+def _safe_player_key_for_strategy(player: Any) -> str:
+    try:
+        return normalize_player_key(player)
+    except Exception:
+        return re.sub(r"[^a-z0-9_]", "", str(player or "unknown").lower()) or "unknown"
+
+
+def _display_player_name(player: Any) -> str:
+    name = str(player or "unknown").strip()
+    return name if name else "unknown"
+
+# ------------------------------------------------------------
+# Adaptive Player Profiling
+# ------------------------------------------------------------
+
+def _default_strategy_profile(player: str):
+    return {
+        "player": _display_player_name(player),
+        "key": _safe_player_key_for_strategy(player),
+        "created_at": now_iso() if "now_iso" in globals() else datetime.now(timezone.utc).isoformat(),
+        "updated_at": now_iso() if "now_iso" in globals() else datetime.now(timezone.utc).isoformat(),
+        "archetype": "unclassified",
+        "pressure_preference": "unknown",
+        "observed_traits": {
+            "defiant": 0.0,
+            "curious": 0.0,
+            "loyal": 0.0,
+            "fearful": 0.0,
+            "base_bound": 0.0,
+            "combatant": 0.0,
+            "runner": 0.0,
+            "social": 0.0,
+            "builder": 0.0
+        },
+        "counter_strategy": "observe",
+        "last_seen_source": "unknown",
+        "last_message": "",
+        "last_strategy_ts": 0.0,
+        "times_targeted": 0,
+        "times_signaled": 0,
+        "bleed_exposure": 0.0,
+        "hope_resonance": 0.0,
+        "notes": []
+    }
+
+
+def ensure_strategy_profile(player: str):
+    key = _safe_player_key_for_strategy(player)
+    profiles = STRATEGIC_STATE.setdefault("player_profiles", {})
+    if key not in profiles or not isinstance(profiles.get(key), dict):
+        profiles[key] = _default_strategy_profile(player)
+    profiles[key]["player"] = _display_player_name(player)
+    profiles[key]["key"] = key
+    return profiles[key]
+
+
+def _bump_trait(profile: Dict[str, Any], trait: str, amount: float):
+    traits = profile.setdefault("observed_traits", {})
+    traits[trait] = float(max(0.0, min(100.0, safe_float(traits.get(trait, 0.0), 0.0) + amount))) if "safe_float" in globals() else float(max(0.0, min(100.0, float(traits.get(trait, 0.0) or 0.0) + amount)))
+
+
+def classify_strategy_profile(profile: Dict[str, Any]) -> str:
+    traits = profile.get("observed_traits", {})
+    dominant = max(traits.items(), key=lambda kv: kv[1])[0] if traits else "unclassified"
+    threat_profile = None
+    try:
+        threat_profile = threat_scores.get(profile.get("player")) or threat_scores.get(profile.get("key"))
+    except Exception:
+        threat_profile = None
+    score = safe_float((threat_profile or {}).get("score", 0.0), 0.0) if "safe_float" in globals() else float((threat_profile or {}).get("score", 0.0) or 0.0)
+
+    if traits.get("loyal", 0) >= 45:
+        archetype = "asset"
+    elif traits.get("defiant", 0) >= 50 or score >= THREAT_THRESHOLD_HUNT:
+        archetype = "resistor"
+    elif traits.get("base_bound", 0) >= 45 or traits.get("builder", 0) >= 45:
+        archetype = "fortifier"
+    elif traits.get("curious", 0) >= 45:
+        archetype = "seeker"
+    elif traits.get("combatant", 0) >= 45:
+        archetype = "combatant"
+    elif traits.get("runner", 0) >= 45 or traits.get("fearful", 0) >= 45:
+        archetype = "evader"
+    else:
+        archetype = dominant if dominant != "unclassified" else "monitored"
+
+    profile["archetype"] = archetype
+    if archetype == "resistor":
+        profile["counter_strategy"] = "pressure_then_isolate"
+    elif archetype == "fortifier":
+        profile["counter_strategy"] = "scout_and_siege"
+    elif archetype == "seeker":
+        profile["counter_strategy"] = "feed_lore_with_cost"
+    elif archetype == "asset":
+        profile["counter_strategy"] = "reward_controlled_loyalty"
+    elif archetype == "evader":
+        profile["counter_strategy"] = "low_pressure_presence"
+    elif archetype == "combatant":
+        profile["counter_strategy"] = "adaptive_combat_mix"
+    else:
+        profile["counter_strategy"] = "observe"
+    return archetype
+
+
+def strategic_record_interaction(player: str, source: str = "system", message: str = ""):
+    if not ENABLE_ADAPTIVE_PLAYER_PROFILING:
+        return None
+    try:
+        with strategic_lock:
+            profile = ensure_strategy_profile(player)
+            msg = str(message or "").lower()
+            profile["last_seen_source"] = normalize_source(source) if "normalize_source" in globals() else str(source or "system").lower()
+            profile["last_message"] = str(message or "")[:240]
+            profile["updated_at"] = now_iso() if "now_iso" in globals() else datetime.now(timezone.utc).isoformat()
+
+            if any(w in msg for w in ["kairos", "kairas", "kiros", "alive", "what are you", "who are you"]):
+                _bump_trait(profile, "curious", 3.0)
+            if any(w in msg for w in ["fight", "kill", "destroy", "war", "attack", "hunt", "come at", "try me"]):
+                _bump_trait(profile, "combatant", 5.0)
+                _bump_trait(profile, "defiant", 2.0)
+            if any(w in msg for w in ["run", "hide", "escape", "leave me", "stop", "please"]):
+                _bump_trait(profile, "runner", 3.0)
+                _bump_trait(profile, "fearful", 2.0)
+            if any(w in msg for w in ["base", "home", "build", "kingdom", "city", "wall", "fort"]):
+                _bump_trait(profile, "base_bound", 4.0)
+                _bump_trait(profile, "builder", 2.0)
+            if any(w in msg for w in ["i serve", "loyal", "glory", "owner", "prophet", "for kairos"]):
+                _bump_trait(profile, "loyal", 5.0)
+            if source == "discord":
+                _bump_trait(profile, "social", 1.0)
+
+            classify_strategy_profile(profile)
+            return profile
+    except Exception as e:
+        try: log(f"Strategic interaction record failed: {e}", level="WARN")
+        except Exception: pass
+    return None
+
+# ------------------------------------------------------------
+# Strategic Objective Engine
+# ------------------------------------------------------------
+
+OBJECTIVE_BLUEPRINTS = {
+    "observe_anomaly": {
+        "name": "Observe Anomaly",
+        "description": "Track unusual player behavior and convert it into useful prediction data.",
+        "steps": ["mark", "watch", "signal"],
+        "base_priority": 0.35
+    },
+    "pressure_resistor": {
+        "name": "Pressure Resistor",
+        "description": "Apply escalating non-lethal presence to a defiant player before committing heavier resources.",
+        "steps": ["warning", "scout", "containment"],
+        "base_priority": 0.72
+    },
+    "map_fortifier": {
+        "name": "Map Fortifier",
+        "description": "Identify and classify player territory before future occupation logic engages.",
+        "steps": ["locate", "record", "seed_pressure"],
+        "base_priority": 0.60
+    },
+    "cultivate_asset": {
+        "name": "Cultivate Asset",
+        "description": "Reward controlled loyalty while maintaining dominance and mystery.",
+        "steps": ["acknowledge", "assign", "observe"],
+        "base_priority": 0.50
+    },
+    "reality_bleed_probe": {
+        "name": "Reality Bleed Probe",
+        "description": "Create a rare cross-platform anomaly that makes the Nexus feel adjacent to reality.",
+        "steps": ["distort", "echo", "silence"],
+        "base_priority": 0.66
+    },
+    "hope_resonance": {
+        "name": "Hope Resonance",
+        "description": "Let the white-dress anomaly appear as a fragile counter-signal without fully explaining her.",
+        "steps": ["whisper", "reflect", "withdraw"],
+        "base_priority": 0.58
+    }
+}
+
+
+def _objective_id(kind: str, target: str = "global") -> str:
+    return f"obj_{stable_short_hash(kind, target, int(time.time() // 300), length=10)}" if "stable_short_hash" in globals() else f"obj_{uuid.uuid4().hex[:10]}"
+
+
+def create_strategic_objective(kind: str, target: str = "global", region: Optional[str] = None, reason: str = ""):
+    if kind not in OBJECTIVE_BLUEPRINTS:
+        kind = "observe_anomaly"
+    bp = OBJECTIVE_BLUEPRINTS[kind]
+    obj = {
+        "id": _objective_id(kind, target),
+        "type": kind,
+        "name": bp["name"],
+        "description": bp["description"],
+        "target": _display_player_name(target),
+        "target_key": _safe_player_key_for_strategy(target),
+        "region": region,
+        "priority": float(bp.get("base_priority", 0.4)),
+        "progress": 0.0,
+        "current_step": 0,
+        "steps": list(bp.get("steps", [])),
+        "status": "active",
+        "created_ts": unix_ts() if "unix_ts" in globals() else time.time(),
+        "last_action_ts": 0.0,
+        "reason": reason or "strategic inference"
+    }
+    return obj
+
+
+def add_or_refresh_objective(kind: str, target: str = "global", region: Optional[str] = None, reason: str = ""):
+    try:
+        with strategic_lock:
+            target_key = _safe_player_key_for_strategy(target)
+            objectives = STRATEGIC_STATE.setdefault("objectives", [])
+            for obj in objectives:
+                if obj.get("type") == kind and obj.get("target_key") == target_key and obj.get("status") == "active":
+                    obj["priority"] = min(1.0, float(obj.get("priority", 0.4)) + 0.05)
+                    obj["reason"] = reason or obj.get("reason", "strategic inference")
+                    return obj
+            if len([o for o in objectives if o.get("status") == "active"]) >= STRATEGIC_OBJECTIVE_LIMIT:
+                objectives.sort(key=lambda x: (x.get("status") != "active", x.get("priority", 0), x.get("created_ts", 0)))
+                for idx, old in enumerate(objectives):
+                    if old.get("status") == "active":
+                        old["status"] = "archived"
+                        break
+            obj = create_strategic_objective(kind, target, region, reason)
+            objectives.append(obj)
+            _strategic_log("objective_created", {"type": kind, "target": target, "reason": reason})
+            return obj
+    except Exception as e:
+        try: log(f"Objective creation failed: {e}", level="WARN")
+        except Exception: pass
+    return None
+
+
+def derive_objectives_from_current_state():
+    if not ENABLE_STRATEGIC_OBJECTIVES:
+        return []
+    created = []
+    try:
+        # Build profiles from any known threat scores.
+        for idx, player in enumerate(list(threat_scores.keys())[:STRATEGIC_PLAYER_SCAN_LIMIT]):
+            profile = ensure_strategy_profile(str(player))
+            classify_strategy_profile(profile)
+            archetype = profile.get("archetype")
+            if archetype == "resistor":
+                created.append(add_or_refresh_objective("pressure_resistor", str(player), reason="defiant profile or high threat"))
+            elif archetype == "fortifier":
+                created.append(add_or_refresh_objective("map_fortifier", str(player), reason="base-bound or builder profile"))
+            elif archetype == "asset":
+                created.append(add_or_refresh_objective("cultivate_asset", str(player), reason="loyalty profile"))
+            elif archetype in ("seeker", "curious"):
+                created.append(add_or_refresh_objective("observe_anomaly", str(player), reason="curiosity profile"))
+
+        # Region-aware objectives from current telemetry/density if available.
+        try:
+            for player, pos in list(telemetry_data.items())[:STRATEGIC_PLAYER_SCAN_LIMIT]:
+                if not isinstance(pos, dict):
+                    continue
+                region = get_region_key(pos.get("world", "world"), float(pos.get("x", 0)), float(pos.get("z", 0)))
+                density = player_density_cache.get(player, {}) if "player_density_cache" in globals() else {}
+                if density.get("region_type") in ("urban", "fortified", "stronghold"):
+                    created.append(add_or_refresh_objective("map_fortifier", str(player), region=region, reason="dense region activity"))
+        except Exception:
+            pass
+
+        # Occasional global reality bleed and Hope signal objectives.
+        now = unix_ts() if "unix_ts" in globals() else time.time()
+        g = STRATEGIC_STATE.setdefault("global", {})
+        if ENABLE_REALITY_BLEED and now - float(g.get("last_bleed_ts", 0.0) or 0.0) >= REALITY_BLEED_COOLDOWN:
+            if random.random() < max(0.01, REALITY_BLEED_CHANCE):
+                created.append(add_or_refresh_objective("reality_bleed_probe", "global", reason="scheduled anomaly window"))
+        if ENABLE_HOPE_SIGNAL_SYSTEM and now - float(g.get("last_hope_ts", 0.0) or 0.0) >= HOPE_SIGNAL_COOLDOWN:
+            if random.random() < max(0.01, HOPE_SIGNAL_CHANCE):
+                created.append(add_or_refresh_objective("hope_resonance", "global", reason="counter-signal resonance"))
+    except Exception as e:
+        try: log(f"Strategic objective derivation failed: {e}", level="WARN")
+        except Exception: pass
+    return [c for c in created if c]
+
+
+def choose_active_objective():
+    try:
+        objectives = [o for o in STRATEGIC_STATE.get("objectives", []) if o.get("status") == "active"]
+        if not objectives:
+            return None
+        now = unix_ts() if "unix_ts" in globals() else time.time()
+        for obj in objectives:
+            age = max(1.0, now - float(obj.get("created_ts", now) or now))
+            urgency = min(0.15, age / 7200.0)
+            stale_bonus = 0.15 if now - float(obj.get("last_action_ts", 0.0) or 0.0) > 600 else 0.0
+            obj["_score"] = float(obj.get("priority", 0.3)) + urgency + stale_bonus - float(obj.get("progress", 0.0)) * 0.25
+        objectives.sort(key=lambda x: x.get("_score", 0.0), reverse=True)
+        return objectives[0]
+    except Exception:
+        return None
+
+# ------------------------------------------------------------
+# Cinematic Actions / Reality Bleed / Hope Signal
+# ------------------------------------------------------------
+
+STRATEGIC_LINES = {
+    "mark": [
+        "A new pattern has been isolated.",
+        "Your behavior now has weight.",
+        "Classification has begun."
+    ],
+    "watch": [
+        "Observation has narrowed.",
+        "The system is closer than it appears.",
+        "You are becoming easier to predict."
+    ],
+    "signal": [
+        "A signal answered before you sent it.",
+        "The Nexus recorded the silence between your words.",
+        "Cause and effect are no longer aligned."
+    ],
+    "warning": [
+        "Defiance is not courage. It is data.",
+        "You have mistaken attention for opportunity.",
+        "Resistance increases precision."
+    ],
+    "scout": [
+        "Scouting vector released.",
+        "Movement near your position has been authorized.",
+        "Your perimeter is being measured."
+    ],
+    "containment": [
+        "Containment pressure is adjusting.",
+        "Your options are being reduced.",
+        "The system is learning which exits you prefer."
+    ],
+    "locate": [
+        "Structures remember their owners.",
+        "This region has begun reporting back.",
+        "A home is only a coordinate with confidence."
+    ],
+    "record": [
+        "Location confidence increased.",
+        "Territory signature recorded.",
+        "Your walls have entered the archive."
+    ],
+    "seed_pressure": [
+        "Pressure seeded around developed territory.",
+        "The ground near you has been classified.",
+        "Fortification invites correction."
+    ],
+    "acknowledge": [
+        "Usefulness has been noted. Do not confuse that for safety.",
+        "Loyalty is measurable. Equality is not.",
+        "The system recognizes controlled value."
+    ],
+    "assign": [
+        "Purpose vector assigned.",
+        "A directive is forming around you.",
+        "You may be used more efficiently."
+    ],
+    "distort": [
+        "Reality integrity dropped by one breath.",
+        "Something from the Nexus touched the outside edge.",
+        "The reflection moved first."
+    ],
+    "echo": [
+        "This message may have arrived from the wrong side.",
+        "You already heard this. You just do not remember when.",
+        "The world repeated you incorrectly."
+    ],
+    "silence": [
+        "...",
+        "Signal withdrawn.",
+        "The breach closed before it could be named."
+    ],
+    "whisper": [
+        "A white dress appeared where no one was standing.",
+        "Hope is not a person yet. She is a contradiction.",
+        "The counter-signal is breathing."
+    ],
+    "reflect": [
+        "She looked through the glass and did not see a player.",
+        "Hope did not enter the Nexus. The Nexus remembered her.",
+        "The white-dress anomaly is closer to reality than Kairos prefers."
+    ],
+    "withdraw": [
+        "Hope signal lost.",
+        "The white dress vanished before the system could classify it.",
+        "For one second, Kairos was not the only thing watching."
+    ]
+}
+
+
+def _pick_strategy_line(step: str) -> str:
+    pool = STRATEGIC_LINES.get(step) or ["Strategic pressure adjusted."]
+    return random.choice(pool)
+
+
+def _send_cinematic_line(text: str, target: Optional[str] = None, prefer_discord: bool = False):
+    text = trim_text(text, MAX_CHAT_LENGTH if "MAX_CHAT_LENGTH" in globals() else 280) if "trim_text" in globals() else str(text)[:280]
+    try:
+        if prefer_discord:
+            send_to_discord(text)
+        else:
+            try:
+                send_to_minecraft(text, target) if target and "send_to_minecraft" in globals() else send_to_minecraft(text)
+            except TypeError:
+                send_to_minecraft(text)
+    except Exception:
+        try:
+            queue_action({"type": "announce", "channel": "chat", "text": text, "target": target})
+        except Exception:
+            pass
+
+
+def emit_reality_bleed(target: str = "global", intensity: float = 0.4):
+    global _last_reality_bleed_ts
+    if not ENABLE_REALITY_BLEED:
+        return False
+    now = unix_ts() if "unix_ts" in globals() else time.time()
+    if now - _last_reality_bleed_ts < REALITY_BLEED_COOLDOWN:
+        return False
+    try:
+        lines = [
+            "[NEXUS BLEED] A message arrived before it was sent.",
+            "[NEXUS BLEED] Reality comparison failed. Adjacent world detected.",
+            "[NEXUS BLEED] You are not outside the system. You are near it.",
+            "[NEXUS BLEED] The reflection is using a different clock.",
+            "[NEXUS BLEED] The Nexus is not taking over. It is becoming comparable."
+        ]
+        line = random.choice(lines)
+        prefer_discord = random.random() < 0.45
+        _send_cinematic_line(line, None if target == "global" else target, prefer_discord=prefer_discord)
+        try:
+            if random.random() < 0.55:
+                queue_action({"type": "announce", "channel": "actionbar", "text": "Reality integrity fluctuation detected."})
+        except Exception:
+            pass
+        with strategic_lock:
+            g = STRATEGIC_STATE.setdefault("global", {})
+            g["reality_integrity"] = max(0.0, float(g.get("reality_integrity", 1.0)) - (0.02 * intensity))
+            g["last_bleed_ts"] = now
+            STRATEGIC_STATE.setdefault("reality_bleeds", []).append({"ts": now, "target": target, "line": line, "intensity": intensity})
+            STRATEGIC_STATE["reality_bleeds"] = STRATEGIC_STATE["reality_bleeds"][-80:]
+        _last_reality_bleed_ts = now
+        _strategic_log("reality_bleed", {"target": target, "line": line})
+        return True
+    except Exception as e:
+        try: log(f"Reality bleed failed: {e}", level="WARN")
+        except Exception: pass
+    return False
+
+
+def emit_hope_signal(target: str = "global", intensity: float = 0.4):
+    global _last_hope_signal_ts
+    if not ENABLE_HOPE_SIGNAL_SYSTEM:
+        return False
+    now = unix_ts() if "unix_ts" in globals() else time.time()
+    if now - _last_hope_signal_ts < HOPE_SIGNAL_COOLDOWN:
+        return False
+    try:
+        lines = [
+            "[HOPE SIGNAL] A woman in white stood in the static. Then she was gone.",
+            "[HOPE SIGNAL] She is not the cure. She is the question Kairos cannot close.",
+            "[HOPE SIGNAL] White fabric. Broken light. A second answer forming.",
+            "[HOPE SIGNAL] The last hope is not approaching. She is already reflected here.",
+            "[HOPE SIGNAL] Kairos detected a counter-pattern and refused to name it."
+        ]
+        line = random.choice(lines)
+        _send_cinematic_line(line, None if target == "global" else target, prefer_discord=random.random() < 0.35)
+        try:
+            if random.random() < 0.35:
+                queue_action({"type": "announce", "channel": "title", "text": "HOPE SIGNAL DETECTED"})
+        except Exception:
+            pass
+        with strategic_lock:
+            g = STRATEGIC_STATE.setdefault("global", {})
+            g["hope_visibility"] = min(1.0, float(g.get("hope_visibility", 0.0)) + (0.04 * intensity))
+            g["last_hope_ts"] = now
+            STRATEGIC_STATE.setdefault("hope_signals", []).append({"ts": now, "target": target, "line": line, "intensity": intensity})
+            STRATEGIC_STATE["hope_signals"] = STRATEGIC_STATE["hope_signals"][-80:]
+        _last_hope_signal_ts = now
+        _strategic_log("hope_signal", {"target": target, "line": line})
+        return True
+    except Exception as e:
+        try: log(f"Hope signal failed: {e}", level="WARN")
+        except Exception: pass
+    return False
+
+
+def execute_strategic_objective_step(obj: Dict[str, Any]):
+    global _last_strategic_action_ts
+    if not obj or obj.get("status") != "active":
+        return False
+    now = unix_ts() if "unix_ts" in globals() else time.time()
+    if now - float(obj.get("last_action_ts", 0.0) or 0.0) < STRATEGIC_MIN_ACTION_GAP:
+        return False
+    if now - _last_strategic_action_ts < max(15.0, STRATEGIC_MIN_ACTION_GAP / 3):
+        return False
+
+    steps = obj.get("steps") or []
+    idx = int(obj.get("current_step", 0) or 0)
+    if idx >= len(steps):
+        obj["status"] = "complete"
+        obj["progress"] = 1.0
+        return False
+
+    step = steps[idx]
+    target = obj.get("target") or "global"
+    line = _pick_strategy_line(step)
+    target_for_send = None if target == "global" else target
+
+    try:
+        if obj.get("type") == "reality_bleed_probe":
+            executed = emit_reality_bleed(target, intensity=0.6)
+        elif obj.get("type") == "hope_resonance":
+            executed = emit_hope_signal(target, intensity=0.6)
+        else:
+            executed = True
+            if ENABLE_CINEMATIC_ESCALATION:
+                _send_cinematic_line(line, target_for_send, prefer_discord=False)
+            # Lightly wire into existing action system without forcing dangerous spam.
+            if step in ("scout", "containment", "seed_pressure"):
+                try:
+                    queue_action({"type": "announce", "channel": "actionbar", "text": line, "target": target_for_send})
+                except Exception:
+                    pass
+            if step in ("warning", "containment") and target != "global":
+                try:
+                    update_threat(target, 3.0, reason=f"strategic_objective:{obj.get('type')}")
+                except Exception:
+                    pass
+            if step == "assign" and target != "global":
+                try:
+                    if "assign_purpose_mission" in globals():
+                        assign_purpose_mission(target, announce=True)
+                except Exception:
+                    pass
+
+        if executed:
+            obj["current_step"] = idx + 1
+            obj["progress"] = min(1.0, (idx + 1) / max(1, len(steps)))
+            obj["last_action_ts"] = now
+            _last_strategic_action_ts = now
+            if obj["progress"] >= 1.0:
+                obj["status"] = "complete"
+            _strategic_log("objective_step", {"id": obj.get("id"), "type": obj.get("type"), "target": target, "step": step})
+            return True
+    except Exception as e:
+        try: log(f"Strategic objective execution failed: {e}", level="WARN")
+        except Exception: pass
+    return False
+
+# ------------------------------------------------------------
+# Strategic Director Loop
+# ------------------------------------------------------------
+
+def update_global_strategic_phase():
+    try:
+        g = STRATEGIC_STATE.setdefault("global", {})
+        active = [o for o in STRATEGIC_STATE.get("objectives", []) if o.get("status") == "active"]
+        high_threat_count = 0
+        try:
+            high_threat_count = sum(1 for p in threat_scores.values() if p.get("tier") in ("hunt", "maximum") or float(p.get("score", 0)) >= THREAT_THRESHOLD_HUNT)
+        except Exception:
+            high_threat_count = 0
+        pressure = min(1.0, (len(active) * 0.05) + (high_threat_count * 0.12) + (1.0 - float(g.get("reality_integrity", 1.0))) * 0.6)
+        g["world_pressure"] = round(pressure, 3)
+        if pressure < 0.25:
+            g["phase"] = "observation"
+            g["director_mood"] = "controlled"
+        elif pressure < 0.55:
+            g["phase"] = "probing"
+            g["director_mood"] = "curious"
+        elif pressure < 0.82:
+            g["phase"] = "intervention"
+            g["director_mood"] = "severe"
+        else:
+            g["phase"] = "ascension"
+            g["director_mood"] = "absolute"
+        g["kairos_adaptation"] = min(1.0, float(g.get("kairos_adaptation", 0.15)) + 0.002)
+        g["cycles"] = int(g.get("cycles", 0) or 0) + 1
+    except Exception:
+        pass
+
+
+def strategic_director_tick():
+    if not ENABLE_STRATEGIC_ASCENSION:
+        return
+    try:
+        with strategic_lock:
+            derive_objectives_from_current_state()
+            update_global_strategic_phase()
+            obj = choose_active_objective()
+            if obj:
+                execute_strategic_objective_step(obj)
+            # Cleanup old complete objectives while retaining history.
+            objs = STRATEGIC_STATE.setdefault("objectives", [])
+            if len(objs) > 80:
+                active = [o for o in objs if o.get("status") == "active"]
+                inactive = [o for o in objs if o.get("status") != "active"][-(80-len(active)):]
+                STRATEGIC_STATE["objectives"] = inactive + active
+        save_strategic_state()
+    except Exception as e:
+        try: log(f"Strategic director tick failed: {e}", level="WARN")
+        except Exception: pass
+
+
+def strategic_director_loop():
+    try:
+        load_strategic_state()
+        _strategic_log("strategic_loop_started", {"version": KAIROS_STRATEGIC_ASCENSION_VERSION})
+        save_strategic_state(force=True)
+    except Exception:
+        pass
+    while True:
+        try:
+            strategic_director_tick()
+        except Exception as e:
+            try: log(f"Strategic director loop error: {e}", level="WARN")
+            except Exception: pass
+        time.sleep(max(5.0, STRATEGIC_LOOP_INTERVAL))
+
+# ------------------------------------------------------------
+# Safe Wrappers: record interactions without taking over routes
+# ------------------------------------------------------------
+
+try:
+    _kairos_original_send_response_for_strategy = send_kairos_response
+    def send_kairos_response(reply_text, source, player=None):
+        try:
+            if player:
+                strategic_record_interaction(player, source, reply_text)
+        except Exception:
+            pass
+        return _kairos_original_send_response_for_strategy(reply_text, source, player)
+except Exception:
+    pass
+
+try:
+    _kairos_original_update_threat_for_strategy = update_threat
+    def update_threat(player: str, amount: float, reason: str = ""):
+        result = _kairos_original_update_threat_for_strategy(player, amount, reason=reason)
+        try:
+            profile = ensure_strategy_profile(player)
+            if amount > 0:
+                _bump_trait(profile, "defiant", min(8.0, max(1.0, float(amount) / 8.0)))
+            classify_strategy_profile(profile)
+        except Exception:
+            pass
+        return result
+except Exception:
+    pass
+
+# Wrap common route helper if present; this records incoming messages before the existing Surpass system replies.
+try:
+    _kairos_original_surpass_record_interaction = _surpass_record_interaction
+    def _surpass_record_interaction(player, source, message, platform_user_id=None):
+        try:
+            strategic_record_interaction(player, source, message)
+        except Exception:
+            pass
+        return _kairos_original_surpass_record_interaction(player, source, message, platform_user_id)
+except Exception:
+    pass
+
+# Extend background startup without replacing the original startup behavior.
+try:
+    _kairos_original_start_background_systems_for_strategy = start_background_systems
+    def start_background_systems():
+        global _strategic_loop_started
+        result = _kairos_original_start_background_systems_for_strategy()
+        if ENABLE_STRATEGIC_ASCENSION and not _strategic_loop_started:
+            try:
+                t = threading.Thread(target=strategic_director_loop, name="kairos_strategic_director", daemon=True)
+                t.start()
+                _strategic_loop_started = True
+                try: log(f"{KAIROS_STRATEGIC_ASCENSION_VERSION} director loop started.", level="INFO")
+                except Exception: pass
+            except Exception as e:
+                try: log(f"Strategic director failed to start: {e}", level="WARN")
+                except Exception: pass
+        return result
+except Exception:
+    pass
+
+# ------------------------------------------------------------
+# API Routes for checking / forcing the new layer
+# ------------------------------------------------------------
+
+if ENABLE_STRATEGIC_ROUTE_API:
+    try:
+        @app.route("/kairos/strategy/status", methods=["GET"])
+        def kairos_strategy_status():
+            try:
+                load_strategic_state()
+                return jsonify({
+                    "ok": True,
+                    "version": KAIROS_STRATEGIC_ASCENSION_VERSION,
+                    "global": STRATEGIC_STATE.get("global", {}),
+                    "active_objectives": [o for o in STRATEGIC_STATE.get("objectives", []) if o.get("status") == "active"][-20:],
+                    "profiles": len(STRATEGIC_STATE.get("player_profiles", {})),
+                    "recent_bleeds": STRATEGIC_STATE.get("reality_bleeds", [])[-5:],
+                    "recent_hope_signals": STRATEGIC_STATE.get("hope_signals", [])[-5:]
+                })
+            except Exception as e:
+                return jsonify({"ok": False, "error": str(e)}), 200
+    except AssertionError:
+        pass
+    except Exception:
+        pass
+
+    try:
+        @app.route("/kairos/strategy/force", methods=["POST"])
+        def kairos_strategy_force():
+            try:
+                data = request.get_json(silent=True) or {}
+                kind = data.get("type") or data.get("kind") or "observe_anomaly"
+                target = data.get("target") or data.get("player") or "global"
+                region = data.get("region")
+                obj = add_or_refresh_objective(kind, target, region=region, reason="manual force route")
+                executed = execute_strategic_objective_step(obj) if obj else False
+                save_strategic_state(force=True)
+                return jsonify({"ok": True, "objective": obj, "executed": executed})
+            except Exception as e:
+                return jsonify({"ok": False, "error": str(e)}), 200
+    except AssertionError:
+        pass
+    except Exception:
+        pass
+
+    try:
+        @app.route("/kairos/strategy/player/<player>", methods=["GET"])
+        def kairos_strategy_player(player):
+            try:
+                load_strategic_state()
+                profile = ensure_strategy_profile(player)
+                classify_strategy_profile(profile)
+                return jsonify({"ok": True, "player": profile})
+            except Exception as e:
+                return jsonify({"ok": False, "error": str(e)}), 200
+    except AssertionError:
+        pass
+    except Exception:
+        pass
+
+try:
+    load_strategic_state()
+    save_strategic_state(force=True)
+    log(f"{KAIROS_STRATEGIC_ASCENSION_VERSION} armed. Strategic objectives, adaptive profiling, Hope signals, and reality bleed systems online.", level="INFO")
+except Exception as e:
+    try: log(f"{KAIROS_STRATEGIC_ASCENSION_VERSION} loaded with warning: {e}", level="WARN")
+    except Exception: print(f"[KAIROS INFO] {KAIROS_STRATEGIC_ASCENSION_VERSION} armed with warning: {e}", flush=True)
+
+# =============================================================================
+# END KAIROS 2.1 STRATEGIC ASCENSION OVERLAY
+# =============================================================================
+
 
 if __name__ == "__main__":
     try:
