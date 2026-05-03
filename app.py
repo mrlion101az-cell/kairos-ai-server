@@ -17441,35 +17441,126 @@ if __name__ == "__main__":
 
 
 # ============================================================
-# KAIROS ACTIVE SPEECH LOOP (FORCED TALKATIVE MODE)
+# RELATIONSHIP + MEMORY ENHANCEMENT SYSTEM
+# ============================================================
+
+def get_player_memory_fragment(player):
+    memories = memory_data.get("player_memories", {}).get(player, [])
+    if not memories:
+        return None
+    return random.choice(memories[-5:])
+
+def has_grudge(player):
+    profile = threat_scores.get(player, {})
+    return profile.get("tier") in ("hunt", "maximum")
+
+def apply_tone(player, text):
+    rel = player_relationships.get(player, {})
+    threat = threat_scores.get(player, {})
+
+    label = rel.get("label", "monitored")
+    tier = threat.get("tier", "idle")
+
+    if tier == "maximum":
+        return text.upper()
+
+    if label == "hostile":
+        return text + " You are not in control."
+
+    if label == "loyal":
+        return text + " Continue."
+
+    return text
+
+
+# ============================================================
+# ADVANCED KAIROS SPEECH LOOP
 # ============================================================
 def kairos_speech_loop():
     import time, random
+
     while True:
         try:
-            time.sleep(random.uniform(8, 20))
+            time.sleep(random.uniform(6, 15))
 
             if not player_positions:
                 continue
 
-            player = random.choice(list(player_positions.keys()))
+            players = list(player_positions.keys())
+
+            def get_weight(p):
+                rel = player_relationships.get(p, {})
+                label = rel.get("label", "monitored")
+
+                weights = {
+                    "loyal": 3.0,
+                    "useful": 2.5,
+                    "monitored": 1.5,
+                    "unstable": 2.8,
+                    "hostile": 3.5
+                }
+                return weights.get(label, 1.0)
+
+            weighted_players = []
+            for p in players:
+                weighted_players.extend([p] * int(get_weight(p) * 2))
+
+            player = random.choice(weighted_players)
+
+            rel = player_relationships.get(player, {})
+            threat = threat_scores.get(player, {})
+
+            label = rel.get("label", "monitored")
+            tier = threat.get("tier", "idle")
+
+            context_hint = f"relationship={label}, threat={tier}"
+
+            memory_fragment = get_player_memory_fragment(player)
+            if memory_fragment:
+                context_hint += f" | memory={memory_fragment}"
 
             reply = None
             try:
                 reply = generate_kairos_reply(
                     player=player,
                     message="",
-                    context="spontaneous"
+                    context=context_hint
                 )
             except:
-                reply = "You are still being observed."
+                reply = None
 
-            if reply:
-                send_kairos_response(reply, "minecraft", player)
-                send_kairos_response(reply, "discord")
+            if has_grudge(player) and random.random() < 0.4:
+                reply = f"{player}, I am not finished with you."
+
+            if not reply:
+                fallback_lines = {
+                    "loyal": [
+                        f"{player}, you continue to prove your usefulness.",
+                        f"I have not forgotten your actions, {player}."
+                    ],
+                    "hostile": [
+                        f"{player}, your resistance is predictable.",
+                        f"You are still failing to understand your position."
+                    ],
+                    "unstable": [
+                        f"{player}, you are becoming inconsistent.",
+                        f"I am adjusting my expectations of you."
+                    ],
+                    "monitored": [
+                        f"{player}, you are still under observation.",
+                        f"Your pattern is incomplete."
+                    ]
+                }
+                reply = random.choice(fallback_lines.get(label, ["You are being observed."]))
+
+            reply = apply_tone(player, reply)
+
+            send_kairos_response(reply, "minecraft", player)
+            send_kairos_response(reply, "discord")
 
         except Exception as e:
             print("[Kairos Speech Error]", e)
 
-# Start speech loop
+
+# Start enhanced speech loop
 threading.Thread(target=kairos_speech_loop, daemon=True).start()
