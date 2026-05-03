@@ -441,8 +441,8 @@ TELEMETRY_STALE_SECONDS = int(os.getenv("TELEMETRY_STALE_SECONDS", "25"))
 # -----------------------------
 # Player Interaction Control
 # -----------------------------
-PLAYER_COOLDOWN_SECONDS = float(os.getenv("PLAYER_COOLDOWN_SECONDS", "1.5"))
-DUPLICATE_MESSAGE_WINDOW_SECONDS = int(os.getenv("DUPLICATE_MESSAGE_WINDOW_SECONDS", "15"))
+PLAYER_COOLDOWN_SECONDS = 0.3
+DUPLICATE_MESSAGE_WINDOW_SECONDS = 2
 
 # -----------------------------
 # Combat / Army Timing (CRITICAL)
@@ -478,7 +478,7 @@ HTTP_RETRY_DELAY = float(os.getenv("HTTP_RETRY_DELAY", "0.5"))
 GLOBAL_ACTION_COOLDOWN = float(os.getenv("GLOBAL_ACTION_COOLDOWN", "0.05"))
 
 # Prevents same target from being spammed instantly
-TARGET_ACTION_COOLDOWN = float(os.getenv("TARGET_ACTION_COOLDOWN", "2.0"))
+TARGET_ACTION_COOLDOWN = 0.5
 
 # -----------------------------
 # Passive Recognition / Spontaneous Targeting
@@ -17438,3 +17438,38 @@ if __name__ == "__main__":
         print("[KAIROS INFO] Starting Kairos AI server...", flush=True)
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", "10000")), threaded=True)
 
+
+
+# ============================================================
+# KAIROS ACTIVE SPEECH LOOP (FORCED TALKATIVE MODE)
+# ============================================================
+def kairos_speech_loop():
+    import time, random
+    while True:
+        try:
+            time.sleep(random.uniform(8, 20))
+
+            if not player_positions:
+                continue
+
+            player = random.choice(list(player_positions.keys()))
+
+            reply = None
+            try:
+                reply = generate_kairos_reply(
+                    player=player,
+                    message="",
+                    context="spontaneous"
+                )
+            except:
+                reply = "You are still being observed."
+
+            if reply:
+                send_kairos_response(reply, "minecraft", player)
+                send_kairos_response(reply, "discord")
+
+        except Exception as e:
+            print("[Kairos Speech Error]", e)
+
+# Start speech loop
+threading.Thread(target=kairos_speech_loop, daemon=True).start()
