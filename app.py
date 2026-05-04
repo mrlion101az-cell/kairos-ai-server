@@ -290,8 +290,8 @@ UNIT_TYPES = [
 # -----------------------------
 # Idle / Presence
 # -----------------------------
-IDLE_TRIGGER_SECONDS = int(os.getenv("IDLE_TRIGGER_SECONDS", "300"))
-IDLE_CHECK_INTERVAL = int(os.getenv("IDLE_CHECK_INTERVAL", "10"))
+IDLE_TRIGGER_SECONDS = int(os.getenv("IDLE_TRIGGER_SECONDS", "7200"))
+IDLE_CHECK_INTERVAL = int(os.getenv("IDLE_CHECK_INTERVAL", "40"))
 
 # -----------------------------
 # Memory Limits
@@ -9718,7 +9718,7 @@ PASSIVE_PRESSURE_COOLDOWN = min(safe_int(globals().get("PASSIVE_PRESSURE_COOLDOW
 PASSIVE_SCOUT_CHANCE = max(safe_float(globals().get("PASSIVE_SCOUT_CHANCE", 0.65), 0.65), 0.92)
 PASSIVE_TARGET_THREAT_GAIN = max(safe_float(globals().get("PASSIVE_TARGET_THREAT_GAIN", 28.0), 28.0), 40.0)
 PASSIVE_HUNT_THREAT_GAIN = max(safe_float(globals().get("PASSIVE_HUNT_THREAT_GAIN", 48.0), 48.0), 70.0)
-SPONTANEOUS_MESSAGE_CHANCE = max(safe_float(globals().get("SPONTANEOUS_MESSAGE_CHANCE", 0.45), 0.45), 0.80)
+SPONTANEOUS_MESSAGE_CHANCE = 0.08
 
 BASE_WAVE_SIZE = max(safe_int(globals().get("BASE_WAVE_SIZE", 3), 3), 3)
 MAX_WAVE_SIZE = max(safe_int(globals().get("MAX_WAVE_SIZE", 10), 10), 8)
@@ -14468,7 +14468,7 @@ except Exception:
 
 KAIROS_SEGMENT = "2.0-stable-core-trustbar"
 KAIROS_IDLE_ENABLED = os.getenv("KAIROS_IDLE_ENABLED", "false").lower() == "true"
-IDLE_TRIGGER_SECONDS = int(os.getenv("IDLE_TRIGGER_SECONDS", os.getenv("KAIROS_IDLE_INTERVAL_SECONDS", "3600")))
+IDLE_TRIGGER_SECONDS = int(os.getenv("IDLE_TRIGGER_SECONDS", os.getenv("KAIROS_IDLE_INTERVAL_SECONDS", "7200")))
 DISCORD_CHUNK_LIMIT = int(os.getenv("DISCORD_CHUNK_LIMIT", "1850"))
 TRUST_BAR_ENABLED = os.getenv("KAIROS_TRUST_BAR_ENABLED", "true").lower() == "true"
 TRUST_BAR_ID = os.getenv("KAIROS_TRUST_BAR_ID", "kairos:trust")
