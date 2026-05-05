@@ -27,7 +27,7 @@ from flask import Flask, request, jsonify
 from openai import OpenAI
 
 app = Flask(__name__)
-DISCORD_WORLD_EVENT_COOLDOWN = int(os.getenv("DISCORD_WORLD_EVENT_COOLDOWN", "1800"))
+DISCORD_WORLD_EVENT_COOLDOWN = int(os.getenv("DISCORD_WORLD_EVENT_COOLDOWN", "18000"))
 last_discord_world_event_time = 0
 
 
