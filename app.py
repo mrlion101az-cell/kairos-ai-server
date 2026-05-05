@@ -1,45 +1,18 @@
 
-
-
-import os
-import json
-import re
-import time
-import uuid
-import math
-import copy
-import queue
-import random
-import hashlib
-import secrets
-import threading
-import traceback
-from enum import Enum
-from copy import deepcopy
-from pathlib import Path
-from dataclasses import dataclass, field, asdict
-from collections import defaultdict, deque
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Tuple, Set
-
-import requests
-from flask import Flask, request, jsonify
-from openai import OpenAI
-
 app = Flask(__name__)
-
-# ============================================================
-# PLATFORM-SAFE RESPONSE (NO DUPLICATES)
-# ============================================================
 
 # ------------------------------------------------------------
 # DISCORD WORLD EVENT THROTTLE (SAFE ADD)
 # ------------------------------------------------------------
-DISCORD_WORLD_EVENT_COOLDOWN = int(os.getenv("DISCORD_WORLD_EVENT_COOLDOWN", "1800"))  # seconds
-_last_discord_world_event_time = 0
+DISCORD_WORLD_EVENT_COOLDOWN = int(os.getenv("DISCORD_WORLD_EVENT_COOLDOWN", "1800"))
+last_discord_world_event_time = 0
 
+
+# ============================================================
+# PLATFORM-SAFE RESPONSE (NO DUPLICATES)
+# ============================================================
 def send_kairos_response(reply_text, source, player=None):
-    global _last_discord_world_event_time
+    global last_discord_world_event_time
 
     try:
         source = normalize_source(source)
@@ -49,9 +22,9 @@ def send_kairos_response(reply_text, source, player=None):
 
             if "WORLD EVENT" in text or "NEXUS BLEED" in text or "New actor detected" in text:
                 now = time.time()
-                if now - _last_discord_world_event_time < DISCORD_WORLD_EVENT_COOLDOWN:
+                if now - last_discord_world_event_time < DISCORD_WORLD_EVENT_COOLDOWN:
                     return
-                _last_discord_world_event_time = now
+                last_discord_world_event_time = now
 
             send_to_discord(reply_text)
             return
@@ -18781,14 +18754,7 @@ def strategic_director_loop():
 
 try:
     _kairos_original_send_response_for_strategy = send_kairos_response
-    
-# ------------------------------------------------------------
-# DISCORD WORLD EVENT THROTTLE (SAFE ADD)
-# ------------------------------------------------------------
-DISCORD_WORLD_EVENT_COOLDOWN = int(os.getenv("DISCORD_WORLD_EVENT_COOLDOWN", "1800"))  # seconds
-_last_discord_world_event_time = 0
-
-def send_kairos_response(reply_text, source, player=None):
+    def send_kairos_response(reply_text, source, player=None):
         try:
             if player:
                 strategic_record_interaction(player, source, reply_text)
