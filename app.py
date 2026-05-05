@@ -32,7 +32,7 @@ last_discord_world_event_time = 0
 
 
 # ============================================================
-# PLATFORM-SAFE RESPONSE (NO DUPLICATES)
+# PLATFORM-SAFE RESPONSE (NO DUPLICATES + DISCORD CONTROL)
 # ============================================================
 def send_kairos_response(reply_text, source, player=None):
     global last_discord_world_event_time
@@ -40,18 +40,47 @@ def send_kairos_response(reply_text, source, player=None):
     try:
         source = normalize_source(source)
 
+        # ===================================================
+        # DISCORD CONTROL (MENTION-ONLY MODE)
+        # ===================================================
         if source == "discord":
-            text = str(reply_text)
+            text = str(reply_text).lower()
 
-            if "WORLD EVENT" in text or "NEXUS BLEED" in text or "New actor detected" in text:
-                now = time.time()
+            # -----------------------------------------------
+            # ONLY ALLOW IF DIRECTLY ADDRESSED
+            # -----------------------------------------------
+            if not any(trigger in text for trigger in [
+                "kairos",
+                "@kairos",
+                "kairo",
+                "ai",
+                "system"
+            ]):
+                return  # BLOCK autonomous messages completely
+
+            now = time.time()
+
+            # -----------------------------------------------
+            # GLOBAL DISCORD THROTTLE (ANTI-SPAM)
+            # -----------------------------------------------
+            if now - last_discord_world_event_time < 800:  # 2 minutes
+                return
+
+            last_discord_world_event_time = now
+
+            # -----------------------------------------------
+            # EXISTING WORLD EVENT FILTER (UNCHANGED)
+            # -----------------------------------------------
+            if "world event" in text or "nexus bleed" in text or "new actor detected" in text:
                 if now - last_discord_world_event_time < DISCORD_WORLD_EVENT_COOLDOWN:
                     return
-                last_discord_world_event_time = now
 
             send_to_discord(reply_text)
             return
 
+        # ===================================================
+        # MINECRAFT (UNCHANGED - FULL POWER)
+        # ===================================================
         if source == "minecraft":
             send_to_minecraft(reply_text, player)
         else:
@@ -59,7 +88,6 @@ def send_kairos_response(reply_text, source, player=None):
 
     except Exception as e:
         log_exception("send_kairos_response failed", e)
-
 
 # ================================
 # COMMAND CLEAN FIX (SAFE)
