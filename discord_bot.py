@@ -299,6 +299,12 @@ def mc_to_discord():
         player = str(data.get("player") or data.get("username") or data.get("name") or "Minecraft").strip()
         message = str(data.get("message") or data.get("content") or "").strip()
 
+# ----------------------------------------
+# BLOCK ALL KAIROS SYSTEM MESSAGES (FINAL FIX)
+# ----------------------------------------
+if message.strip().startswith("[Kairos]"):
+    return jsonify({"ok": True, "blocked": True}), 200
+
         if not message:
             return jsonify({"ok": False, "error": "missing message"}), 400
 
