@@ -915,8 +915,8 @@ MESSAGE_TEMPLATES = {
 # -----------------------------
 # Formatting Rules
 # -----------------------------
-MAX_CHAT_LENGTH = int(os.getenv("MAX_CHAT_LENGTH", "280"))
-MAX_ACTIONBAR_LENGTH = int(os.getenv("MAX_ACTIONBAR_LENGTH", "120"))
+MAX_CHAT_LENGTH = int(os.getenv("MAX_CHAT_LENGTH", "256"))
+MAX_ACTIONBAR_LENGTH = int(os.getenv("MAX_ACTIONBAR_LENGTH", "12"))
 
 # -----------------------------
 # Personality Modifiers
