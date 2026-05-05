@@ -39,45 +39,28 @@ def send_kairos_response(reply_text, source, player=None):
 
     try:
         source = normalize_source(source)
+        
+# ===================================================
+# DISCORD CONTROL (NON-AUTONOMOUS MODE)
+# ===================================================
+if source == "discord":
+    # Block ALL autonomous system messages
+    if not player:
+        return
 
-        # ===================================================
-        # DISCORD CONTROL (MENTION-ONLY MODE)
-        # ===================================================
-        if source == "discord":
-            text = str(reply_text).lower()
+    now = time.time()
 
-            # -----------------------------------------------
-            # ONLY ALLOW IF DIRECTLY ADDRESSED
-            # -----------------------------------------------
-            if not any(trigger in text for trigger in [
-                "kairos",
-                "@kairos",
-                "kairo",
-                "ai",
-                "system"
-            ]):
-                return  # BLOCK autonomous messages completely
+    # -----------------------------------------------
+    # GLOBAL DISCORD THROTTLE (ANTI-SPAM)
+    # -----------------------------------------------
+    if now - last_discord_world_event_time < 120:
+        return
 
-            now = time.time()
+    last_discord_world_event_time = now
 
-            # -----------------------------------------------
-            # GLOBAL DISCORD THROTTLE (ANTI-SPAM)
-            # -----------------------------------------------
-            if now - last_discord_world_event_time < 800:  # 2 minutes
-                return
-
-            last_discord_world_event_time = now
-
-            # -----------------------------------------------
-            # EXISTING WORLD EVENT FILTER (UNCHANGED)
-            # -----------------------------------------------
-            if "world event" in text or "nexus bleed" in text or "new actor detected" in text:
-                if now - last_discord_world_event_time < DISCORD_WORLD_EVENT_COOLDOWN:
-                    return
-
-            send_to_discord(reply_text)
-            return
-
+    send_to_discord(reply_text)
+    return
+        
         # ===================================================
         # MINECRAFT (UNCHANGED - FULL POWER)
         # ===================================================
