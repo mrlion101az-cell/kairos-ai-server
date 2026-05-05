@@ -39,30 +39,28 @@ def send_kairos_response(reply_text, source, player=None):
 
     try:
         source = normalize_source(source)
-        
-# ===================================================
-# DISCORD CONTROL (NON-AUTONOMOUS MODE)
-# ===================================================
-if source == "discord":
-    # Block ALL autonomous system messages
-    if not player:
-        return
 
-    now = time.time()
-
-    # -----------------------------------------------
-    # GLOBAL DISCORD THROTTLE (ANTI-SPAM)
-    # -----------------------------------------------
-    if now - last_discord_world_event_time < 120:
-        return
-
-    last_discord_world_event_time = now
-
-    send_to_discord(reply_text)
-    return
-        
         # ===================================================
-        # MINECRAFT (UNCHANGED - FULL POWER)
+        # DISCORD CONTROL (NON-AUTONOMOUS MODE)
+        # ===================================================
+        if source == "discord":
+            # Block ALL autonomous system messages
+            if not player:
+                return
+
+            now = time.time()
+
+            # GLOBAL DISCORD THROTTLE (ANTI-SPAM)
+            if now - last_discord_world_event_time < 120:
+                return
+
+            last_discord_world_event_time = now
+
+            send_to_discord(reply_text)
+            return
+
+        # ===================================================
+        # MINECRAFT (UNCHANGED)
         # ===================================================
         if source == "minecraft":
             send_to_minecraft(reply_text, player)
@@ -71,7 +69,6 @@ if source == "discord":
 
     except Exception as e:
         log_exception("send_kairos_response failed", e)
-
 # ================================
 # COMMAND CLEAN FIX (SAFE)
 # ================================
