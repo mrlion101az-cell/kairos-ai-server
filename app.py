@@ -9718,7 +9718,7 @@ PASSIVE_PRESSURE_COOLDOWN = min(safe_int(globals().get("PASSIVE_PRESSURE_COOLDOW
 PASSIVE_SCOUT_CHANCE = max(safe_float(globals().get("PASSIVE_SCOUT_CHANCE", 0.65), 0.65), 0.92)
 PASSIVE_TARGET_THREAT_GAIN = max(safe_float(globals().get("PASSIVE_TARGET_THREAT_GAIN", 28.0), 28.0), 40.0)
 PASSIVE_HUNT_THREAT_GAIN = max(safe_float(globals().get("PASSIVE_HUNT_THREAT_GAIN", 48.0), 48.0), 70.0)
-SPONTANEOUS_MESSAGE_CHANCE = 0.08
+SPONTANEOUS_MESSAGE_CHANCE = 0.02
 
 BASE_WAVE_SIZE = max(safe_int(globals().get("BASE_WAVE_SIZE", 3), 3), 3)
 MAX_WAVE_SIZE = max(safe_int(globals().get("MAX_WAVE_SIZE", 10), 10), 8)
