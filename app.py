@@ -1,9 +1,32 @@
 
-app = Flask(__name__)
 
-# ------------------------------------------------------------
-# DISCORD WORLD EVENT THROTTLE (SAFE ADD)
-# ------------------------------------------------------------
+
+import os
+import json
+import re
+import time
+import uuid
+import math
+import copy
+import queue
+import random
+import hashlib
+import secrets
+import threading
+import traceback
+from enum import Enum
+from copy import deepcopy
+from pathlib import Path
+from dataclasses import dataclass, field, asdict
+from collections import defaultdict, deque
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional, Tuple, Set
+
+import requests
+from flask import Flask, request, jsonify
+from openai import OpenAI
+
+app = Flask(__name__)
 DISCORD_WORLD_EVENT_COOLDOWN = int(os.getenv("DISCORD_WORLD_EVENT_COOLDOWN", "1800"))
 last_discord_world_event_time = 0
 
@@ -36,6 +59,7 @@ def send_kairos_response(reply_text, source, player=None):
 
     except Exception as e:
         log_exception("send_kairos_response failed", e)
+
 
 # ================================
 # COMMAND CLEAN FIX (SAFE)
