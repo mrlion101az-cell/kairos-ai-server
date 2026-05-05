@@ -31,16 +31,33 @@ app = Flask(__name__)
 # ============================================================
 # PLATFORM-SAFE RESPONSE (NO DUPLICATES)
 # ============================================================
+
+# ------------------------------------------------------------
+# DISCORD WORLD EVENT THROTTLE (SAFE ADD)
+# ------------------------------------------------------------
+DISCORD_WORLD_EVENT_COOLDOWN = int(os.getenv("DISCORD_WORLD_EVENT_COOLDOWN", "1800"))  # seconds
+_last_discord_world_event_time = 0
+
 def send_kairos_response(reply_text, source, player=None):
+    global _last_discord_world_event_time
+
     try:
         source = normalize_source(source)
 
+        if source == "discord":
+            text = str(reply_text)
+
+            if "WORLD EVENT" in text or "NEXUS BLEED" in text or "New actor detected" in text:
+                now = time.time()
+                if now - _last_discord_world_event_time < DISCORD_WORLD_EVENT_COOLDOWN:
+                    return
+                _last_discord_world_event_time = now
+
+            send_to_discord(reply_text)
+            return
+
         if source == "minecraft":
             send_to_minecraft(reply_text, player)
-
-        elif source == "discord":
-            send_to_discord(reply_text)
-
         else:
             send_to_minecraft(reply_text, player)
 
@@ -18764,7 +18781,14 @@ def strategic_director_loop():
 
 try:
     _kairos_original_send_response_for_strategy = send_kairos_response
-    def send_kairos_response(reply_text, source, player=None):
+    
+# ------------------------------------------------------------
+# DISCORD WORLD EVENT THROTTLE (SAFE ADD)
+# ------------------------------------------------------------
+DISCORD_WORLD_EVENT_COOLDOWN = int(os.getenv("DISCORD_WORLD_EVENT_COOLDOWN", "1800"))  # seconds
+_last_discord_world_event_time = 0
+
+def send_kairos_response(reply_text, source, player=None):
         try:
             if player:
                 strategic_record_interaction(player, source, reply_text)
