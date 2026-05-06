@@ -17890,7 +17890,7 @@ def generate_purpose_reply(player):
     ctx, reply = build_purpose_context(player), None
     try:
         if "generate_kairos_reply" in globals() and callable(generate_kairos_reply): reply = generate_kairos_reply(player=player, message="", context=ctx)
-        elif "generate_reply" in globals() and callable(generate_reply): reply = generate_reply(player, "", ctx)
+        elif "generate_reply" in globals() and callable(generate_reply): reply = None
     except Exception: reply = None
     st = load_purpose_state(); profile = ensure_purpose_player(st, player); active = get_active_missions_for_player(st, player)
     vals = {"player":profile.get("player",player), "faction":profile.get("faction","Unregistered"), "rank":profile.get("rank","unproven"), "mission":active[0].get("name") if active else "none", "objective":active[0].get("objective") if active else "become valuable"}
@@ -17899,6 +17899,11 @@ def generate_purpose_reply(player):
         cat = "favored" if profile.get("favorite_candidate") or profile.get("rank") in ("high-value asset","prime actor") else "active_mission" if active else "no_mission"
         reply = non_repeating_line(st, profile.get("key"), cat, vals)
     save_purpose_state(st)
+    
+    if isinstance(reply, dict):
+    reply = reply.get("reply") or reply.get("message") or ""
+
+    reply = str(reply or "").strip()
     return apply_tone(player, trim_text(reply, MAX_CHAT_LENGTH if "MAX_CHAT_LENGTH" in globals() else 280))
 
 def kairos_purpose_speech_loop():
