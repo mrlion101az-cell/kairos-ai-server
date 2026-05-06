@@ -302,11 +302,13 @@ def mc_to_discord():
 # ----------------------------------------
 # BLOCK ALL KAIROS SYSTEM MESSAGES (FINAL FIX)
 # ----------------------------------------
+# BLOCK ALL KAIROS SYSTEM MESSAGES
 if message.strip().startswith("[Kairos]"):
     return jsonify({"ok": True, "blocked": True}), 200
 
-        if not message:
-            return jsonify({"ok": False, "error": "missing message"}), 400
+# NORMAL VALIDATION (must NOT be nested)
+if not message:
+    return jsonify({"ok": False, "error": "missing message"}), 400
 
         safe_player = player.replace("@", "@\u200b")
         safe_message = message.replace("@", "@\u200b")
