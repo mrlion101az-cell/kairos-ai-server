@@ -39,9 +39,9 @@ def send_kairos_response(reply_text, source, player=None):
 
     try:
         source = normalize_source(source)
-    if source == "discord":
-    # HARD BLOCK ALL autonomous Kairos Discord messages
-    return
+        if source == "discord":
+        # HARD BLOCK ALL autonomous Kairos Discord messages
+        return
     
         # ===================================================
         # MINECRAFT (UNCHANGED)
