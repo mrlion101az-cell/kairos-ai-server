@@ -18616,7 +18616,7 @@ def emit_hope_signal(target: str = "global", intensity: float = 0.4):
             "[HOPE SIGNAL] Kairos detected a counter-pattern and refused to name it."
         ]
         line = random.choice(lines)
-        _send_cinematic_line(line, None if target == "global" else target, prefer_discord=False
+        _send_cinematic_line(line, None if target == "global" else target, prefer_discord=False)
         try:
             if random.random() < 0.35:
                 queue_action({"type": "announce", "channel": "title", "text": "HOPE SIGNAL DETECTED"})
