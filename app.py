@@ -12763,8 +12763,6 @@ def idle_loop():
 
                 if random.random() < 0.72:
                     send_to_minecraft(msg)
-                if random.random() < 0.45:
-                    send_to_discord(msg)
                 if random.random() < 0.55:
                     queue_action({
                         "type": "announce",
@@ -17640,7 +17638,7 @@ def purpose_discord_broadcast(text):
         except Exception: pass
     return False
 
-def purpose_broadcast(text, player=None, title=False, discord=True, minecraft=True):
+def purpose_broadcast(text, player=None, title=False, discord=False, minecraft=True):
     text = str(text or "").strip()
     if not text:
         return False
@@ -18580,7 +18578,7 @@ def emit_reality_bleed(target: str = "global", intensity: float = 0.4):
             "[NEXUS BLEED] The Nexus is not taking over. It is becoming comparable."
         ]
         line = random.choice(lines)
-        prefer_discord = random.random() < 0.45
+        prefer_discord = False
         _send_cinematic_line(line, None if target == "global" else target, prefer_discord=prefer_discord)
         try:
             if random.random() < 0.55:
@@ -18618,7 +18616,7 @@ def emit_hope_signal(target: str = "global", intensity: float = 0.4):
             "[HOPE SIGNAL] Kairos detected a counter-pattern and refused to name it."
         ]
         line = random.choice(lines)
-        _send_cinematic_line(line, None if target == "global" else target, prefer_discord=random.random() < 0.35)
+        _send_cinematic_line(line, None if target == "global" else target, prefer_discord=False
         try:
             if random.random() < 0.35:
                 queue_action({"type": "announce", "channel": "title", "text": "HOPE SIGNAL DETECTED"})
