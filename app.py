@@ -17908,7 +17908,7 @@ def kairos_purpose_speech_loop():
                 weighted.extend([p] * max(1, w))
             save_purpose_state(st)
             player = random.choice(weighted)
-            purpose_broadcast(generate_purpose_reply(player), player=player, minecraft=True, discord=True)
+            purpose_broadcast(generate_purpose_reply(player), player=player, minecraft=True, discord=False)
         except Exception as e:
             try: log(f"Purpose speech loop error: {e}", level="ERROR")
             except Exception: print("[Kairos Purpose Speech Error]", e, flush=True)
