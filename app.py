@@ -17901,7 +17901,7 @@ def generate_purpose_reply(player):
     save_purpose_state(st)
     
     if isinstance(reply, dict):
-    reply = reply.get("reply") or reply.get("message") or ""
+        reply = reply.get("reply") or reply.get("message") or ""
 
     reply = str(reply or "").strip()
     return apply_tone(player, trim_text(reply, MAX_CHAT_LENGTH if "MAX_CHAT_LENGTH" in globals() else 280))
