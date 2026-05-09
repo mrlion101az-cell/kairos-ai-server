@@ -249,10 +249,9 @@ async def on_message(message):
         # Discord only gets Kairos reply when directly triggered.
         # Normal Discord messages still travel to Minecraft through app.py.
         if triggered and reply:
-            async with message.channel.typing():
-                for chunk in split_text(reply):
-                    await message.channel.send(f"**[Kairos]** {chunk}")
-                    await asyncio.sleep(0.35)
+            for chunk in split_text(reply):
+                await message.channel.send(f"**[Kairos]** {chunk}")
+                await asyncio.sleep(0.35)
 
     except Exception as exc:
         log(f"Discord -> Kairos ERROR: {exc}")
