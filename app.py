@@ -7773,7 +7773,7 @@ def send_http_commands(command_list):
 # Minecraft Reply
 # ------------------------------------------------------------
 
-def send_to_minecraft(reply):
+def send_to_minecraft(reply, player=None):
     if not reply:
         return False
 
