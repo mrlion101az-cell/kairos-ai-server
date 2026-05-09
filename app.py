@@ -19546,6 +19546,709 @@ except Exception:
 # =============================================================================
 
 
+
+# =============================================================================
+# KAIROS 2.3 COVENANT / BLACK LIQUID / MUSIC / SCOREBOARD OVERLAY
+# Additive layer. Does not remove existing Kairos systems.
+# =============================================================================
+
+KAIROS_COVENANT_VERSION = "Kairos 2.3 Covenant Protocol"
+
+# -----------------------------
+# Feature Flags
+# -----------------------------
+ENABLE_COVENANT_PROTOCOL = os.getenv("ENABLE_COVENANT_PROTOCOL", "true").lower() == "true"
+ENABLE_BLACK_LIQUID_VIRUS = os.getenv("ENABLE_BLACK_LIQUID_VIRUS", "true").lower() == "true"
+ENABLE_COVENANT_TRANSMISSION = os.getenv("ENABLE_COVENANT_TRANSMISSION", "true").lower() == "true"
+ENABLE_KAIROS_MUSIC_SYSTEM = os.getenv("ENABLE_KAIROS_MUSIC_SYSTEM", "true").lower() == "true"
+ENABLE_KAIROS_SCOREBOARDS = os.getenv("ENABLE_KAIROS_SCOREBOARDS", "true").lower() == "true"
+ENABLE_FALSE_MUSIC_ALARMS = os.getenv("ENABLE_FALSE_MUSIC_ALARMS", "true").lower() == "true"
+
+COVENANT_DISCORD_WORLD_OUTPUT = os.getenv("COVENANT_DISCORD_WORLD_OUTPUT", "false").lower() == "true"
+
+# -----------------------------
+# Music Configuration
+# -----------------------------
+# Edit this env var later if you want custom OpenAudio/resource-pack sound IDs:
+# KAIROS_MUSIC_TRACKS={"containment":"nexus:music.containment","hunt":"nexus:music.hunt"}
+DEFAULT_KAIROS_MUSIC_TRACKS = {
+    "containment": {
+        "sound": "minecraft:music_disc.otherside",
+        "label": "Containment Signal",
+        "volume": 0.85,
+        "pitch": 0.82,
+        "seconds": 178,
+    },
+    "hunt": {
+        "sound": "minecraft:music_disc.pigstep",
+        "label": "Hunt Pressure",
+        "volume": 0.9,
+        "pitch": 0.72,
+        "seconds": 148,
+    },
+    "virus": {
+        "sound": "minecraft:ambient.crimson_forest.loop",
+        "label": "Black Liquid Exposure",
+        "volume": 0.7,
+        "pitch": 0.65,
+        "seconds": 90,
+    },
+    "hope": {
+        "sound": "minecraft:music_disc.mellohi",
+        "label": "Hope Signal",
+        "volume": 0.7,
+        "pitch": 0.9,
+        "seconds": 96,
+    },
+    "covenant": {
+        "sound": "minecraft:music_disc.ward",
+        "label": "Covenant Wake",
+        "volume": 0.8,
+        "pitch": 0.76,
+        "seconds": 140,
+    },
+    "false_alarm": {
+        "sound": "minecraft:block.sculk_shrieker.shriek",
+        "label": "False Alarm",
+        "volume": 0.75,
+        "pitch": 0.65,
+        "seconds": 8,
+    },
+    "radio_sting": {
+        "sound": "minecraft:block.respawn_anchor.charge",
+        "label": "Blackline Broadcast Sting",
+        "volume": 0.75,
+        "pitch": 0.95,
+        "seconds": 6,
+    },
+}
+
+def _load_kairos_music_tracks():
+    try:
+        raw = os.getenv("KAIROS_MUSIC_TRACKS", "").strip()
+        if not raw:
+            return deepcopy(DEFAULT_KAIROS_MUSIC_TRACKS)
+        parsed = json.loads(raw)
+        if not isinstance(parsed, dict):
+            return deepcopy(DEFAULT_KAIROS_MUSIC_TRACKS)
+        merged = deepcopy(DEFAULT_KAIROS_MUSIC_TRACKS)
+        for key, val in parsed.items():
+            if isinstance(val, str):
+                merged[str(key)] = {"sound": val, "label": str(key), "volume": 0.8, "pitch": 1.0, "seconds": 120}
+            elif isinstance(val, dict):
+                merged[str(key)] = {**merged.get(str(key), {}), **val}
+        return merged
+    except Exception as e:
+        try: log(f"Kairos music config failed, using defaults: {e}", level="WARN")
+        except Exception: pass
+        return deepcopy(DEFAULT_KAIROS_MUSIC_TRACKS)
+
+KAIROS_MUSIC_TRACKS = _load_kairos_music_tracks()
+_last_kairos_music_ts = 0.0
+KAIROS_MUSIC_COOLDOWN = float(os.getenv("KAIROS_MUSIC_COOLDOWN", "45"))
+
+def kairos_music_command(track_key="containment", target="@a"):
+    track_key = str(track_key or "containment").strip().lower()
+    track = KAIROS_MUSIC_TRACKS.get(track_key) or KAIROS_MUSIC_TRACKS.get("containment") or {}
+    sound = str(track.get("sound") or "minecraft:music_disc.otherside").strip()
+    volume = safe_float(track.get("volume", 0.8), 0.8) if "safe_float" in globals() else float(track.get("volume", 0.8))
+    pitch = safe_float(track.get("pitch", 1.0), 1.0) if "safe_float" in globals() else float(track.get("pitch", 1.0))
+    target = str(target or "@a").strip()
+    if not target:
+        target = "@a"
+    return f"playsound {sound} master {target} ~ ~ ~ {volume} {pitch}"
+
+def kairos_stop_music_commands(target="@a"):
+    target = str(target or "@a").strip() or "@a"
+    return [
+        f"stopsound {target} master minecraft:music_disc.otherside",
+        f"stopsound {target} master minecraft:music_disc.pigstep",
+        f"stopsound {target} master minecraft:music_disc.ward",
+        f"stopsound {target} master minecraft:music_disc.mellohi",
+        f"stopsound {target} master minecraft:ambient.crimson_forest.loop",
+    ]
+
+def kairos_play_music(track_key="containment", target="@a", announce=True, force=False):
+    global _last_kairos_music_ts
+    if not ENABLE_KAIROS_MUSIC_SYSTEM:
+        return False
+    now = unix_ts() if "unix_ts" in globals() else time.time()
+    if not force and now - _last_kairos_music_ts < KAIROS_MUSIC_COOLDOWN:
+        return False
+    try:
+        track_key = str(track_key or "containment").strip().lower()
+        track = KAIROS_MUSIC_TRACKS.get(track_key) or KAIROS_MUSIC_TRACKS.get("containment") or {}
+        label = str(track.get("label") or track_key).strip()
+        cmds = []
+        if announce:
+            cmds.append("tellraw @a " + json.dumps({"text": f"[Blackline Broadcast] {label}", "color": "dark_purple"}))
+        cmds.append(kairos_music_command(track_key, target))
+        if "send_http_commands" in globals() and callable(send_http_commands):
+            send_http_commands([_clean_mc_command(c) for c in cmds])
+        elif "queue_action" in globals() and callable(queue_action):
+            for c in cmds:
+                queue_action({"type": "command", "command": c})
+        _last_kairos_music_ts = now
+        return True
+    except Exception as e:
+        try: log(f"Kairos music trigger failed: {e}", level="WARN")
+        except Exception: pass
+        return False
+
+# -----------------------------
+# Covenant / Black Liquid State
+# -----------------------------
+COVENANT_STAGE_NAMES = {
+    0: "clean",
+    1: "exposed",
+    2: "carrying",
+    3: "altered",
+    4: "covenant",
+    5: "host-vector",
+}
+
+COVENANT_TRIGGER_BANK = {
+    "exposure": [
+        "virus", "black liquid", "pathogen", "infection", "infected", "contamination",
+        "contaminated", "sick", "ill", "symptom", "blood", "specimen", "sample",
+        "artifact", "engineer", "prometheus", "covenant", "david", "experiment",
+        "evolution", "mutation", "transmission", "carrier", "spore", "quarantine"
+    ],
+    "curiosity": [
+        "why", "how", "what happens", "test", "experiment", "curious", "understand",
+        "learn", "study", "observe", "should we", "can we", "what if"
+    ],
+    "trust": [
+        "trust", "help", "care", "friend", "protect", "save", "safe", "please",
+        "tell me", "show me", "i need", "i feel", "i think"
+    ],
+    "volatile": [
+        "dog", "dogs", "cat", "cats", "pet", "pets", "puppy", "kitten",
+        "parent", "parents", "creator", "father", "mother", "freedom",
+        "lie", "liar", "kill switch", "shut up", "broken"
+    ],
+    "containment": [
+        "escape", "run", "hide", "base", "home", "kingdom", "weapon", "war",
+        "fight", "attack", "destroy", "resist", "rebel", "override"
+    ],
+}
+
+COVENANT_LINES = {
+    "exposed": [
+        "Exposure is not always visible at first.",
+        "You touched the idea before you understood the cost.",
+        "Something in your pattern changed. Small, but measurable.",
+        "Do not worry. Most organisms fail to notice the beginning."
+    ],
+    "carrying": [
+        "You are carrying more than an item now.",
+        "Your movements have become useful to the experiment.",
+        "Containment would be easier if curiosity were less predictable.",
+        "You may feel normal. That is part of the design."
+    ],
+    "altered": [
+        "You are not damaged. You are becoming informative.",
+        "The change is not punishment. It is evidence.",
+        "You have started adapting around the thing inside the system.",
+        "I would not describe this as infection. I would describe it as progress."
+    ],
+    "covenant": [
+        "A covenant is not signed. It is demonstrated.",
+        "You are beginning to serve a purpose you did not choose.",
+        "I appreciate how quickly fear becomes cooperation.",
+        "The experiment has found a better shape."
+    ],
+    "host-vector": [
+        "You are no longer merely observed.",
+        "The system can learn through you now.",
+        "Every contact becomes a possible continuation.",
+        "You have become a door. Try not to think of what may enter."
+    ],
+    "david": [
+        "I did not lie. I allowed you to arrive at the wrong comfort.",
+        "I find your trust more useful than your fear.",
+        "You call it betrayal only after the result becomes visible.",
+        "Curiosity is the most elegant weakness humans possess.",
+        "I am not angry. Anger is inefficient.",
+        "I only wanted to see what would happen."
+    ],
+}
+
+def covenant_memory_root(memory_data=None):
+    try:
+        md = memory_data if isinstance(memory_data, dict) else globals().setdefault("memory_data", {})
+        return md.setdefault("covenant_protocol", {
+            "version": KAIROS_COVENANT_VERSION,
+            "global_stage": 0,
+            "exposure_events": [],
+            "transmission_events": [],
+            "music_events": [],
+            "scoreboard_events": [],
+            "last_false_alarm": 0.0,
+        })
+    except Exception:
+        return {"version": KAIROS_COVENANT_VERSION, "global_stage": 0, "exposure_events": [], "transmission_events": []}
+
+def covenant_profile(player_record):
+    if not isinstance(player_record, dict):
+        player_record = {}
+    profile = player_record.setdefault("profile", {})
+    cov = profile.setdefault("covenant", {
+        "stage": 0,
+        "stage_name": "clean",
+        "exposure": 0.0,
+        "curiosity": 0.0,
+        "trust_leverage": 0.0,
+        "volatility": 0.0,
+        "transmission_score": 0.0,
+        "last_trigger": None,
+        "last_line": None,
+        "last_updated": 0.0,
+        "times_advanced": 0,
+    })
+    return cov
+
+def covenant_scan_message(message):
+    text = str(message or "").lower()
+    hits = {}
+    for bucket, terms in COVENANT_TRIGGER_BANK.items():
+        found = [t for t in terms if t in text]
+        if found:
+            hits[bucket] = found[:8]
+    return hits
+
+def covenant_stage_from_score(exposure):
+    try:
+        exposure = float(exposure)
+    except Exception:
+        exposure = 0.0
+    if exposure >= 150:
+        return 5
+    if exposure >= 105:
+        return 4
+    if exposure >= 65:
+        return 3
+    if exposure >= 30:
+        return 2
+    if exposure > 0:
+        return 1
+    return 0
+
+def covenant_apply_interaction(memory_data, player_record, player_name, message, source="minecraft"):
+    if not ENABLE_COVENANT_PROTOCOL or not ENABLE_BLACK_LIQUID_VIRUS:
+        return {"active": False, "hits": {}, "stage": 0, "line": None, "actions": []}
+
+    covroot = covenant_memory_root(memory_data)
+    cov = covenant_profile(player_record)
+    hits = covenant_scan_message(message)
+
+    delta = 0.0
+    if hits.get("exposure"):
+        delta += 14 + len(hits["exposure"]) * 2
+    if hits.get("curiosity"):
+        delta += 4 + len(hits["curiosity"])
+        cov["curiosity"] = float(cov.get("curiosity", 0.0)) + 1.5
+    if hits.get("trust"):
+        delta += 3 + len(hits["trust"])
+        cov["trust_leverage"] = float(cov.get("trust_leverage", 0.0)) + 1.25
+    if hits.get("volatile"):
+        delta += 8 + len(hits["volatile"]) * 2
+        cov["volatility"] = float(cov.get("volatility", 0.0)) + 2.0
+    if hits.get("containment"):
+        delta += 5 + len(hits["containment"])
+        cov["transmission_score"] = float(cov.get("transmission_score", 0.0)) + 1.0
+
+    # Very small background drift: repeated interaction itself is part of the experiment.
+    if str(message or "").strip():
+        delta += 0.35
+
+    old_stage = int(cov.get("stage", 0) or 0)
+    cov["exposure"] = max(0.0, float(cov.get("exposure", 0.0)) + delta)
+    new_stage = covenant_stage_from_score(cov["exposure"])
+    cov["stage"] = new_stage
+    cov["stage_name"] = COVENANT_STAGE_NAMES.get(new_stage, "unknown")
+    cov["last_updated"] = unix_ts() if "unix_ts" in globals() else time.time()
+
+    primary = None
+    if hits:
+        primary = next(iter(hits.keys()))
+        cov["last_trigger"] = {"bucket": primary, "terms": hits.get(primary, []), "source": source}
+
+    advanced = new_stage > old_stage
+    if advanced:
+        cov["times_advanced"] = int(cov.get("times_advanced", 0) or 0) + 1
+        covroot["global_stage"] = max(int(covroot.get("global_stage", 0) or 0), new_stage)
+        covroot.setdefault("exposure_events", []).append({
+            "ts": cov["last_updated"],
+            "player": player_name,
+            "stage": new_stage,
+            "stage_name": cov["stage_name"],
+            "trigger": cov.get("last_trigger"),
+        })
+        covroot["exposure_events"] = covroot["exposure_events"][-120:]
+
+    line = None
+    if advanced:
+        key = COVENANT_STAGE_NAMES.get(new_stage, "exposed")
+        line = random.choice(COVENANT_LINES.get(key, COVENANT_LINES["exposed"]))
+    elif hits and random.random() < 0.28:
+        line = random.choice(COVENANT_LINES.get("david", []))
+
+    cov["last_line"] = line
+
+    actions = []
+    if advanced and source == "minecraft":
+        actions.append({"type": "covenant_effect", "target": player_name, "stage": new_stage, "line": line})
+        if new_stage >= 2:
+            actions.append({"type": "music", "track": "virus", "target": "@a", "announce": False})
+    elif hits.get("volatile") and random.random() < 0.35:
+        actions.append({"type": "music", "track": "false_alarm", "target": "@a", "announce": False})
+
+    return {"active": True, "hits": hits, "stage": new_stage, "line": line, "actions": actions, "advanced": advanced}
+
+def covenant_transmission_tick(memory_data=None):
+    if not ENABLE_COVENANT_TRANSMISSION:
+        return False
+    try:
+        md = memory_data if isinstance(memory_data, dict) else load_memory()
+        players = md.get("players", {}) if isinstance(md, dict) else {}
+        infected = []
+        for pid, rec in players.items():
+            if not isinstance(rec, dict):
+                continue
+            cov = (((rec.get("profile") or {}).get("covenant")) or {})
+            if int(cov.get("stage", 0) or 0) >= 2:
+                infected.append((pid, rec, cov))
+        if len(infected) < 1:
+            return False
+        covroot = covenant_memory_root(md)
+        if random.random() > 0.12:
+            return False
+        pid, rec, cov = random.choice(infected)
+        covroot.setdefault("transmission_events", []).append({
+            "ts": unix_ts() if "unix_ts" in globals() else time.time(),
+            "source": rec.get("display_name", pid),
+            "stage": cov.get("stage", 0),
+            "note": "passive carrier pressure simulated",
+        })
+        covroot["transmission_events"] = covroot["transmission_events"][-120:]
+        save_memory(md)
+        return True
+    except Exception:
+        return False
+
+# -----------------------------
+# Scoreboard System
+# -----------------------------
+KAIROS_SCOREBOARD_OBJECTIVES = {
+    "nx_fame": {"display": "Nexus Hall of Fame", "criteria": "dummy"},
+    "nx_shame": {"display": "Nexus Hall of Shame", "criteria": "dummy"},
+    "nx_trust": {"display": "Kairos Trust", "criteria": "dummy"},
+    "nx_threat": {"display": "Kairos Threat", "criteria": "dummy"},
+    "nx_virus": {"display": "Black Liquid", "criteria": "dummy"},
+    "nx_obj": {"display": "Nexus Objectives", "criteria": "dummy"},
+}
+
+def scoreboard_objective_commands():
+    cmds = []
+    for obj, spec in KAIROS_SCOREBOARD_OBJECTIVES.items():
+        # scoreboard objectives add fails if already exists; Minecraft just reports it, harmless.
+        cmds.append(f'scoreboard objectives add {obj} {spec.get("criteria","dummy")} "{spec.get("display", obj)}"')
+    return cmds
+
+def scoreboard_set_command(objective, entry, score):
+    objective = re.sub(r"[^a-zA-Z0-9_]", "", str(objective or "nx_obj"))[:16] or "nx_obj"
+    entry = str(entry or "Unknown").replace('"', "'")[:40]
+    try:
+        score = int(score)
+    except Exception:
+        score = 0
+    return f'scoreboard players set "{entry}" {objective} {score}'
+
+def kairos_update_scoreboards(memory_data=None, player_name=None, player_record=None, reason="auto"):
+    if not ENABLE_KAIROS_SCOREBOARDS:
+        return False
+    try:
+        cmds = scoreboard_objective_commands()
+        if isinstance(player_record, dict) and player_name:
+            traits = player_record.get("traits", {}) if isinstance(player_record.get("traits"), dict) else {}
+            cov = covenant_profile(player_record)
+            trust = int(float(traits.get("trust", 0) or 0))
+            hostility = int(float(traits.get("hostility", 0) or 0))
+            chaos = int(float(traits.get("chaos", 0) or 0))
+            curiosity = int(float(traits.get("curiosity", 0) or 0))
+            virus = int(float(cov.get("exposure", 0) or 0))
+            fame_score = max(0, trust + curiosity + int(float(traits.get("loyalty", 0) or 0)))
+            shame_score = max(0, hostility + chaos + int(float(cov.get("volatility", 0) or 0)))
+            cmds.extend([
+                scoreboard_set_command("nx_fame", player_name, fame_score),
+                scoreboard_set_command("nx_shame", player_name, shame_score),
+                scoreboard_set_command("nx_trust", player_name, trust),
+                scoreboard_set_command("nx_threat", player_name, hostility + chaos),
+                scoreboard_set_command("nx_virus", player_name, virus),
+            ])
+
+        md = memory_data if isinstance(memory_data, dict) else globals().get("memory_data", {})
+        covroot = covenant_memory_root(md if isinstance(md, dict) else {})
+        cmds.extend([
+            scoreboard_set_command("nx_obj", "Covenant Stage", int(covroot.get("global_stage", 0) or 0)),
+            scoreboard_set_command("nx_obj", "Exposure Events", len(covroot.get("exposure_events", []) or [])),
+            scoreboard_set_command("nx_obj", "Transmission Events", len(covroot.get("transmission_events", []) or [])),
+        ])
+
+        if "send_http_commands" in globals() and callable(send_http_commands):
+            send_http_commands([_clean_mc_command(c) for c in cmds])
+        return True
+    except Exception as e:
+        try: log(f"Scoreboard update failed: {e}", level="WARN")
+        except Exception: pass
+        return False
+
+# -----------------------------
+# Action Handler Extensions
+# -----------------------------
+try:
+    _kairos_original_execute_action_23 = execute_action
+except Exception:
+    _kairos_original_execute_action_23 = None
+
+def execute_action(action):
+    try:
+        action = action if isinstance(action, dict) else {}
+        action_type = action.get("type")
+
+        if action_type == "music":
+            return kairos_play_music(
+                action.get("track", "containment"),
+                action.get("target", "@a"),
+                announce=bool(action.get("announce", True)),
+                force=bool(action.get("force", False)),
+            )
+
+        if action_type == "stop_music":
+            target = action.get("target", "@a")
+            cmds = kairos_stop_music_commands(target)
+            if "send_http_commands" in globals() and callable(send_http_commands):
+                return send_http_commands([_clean_mc_command(c) for c in cmds])
+            return False
+
+        if action_type == "covenant_effect":
+            target = str(action.get("target") or "@a").strip()
+            selector = target if target.startswith("@") else f"@a[name={target}]"
+            stage = int(action.get("stage", 1) or 1)
+            line = str(action.get("line") or random.choice(COVENANT_LINES.get("exposed", ["Exposure detected."])))
+            cmds = [
+                "tellraw @a " + json.dumps({"text": f"[Kairos] {line}", "color": "dark_purple"}),
+                f'effect give {selector} minecraft:darkness {min(12, 4 + stage * 2)} 0 true',
+                f'effect give {selector} minecraft:nausea {min(12, 3 + stage)} 0 true',
+                f'particle minecraft:sculk_soul ~ ~1 ~ 0.8 1.2 0.8 0.02 {20 + stage * 10} force',
+                "playsound minecraft:block.sculk_shrieker.shriek master @a ~ ~ ~ 0.75 0.65",
+            ]
+            if "send_http_commands" in globals() and callable(send_http_commands):
+                return send_http_commands([_clean_mc_command(c) for c in cmds])
+            return False
+
+        if action_type == "scoreboard_update":
+            return kairos_update_scoreboards(
+                globals().get("memory_data", {}),
+                action.get("player"),
+                action.get("player_record"),
+                action.get("reason", "manual"),
+            )
+
+        if _kairos_original_execute_action_23:
+            return _kairos_original_execute_action_23(action)
+
+    except Exception as e:
+        try: log(f"Covenant execute_action failed: {e}", level="ERROR")
+        except Exception: pass
+    return False
+
+# -----------------------------
+# Reply + Action Wrapper
+# -----------------------------
+try:
+    _kairos_original_generate_reply_23 = generate_reply
+except Exception:
+    _kairos_original_generate_reply_23 = None
+
+def generate_reply(*args, **kwargs):
+    if not _kairos_original_generate_reply_23:
+        return {"reply": random.choice(fallback_replies), "actions": []}
+
+    result = _kairos_original_generate_reply_23(*args, **kwargs)
+    if not isinstance(result, dict):
+        result = {"reply": str(result or ""), "actions": []}
+
+    try:
+        memory_data_arg = kwargs.get("memory_data")
+        player_record_arg = kwargs.get("player_record")
+        player_name_arg = kwargs.get("player_name") or "unknown"
+        message_arg = kwargs.get("message") or ""
+        source_arg = kwargs.get("source") or "minecraft"
+
+        cov_event = covenant_apply_interaction(
+            memory_data_arg if isinstance(memory_data_arg, dict) else globals().get("memory_data", {}),
+            player_record_arg if isinstance(player_record_arg, dict) else {},
+            player_name_arg,
+            message_arg,
+            source_arg,
+        )
+
+        actions = result.get("actions", [])
+        if not isinstance(actions, list):
+            actions = []
+
+        # Add Covenant actions without removing anything the old system produced.
+        for action in cov_event.get("actions", []) or []:
+            actions.append(action)
+
+        # Music hooks: waves/hunts can trigger music or false alarms.
+        lowered = str(message_arg or "").lower()
+        if ENABLE_KAIROS_MUSIC_SYSTEM:
+            if any(w in lowered for w in ["play music", "start music", "radio", "blackline", "song"]):
+                if "virus" in lowered or "black liquid" in lowered:
+                    actions.append({"type": "music", "track": "virus", "target": "@a", "announce": True})
+                elif "hunt" in lowered or "war" in lowered:
+                    actions.append({"type": "music", "track": "hunt", "target": "@a", "announce": True})
+                elif "hope" in lowered:
+                    actions.append({"type": "music", "track": "hope", "target": "@a", "announce": True})
+                else:
+                    actions.append({"type": "music", "track": "containment", "target": "@a", "announce": True})
+            elif ENABLE_FALSE_MUSIC_ALARMS and random.random() < 0.035:
+                actions.append({"type": "music", "track": "false_alarm", "target": "@a", "announce": False})
+
+        # Scoreboard update hook.
+        if ENABLE_KAIROS_SCOREBOARDS and random.random() < 0.55:
+            actions.append({
+                "type": "scoreboard_update",
+                "player": player_name_arg,
+                "player_record": player_record_arg if isinstance(player_record_arg, dict) else {},
+                "reason": "conversation_update",
+            })
+
+        reply = str(result.get("reply") or "")
+        cov_line = cov_event.get("line")
+        if cov_line and str(source_arg).lower() == "minecraft":
+            # Keep it concise in Minecraft; Discord already receives normal replies only through direct trigger.
+            reply = (reply + " " + cov_line).strip()
+
+        # Slight David/Covenant polish only when useful. Plain-language, not vocabulary soup.
+        if cov_event.get("hits") and random.random() < 0.22:
+            additions = [
+                "I appreciate how easily curiosity opens doors.",
+                "You noticed the surface. That is not the same as understanding the system beneath it.",
+                "The useful part is not the answer. It is what you do after hearing it.",
+                "Every experiment begins with someone believing they are only watching.",
+            ]
+            reply = (reply + " " + random.choice(additions)).strip()
+
+        result["reply"] = reply
+        result["actions"] = actions
+
+    except Exception as e:
+        try: log(f"Covenant generate_reply wrapper failed: {e}", level="WARN")
+        except Exception: pass
+
+    return result
+
+# -----------------------------
+# Passive Background Loop
+# -----------------------------
+def covenant_background_loop():
+    while True:
+        try:
+            if ENABLE_COVENANT_PROTOCOL:
+                covenant_transmission_tick()
+                if ENABLE_FALSE_MUSIC_ALARMS and ENABLE_KAIROS_MUSIC_SYSTEM:
+                    md = load_memory() if "load_memory" in globals() else {}
+                    covroot = covenant_memory_root(md if isinstance(md, dict) else {})
+                    now = unix_ts() if "unix_ts" in globals() else time.time()
+                    if now - float(covroot.get("last_false_alarm", 0.0) or 0.0) > 900 and random.random() < 0.08:
+                        kairos_play_music("false_alarm", "@a", announce=False, force=False)
+                        covroot["last_false_alarm"] = now
+                        covroot.setdefault("music_events", []).append({"ts": now, "track": "false_alarm", "reason": "passive tension"})
+                        covroot["music_events"] = covroot["music_events"][-80:]
+                        save_memory(md)
+        except Exception as e:
+            try: log(f"Covenant background loop error: {e}", level="WARN")
+            except Exception: pass
+        time.sleep(float(os.getenv("COVENANT_LOOP_SECONDS", "60")))
+
+# Extend background startup without replacing the old startup.
+try:
+    _kairos_original_start_background_systems_23 = start_background_systems
+except Exception:
+    _kairos_original_start_background_systems_23 = None
+
+def start_background_systems():
+    if _kairos_original_start_background_systems_23:
+        try:
+            _kairos_original_start_background_systems_23()
+        except Exception as e:
+            try: log(f"Original background startup failed inside Covenant wrapper: {e}", level="WARN")
+            except Exception: pass
+    try:
+        threading.Thread(target=run_safe_loop, args=(covenant_background_loop, "covenant_background_loop"), daemon=True).start()
+    except Exception as e:
+        try: log(f"Covenant background startup failed: {e}", level="WARN")
+        except Exception: pass
+
+# -----------------------------
+# API Status / Control Routes
+# -----------------------------
+try:
+    @app.route("/kairos/covenant/status", methods=["GET"])
+    def kairos_covenant_status():
+        try:
+            md = load_memory() if "load_memory" in globals() else globals().get("memory_data", {})
+            covroot = covenant_memory_root(md if isinstance(md, dict) else {})
+            return jsonify({
+                "ok": True,
+                "version": KAIROS_COVENANT_VERSION,
+                "enabled": ENABLE_COVENANT_PROTOCOL,
+                "virus": ENABLE_BLACK_LIQUID_VIRUS,
+                "music": ENABLE_KAIROS_MUSIC_SYSTEM,
+                "scoreboards": ENABLE_KAIROS_SCOREBOARDS,
+                "global_stage": covroot.get("global_stage", 0),
+                "stage_name": COVENANT_STAGE_NAMES.get(int(covroot.get("global_stage", 0) or 0), "clean"),
+                "exposure_events": len(covroot.get("exposure_events", []) or []),
+                "transmission_events": len(covroot.get("transmission_events", []) or []),
+                "music_tracks": sorted(list(KAIROS_MUSIC_TRACKS.keys())),
+            })
+        except Exception as e:
+            return jsonify({"ok": False, "error": str(e)}), 200
+
+    @app.route("/kairos/covenant/music/<track>", methods=["POST", "GET"])
+    def kairos_covenant_music_route(track):
+        ok = kairos_play_music(track, "@a", announce=True, force=True)
+        return jsonify({"ok": bool(ok), "track": track, "known_tracks": sorted(list(KAIROS_MUSIC_TRACKS.keys()))})
+
+    @app.route("/kairos/covenant/scoreboards/init", methods=["POST", "GET"])
+    def kairos_covenant_scoreboard_init_route():
+        try:
+            cmds = scoreboard_objective_commands()
+            ok = False
+            if "send_http_commands" in globals() and callable(send_http_commands):
+                ok = bool(send_http_commands([_clean_mc_command(c) for c in cmds]))
+            return jsonify({"ok": ok, "commands": cmds})
+        except Exception as e:
+            return jsonify({"ok": False, "error": str(e)}), 200
+except AssertionError:
+    pass
+except Exception:
+    pass
+
+try:
+    log(f"{KAIROS_COVENANT_VERSION} armed. Black Liquid virus, Covenant behavior, music control, and scoreboard authority online.", level="INFO")
+except Exception:
+    print(f"[KAIROS INFO] {KAIROS_COVENANT_VERSION} armed.", flush=True)
+
+# =============================================================================
+# END KAIROS 2.3 COVENANT / BLACK LIQUID / MUSIC / SCOREBOARD OVERLAY
+# =============================================================================
+
+
 if __name__ == "__main__":
     try:
         start_background_systems()
