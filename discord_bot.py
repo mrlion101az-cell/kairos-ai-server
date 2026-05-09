@@ -513,6 +513,275 @@ def run_http_server():
     http_app.run(host="0.0.0.0", port=PORT, debug=False, use_reloader=False)
 
 
+
+
+# ============================================================
+# KAIROS ENDGAME DISCORD OVERLAY
+# Adds compatibility for:
+#   - Endgame Continuity Layer
+#   - Living Archive
+#   - Faction / dossier systems
+#   - Delayed consequence routing
+#   - Music orchestration requests
+#   - Stronger anti-loop / anti-spam protections
+# ============================================================
+
+ENDGAME_DISCORD_VERSION = "Kairos Discord Endgame Bridge"
+
+ENABLE_ENDGAME_DISCORD = os.getenv("ENABLE_ENDGAME_DISCORD", "true").lower() == "true"
+
+# Stronger autonomous-event suppression.
+BLOCKED_ENDGAME_PHRASES = (
+    "living archive",
+    "delayed consequence",
+    "history ingestion",
+    "endgame continuity",
+    "classified archive",
+    "faction leaning",
+    "creator attachment",
+    "a player who enters late still enters history already in motion",
+    "the archive is not storage",
+    "old cities are not old",
+    "kairos 2.5",
+)
+
+# Prevent repeated Discord narrative loops.
+ENDGAME_RECENT_BRIDGE = OrderedDict()
+ENDGAME_DEDUPE_SECONDS = float(os.getenv("ENDGAME_DEDUPE_SECONDS", "18"))
+
+# Optional Endgame routes
+ENDGAME_STATUS_URL = os.getenv(
+    "ENDGAME_STATUS_URL",
+    KAIROS_API_URL.rsplit("/chat", 1)[0] + "/kairos/endgame/status" if KAIROS_API_URL.endswith("/chat") else ""
+).strip()
+
+ENDGAME_ARCHIVE_URL = os.getenv(
+    "ENDGAME_ARCHIVE_URL",
+    KAIROS_API_URL.rsplit("/chat", 1)[0] + "/kairos/endgame/archive" if KAIROS_API_URL.endswith("/chat") else ""
+).strip()
+
+ENDGAME_FACTIONS_URL = os.getenv(
+    "ENDGAME_FACTIONS_URL",
+    KAIROS_API_URL.rsplit("/chat", 1)[0] + "/kairos/endgame/factions" if KAIROS_API_URL.endswith("/chat") else ""
+).strip()
+
+def endgame_bridge_fingerprint(player, message):
+    raw = f"{player}|{message}".lower().strip()
+    return raw[:600]
+
+def endgame_recently_seen(player, message):
+    now = time.time()
+    fp = endgame_bridge_fingerprint(player, message)
+
+    for key, ts in list(ENDGAME_RECENT_BRIDGE.items()):
+        if now - ts > ENDGAME_DEDUPE_SECONDS:
+            ENDGAME_RECENT_BRIDGE.pop(key, None)
+
+    if fp in ENDGAME_RECENT_BRIDGE:
+        return True
+
+    ENDGAME_RECENT_BRIDGE[fp] = now
+
+    while len(ENDGAME_RECENT_BRIDGE) > 1200:
+        ENDGAME_RECENT_BRIDGE.popitem(last=False)
+
+    return False
+
+try:
+    _ENDGAME_ORIGINAL_IS_PROBABLY_KAIROS_SYSTEM_MESSAGE = is_probably_kairos_system_message
+except Exception:
+    _ENDGAME_ORIGINAL_IS_PROBABLY_KAIROS_SYSTEM_MESSAGE = None
+
+def is_probably_kairos_system_message(player, message):
+    """
+    Upgraded filter for Endgame Continuity autonomous behavior.
+    """
+    try:
+        if _ENDGAME_ORIGINAL_IS_PROBABLY_KAIROS_SYSTEM_MESSAGE:
+            if _ENDGAME_ORIGINAL_IS_PROBABLY_KAIROS_SYSTEM_MESSAGE(player, message):
+                return True
+    except Exception:
+        pass
+
+    p = str(player or "").lower().strip()
+    m = str(message or "").lower().strip()
+
+    if not m:
+        return False
+
+    if p in {"kairos", "system", "console", "server", "nexus"}:
+        return True
+
+    for phrase in BLOCKED_ENDGAME_PHRASES:
+        if phrase in m:
+            return True
+
+    return False
+
+# ============================================================
+# ENDGAME COMMAND HELPERS
+# ============================================================
+
+async def fetch_endgame_status():
+    if not ENDGAME_STATUS_URL:
+        return None
+    try:
+        response = await asyncio.to_thread(
+            requests.get,
+            ENDGAME_STATUS_URL,
+            timeout=REQUEST_TIMEOUT
+        )
+        if response.status_code == 200:
+            return response.json()
+    except Exception as exc:
+        log(f"Endgame status fetch failed: {exc}")
+    return None
+
+async def fetch_endgame_archive(limit=8):
+    if not ENDGAME_ARCHIVE_URL:
+        return None
+    try:
+        response = await asyncio.to_thread(
+            requests.get,
+            ENDGAME_ARCHIVE_URL,
+            params={"limit": limit},
+            timeout=REQUEST_TIMEOUT
+        )
+        if response.status_code == 200:
+            return response.json()
+    except Exception as exc:
+        log(f"Endgame archive fetch failed: {exc}")
+    return None
+
+async def fetch_endgame_factions():
+    if not ENDGAME_FACTIONS_URL:
+        return None
+    try:
+        response = await asyncio.to_thread(
+            requests.get,
+            ENDGAME_FACTIONS_URL,
+            timeout=REQUEST_TIMEOUT
+        )
+        if response.status_code == 200:
+            return response.json()
+    except Exception as exc:
+        log(f"Endgame factions fetch failed: {exc}")
+    return None
+
+# ============================================================
+# DISCORD COMMAND EXTENSIONS
+# ============================================================
+
+try:
+    _ENDGAME_ORIGINAL_ON_MESSAGE = on_message
+except Exception:
+    _ENDGAME_ORIGINAL_ON_MESSAGE = None
+
+@client.event
+async def on_message(message):
+    # Preserve original protections.
+    if message.author.bot:
+        return
+
+    if DISCORD_CHANNEL_ID and message.channel.id != DISCORD_CHANNEL_ID:
+        return
+
+    content = (message.content or "").strip()
+    lower = content.lower()
+
+    # Prevent feedback loops.
+    if endgame_recently_seen(message.author.display_name, content):
+        return
+
+    # ========================================================
+    # ENDGAME ADMIN / LORE COMMANDS
+    # ========================================================
+
+    if lower.startswith("!archive"):
+        data = await fetch_endgame_archive(limit=10)
+
+        if not data or not data.get("ok"):
+            await message.channel.send("**[Kairos Archive]** archive retrieval failed.")
+            return
+
+        entries = data.get("entries", [])
+        if not entries:
+            await message.channel.send("**[Kairos Archive]** no records available.")
+            return
+
+        lines = ["**[Kairos Archive] Recent Entries**"]
+        for e in entries[-10:]:
+            title = e.get("title", "Unknown")
+            kind = e.get("kind", "record")
+            lines.append(f"• [{kind}] {title}")
+
+        await message.channel.send("\\n".join(lines[:20]))
+        return
+
+    if lower.startswith("!factions"):
+        data = await fetch_endgame_factions()
+
+        if not data or not data.get("ok"):
+            await message.channel.send("**[Kairos]** faction network unavailable.")
+            return
+
+        factions = data.get("factions", {})
+        lines = ["**[Kairos] Known Factions**"]
+
+        for key, fac in list(factions.items())[:12]:
+            lines.append(f"• {fac.get('name', key)}")
+
+        await message.channel.send("\\n".join(lines[:20]))
+        return
+
+    if lower.startswith("!endgame") or lower.startswith("!kairos status"):
+        data = await fetch_endgame_status()
+
+        if not data or not data.get("ok"):
+            await message.channel.send("**[Kairos]** Endgame systems unreachable.")
+            return
+
+        lines = [
+            "**[Kairos Endgame Systems]**",
+            f"Version: {data.get('version')}",
+            f"Archive Entries: {data.get('archive_entries')}",
+            f"History Events: {data.get('history_events')}",
+            f"Player Dossiers: {data.get('player_dossiers')}",
+            f"Factions: {data.get('factions')}",
+            f"Locations: {data.get('locations')}",
+            f"Delayed Consequences: {data.get('delayed_consequences')}",
+        ]
+
+        await message.channel.send("\\n".join(lines))
+        return
+
+    # Let original bridge continue handling normal chat + Kairos interactions.
+    if _ENDGAME_ORIGINAL_ON_MESSAGE:
+        return await _ENDGAME_ORIGINAL_ON_MESSAGE(message)
+
+# ============================================================
+# HEALTH ROUTE EXTENSION
+# ============================================================
+
+try:
+    _ENDGAME_ORIGINAL_HEALTH = health
+except Exception:
+    _ENDGAME_ORIGINAL_HEALTH = None
+
+@http_app.route("/endgame_health", methods=["GET"])
+def endgame_health():
+    return jsonify({
+        "ok": True,
+        "service": ENDGAME_DISCORD_VERSION,
+        "discord_ready": client.is_ready(),
+        "endgame_enabled": ENABLE_ENDGAME_DISCORD,
+        "status_url": ENDGAME_STATUS_URL,
+        "archive_url": ENDGAME_ARCHIVE_URL,
+        "factions_url": ENDGAME_FACTIONS_URL,
+    })
+
+log(f"{ENDGAME_DISCORD_VERSION} armed.")
+
 if __name__ == "__main__":
     threading.Thread(target=run_http_server, daemon=True).start()
     client.run(DISCORD_TOKEN)
