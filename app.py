@@ -46,6 +46,17 @@ WORLD_EVENT_CATEGORY_COOLDOWNS = {
 
 world_event_last_times = {}
 
+# ============================================================
+# PLAYER-REQUESTED COMBAT CONTROL
+# Lets players intentionally challenge Kairos without restoring random spam.
+# ============================================================
+PLAYER_REQUESTED_COMBAT_ENABLED = os.getenv("PLAYER_REQUESTED_COMBAT_ENABLED", "true").lower() == "true"
+PLAYER_REQUESTED_COMBAT_COOLDOWN = int(os.getenv("PLAYER_REQUESTED_COMBAT_COOLDOWN", "180"))
+PLAYER_REQUESTED_COMBAT_MIN_COUNT = int(os.getenv("PLAYER_REQUESTED_COMBAT_MIN_COUNT", "2"))
+PLAYER_REQUESTED_COMBAT_MAX_COUNT = int(os.getenv("PLAYER_REQUESTED_COMBAT_MAX_COUNT", "4"))
+last_player_requested_combat_time = {}
+
+
 
 
 # ============================================================
@@ -64,18 +75,18 @@ def send_kairos_response(reply_text, source, player=None):
             return
 
         # ----------------------------------------
-        # GLOBAL MINECRAFT SPEECH GOVERNOR
+        # CONTEXT-AWARE MINECRAFT SPEECH GOVERNOR
+        # Direct Minecraft player conversations bypass the heavy atmospheric limiter.
+        # System/web/telemetry-style ambient messages still use the slow governor.
         # ----------------------------------------
-        if not minecraft_speech_allowed("idle"):
-            return
+        if source != "minecraft":
+            if not minecraft_speech_allowed("idle"):
+                return
 
         # ----------------------------------------
         # MINECRAFT DELIVERY
         # ----------------------------------------
-        if source == "minecraft":
-            send_to_minecraft(reply_text, player)
-        else:
-            send_to_minecraft(reply_text, player)
+        send_to_minecraft(reply_text, player)
 
     except Exception as e:
         log_exception("send_kairos_response failed", e)
@@ -2276,6 +2287,101 @@ def minecraft_speech_allowed(category="general") -> bool:
     world_event_last_times[category] = now
     last_minecraft_speech_time = now
     return True
+
+
+def is_direct_minecraft_conversation(source, message=None, mode=None, intent=None) -> bool:
+    """
+    True when a real Minecraft player is talking to Kairos.
+    This should not be throttled by the heavy atmospheric/world-event governor.
+    """
+    try:
+        if normalize_source(source) != "minecraft":
+            return False
+        text = str(message or "").strip()
+        if not text:
+            return False
+        mode_text = str(mode or "").lower()
+        intent_text = str(intent or "").lower()
+        if mode_text in {"ambient", "idle", "world_event", "bleed", "system"}:
+            return False
+        if intent_text in {"ambient", "idle", "world_event", "bleed", "system"}:
+            return False
+        return True
+    except Exception:
+        return False
+
+
+def kairos_player_requested_combat_action(player_id, message):
+    """
+    Detects explicit opt-in combat requests from Minecraft chat and returns
+    a controlled spawn_wave action. This restores 'ask Kairos for a fight'
+    without turning passive/background spawning back into chaos.
+    """
+    try:
+        if not PLAYER_REQUESTED_COMBAT_ENABLED:
+            return None
+
+        player_id = str(player_id or "").strip()
+        msg = str(message or "").lower().strip()
+        if not player_id or not msg:
+            return None
+
+        # Only respond to explicit Kairos challenges / combat requests.
+        mentions_kairos = any(x in msg for x in ("kairos", "kyros", "kiros", "kairo"))
+        combat_words = any(x in msg for x in (
+            "fight", "battle", "challenge", "test me", "send mobs", "send a wave",
+            "spawn mobs", "spawn a wave", "send your army", "deploy your army",
+            "bring your army", "attack me", "hunt me", "come at me", "war"
+        ))
+
+        if not (mentions_kairos and combat_words):
+            return None
+
+        now = time.time()
+        last = last_player_requested_combat_time.get(player_id, 0)
+        if now - last < PLAYER_REQUESTED_COMBAT_COOLDOWN:
+            remaining = int(PLAYER_REQUESTED_COMBAT_COOLDOWN - (now - last))
+            return {
+                "type": "announce",
+                "channel": "actionbar",
+                "target": player_id,
+                "text": f"Combat request denied. Cooldown remaining: {remaining}s."
+            }
+
+        # Scale lightly based on language intensity, but keep it safe.
+        count = PLAYER_REQUESTED_COMBAT_MIN_COUNT
+        if any(x in msg for x in ("hard", "strong", "serious", "army", "war")):
+            count += 1
+        if any(x in msg for x in ("maximum", "boss", "warden", "full power")):
+            count += 1
+        count = max(PLAYER_REQUESTED_COMBAT_MIN_COUNT, min(PLAYER_REQUESTED_COMBAT_MAX_COUNT, count))
+
+        template = "scout"
+        if any(x in msg for x in ("hunter", "hunt", "track")):
+            template = "hunter"
+        elif any(x in msg for x in ("army", "war", "strong", "hard")):
+            template = "raider"
+        elif any(x in msg for x in ("boss", "warden", "maximum")):
+            template = "warden"
+
+        last_player_requested_combat_time[player_id] = now
+
+        return {
+            "type": "spawn_wave",
+            "target": player_id,
+            "template": template,
+            "count": count,
+            "reason": "player_requested_combat",
+            "bypass_cooldown": False
+        }
+
+    except Exception as e:
+        try:
+            log(f"Player requested combat parser failed: {e}", level="WARN")
+        except Exception:
+            pass
+        return None
+
 
 
 def normalize_player_key(name: Any) -> str:
@@ -8897,6 +9003,13 @@ def chat_1():
         reply = sanitize_text((result or {}).get("reply", random.choice(fallback_replies)), 500)
         actions = validate_actions((result or {}).get("actions", []))
 
+        # Player-requested combat is opt-in and controlled.
+        # This restores "Kairos, send mobs / challenge me" without allowing random AI combat spam.
+        requested_combat_action = kairos_player_requested_combat_action(canonical_id, message)
+        if requested_combat_action:
+            actions.append(requested_combat_action)
+            actions = validate_actions(actions)
+
         profile = threat_scores.get(canonical_id, {})
         if profile.get("tier") == "maximum" and player_record.get("known_bases"):
             actions.append({"type": "occupy_area", "target": canonical_id, "count": BASE_OCCUPATION_UNIT_COUNT})
@@ -9313,6 +9426,13 @@ def chat_1():
 
         reply = sanitize_text((result or {}).get("reply", random.choice(fallback_replies)), 500)
         actions = validate_actions((result or {}).get("actions", []))
+
+        # Player-requested combat is opt-in and controlled.
+        # This restores "Kairos, send mobs / challenge me" without allowing random AI combat spam.
+        requested_combat_action = kairos_player_requested_combat_action(canonical_id, message)
+        if requested_combat_action:
+            actions.append(requested_combat_action)
+            actions = validate_actions(actions)
 
         queued_keys = set()
         queued_actions = []
