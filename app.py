@@ -20977,6 +20977,1032 @@ except Exception:
 # =============================================================================
 
 
+
+# =============================================================================
+# KAIROS 2.5 ENDGAME CONTINUITY / LIVING ARCHIVE / WORLD MEMORY OVERLAY
+# Additive layer. Does not remove existing Kairos systems.
+#
+# Goals:
+#   Phase 1: Reliability + loop/spam guardrails + diagnostics.
+#   Phase 2: Server history / eras / player lore ingestion.
+#   Phase 3: Living archive records Kairos can reference.
+#   Phase 4: Conversations become long-term gameplay.
+#   Phase 5: Creator logic: Kairos values his created units and reacts to losses.
+#   Phase 6: Faction ideology + automatic faction leaning from conversation.
+#   Phase 7: Location/city registry for old-world recognition.
+#   Phase 8: Music/radio/OpenAudio command orchestration hooks.
+#   Phase 9: Delayed consequences + years-scale continuity seeds.
+# =============================================================================
+
+KAIROS_ENDGAME_VERSION = "Kairos 2.5 Endgame Continuity"
+
+# -----------------------------
+# Feature Flags
+# -----------------------------
+ENABLE_ENDGAME_CONTINUITY = os.getenv("ENABLE_ENDGAME_CONTINUITY", "true").lower() == "true"
+ENABLE_PHASE_ONE_STABILITY = os.getenv("ENABLE_PHASE_ONE_STABILITY", "true").lower() == "true"
+ENABLE_LIVING_ARCHIVE = os.getenv("ENABLE_LIVING_ARCHIVE", "true").lower() == "true"
+ENABLE_HISTORY_INGESTION = os.getenv("ENABLE_HISTORY_INGESTION", "true").lower() == "true"
+ENABLE_CREATOR_ATTACHMENT = os.getenv("ENABLE_CREATOR_ATTACHMENT", "true").lower() == "true"
+ENABLE_FACTION_IDEOLOGY_ENGINE = os.getenv("ENABLE_FACTION_IDEOLOGY_ENGINE", "true").lower() == "true"
+ENABLE_LOCATION_LORE_ENGINE = os.getenv("ENABLE_LOCATION_LORE_ENGINE", "true").lower() == "true"
+ENABLE_OPENAUDIO_MUSIC_ENGINE = os.getenv("ENABLE_OPENAUDIO_MUSIC_ENGINE", "true").lower() == "true"
+ENABLE_ARCHIVE_REFERENCES_IN_CHAT = os.getenv("ENABLE_ARCHIVE_REFERENCES_IN_CHAT", "true").lower() == "true"
+
+ENDGAME_LOOP_SECONDS = float(os.getenv("ENDGAME_LOOP_SECONDS", "75"))
+ENDGAME_PASSIVE_ARCHIVE_COOLDOWN = float(os.getenv("ENDGAME_PASSIVE_ARCHIVE_COOLDOWN", "1800"))
+ENDGAME_ARCHIVE_CHAT_CHANCE = float(os.getenv("ENDGAME_ARCHIVE_CHAT_CHANCE", "0.12"))
+ENDGAME_FACTION_ASSIGN_CHANCE = float(os.getenv("ENDGAME_FACTION_ASSIGN_CHANCE", "0.18"))
+ENDGAME_LOCATION_REPLY_CHANCE = float(os.getenv("ENDGAME_LOCATION_REPLY_CHANCE", "0.18"))
+ENDGAME_CREATION_GRIEF_CHANCE = float(os.getenv("ENDGAME_CREATION_GRIEF_CHANCE", "0.45"))
+
+# -----------------------------
+# Persistent Files
+# -----------------------------
+try:
+    ENDGAME_FILE = DATA_DIR / "kairos_endgame_continuity.json"
+    ENDGAME_TMP_FILE = DATA_DIR / "kairos_endgame_continuity.tmp.json"
+except Exception:
+    ENDGAME_FILE = Path("kairos_endgame_continuity.json")
+    ENDGAME_TMP_FILE = Path("kairos_endgame_continuity.tmp.json")
+
+def _endgame_default_state():
+    return {
+        "version": KAIROS_ENDGAME_VERSION,
+        "created_at": now_iso() if "now_iso" in globals() else "",
+        "last_updated": now_iso() if "now_iso" in globals() else "",
+        "stability": {
+            "events_blocked": 0,
+            "duplicate_blocks": 0,
+            "loop_guard_blocks": 0,
+            "last_health_note": "",
+            "recent_errors": [],
+            "last_reset": unix_ts() if "unix_ts" in globals() else time.time(),
+        },
+        "eras": [],
+        "history_events": [],
+        "player_dossiers": {},
+        "faction_records": {},
+        "location_records": {},
+        "living_archive": [],
+        "classified_files": [],
+        "unit_creation_records": {},
+        "unit_losses": [],
+        "music_catalog": {},
+        "open_audio_commands": {},
+        "delayed_consequences": [],
+        "world_timeline": [],
+        "rumors": [],
+        "active_threads": {},
+        "last_passive_tick": 0.0,
+    }
+
+def load_endgame_state():
+    try:
+        if ENDGAME_FILE.exists():
+            data = parse_json_safely(ENDGAME_FILE.read_text(encoding="utf-8"), {})
+            if isinstance(data, dict):
+                base = _endgame_default_state()
+                for k, v in data.items():
+                    base[k] = v
+                return base
+    except Exception as e:
+        try: log(f"Endgame state load failed: {e}", level="WARN")
+        except Exception: pass
+    return _endgame_default_state()
+
+def save_endgame_state(st):
+    try:
+        if not isinstance(st, dict):
+            return False
+        st["last_updated"] = now_iso() if "now_iso" in globals() else ""
+        ENDGAME_TMP_FILE.write_text(json.dumps(st, indent=2, ensure_ascii=False), encoding="utf-8")
+        ENDGAME_TMP_FILE.replace(ENDGAME_FILE)
+        return True
+    except Exception as e:
+        try: log(f"Endgame state save failed: {e}", level="WARN")
+        except Exception: pass
+        return False
+
+ENDGAME_STATE = load_endgame_state()
+ENDGAME_LOCK = threading.RLock()
+
+# -----------------------------
+# Phase 1: Stability / Brick Wall Guardrails
+# -----------------------------
+ENDGAME_RECENT_OUTPUTS = deque(maxlen=300)
+ENDGAME_RECENT_ACTIONS = deque(maxlen=300)
+
+ENDGAME_BLOCKED_PREFIXES = (
+    "[HOPE SIGNAL]",
+    "[REALITY BLEED]",
+    "[Blackline Broadcast]",
+    "[COVENANT]",
+    "[VIRUS]",
+    "[NARRATIVE]",
+    "[NARRATIVE OPS]",
+    "[ARCHIVE]",
+    "[ENDGAME]",
+)
+
+ENDGAME_SYSTEM_PHRASES = (
+    "reality integrity fluctuation",
+    "covenant stage",
+    "black liquid",
+    "host-vector",
+    "profile estimate:",
+    "primary readings:",
+    "correct me if i am wrong",
+    "the nexus is recording choices",
+    "a long experiment does not announce",
+    "some stories require months",
+    "awaiting active player files",
+)
+
+def endgame_output_fingerprint(text, source="minecraft", player=None):
+    raw = f"{source}|{player}|{str(text or '').strip().lower()}"
+    try:
+        return stable_short_hash(raw, length=16)
+    except Exception:
+        return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
+
+def endgame_should_block_discord_output(text, source="minecraft", player=None):
+    """
+    Absolute guardrail: autonomous/world/narrative outputs should not bleed into Discord.
+    Direct Discord replies are handled by the Discord bot only.
+    """
+    if str(source or "").lower() == "discord":
+        return True
+    msg = str(text or "").strip()
+    low = msg.lower()
+    if any(msg.startswith(p) for p in ENDGAME_BLOCKED_PREFIXES):
+        return True
+    if any(p in low for p in ENDGAME_SYSTEM_PHRASES):
+        return True
+    return False
+
+def endgame_loop_guard(kind, text, player=None, cooldown=10.0):
+    now = unix_ts() if "unix_ts" in globals() else time.time()
+    fp = endgame_output_fingerprint(text, kind, player)
+    for old_fp, old_ts in list(ENDGAME_RECENT_OUTPUTS):
+        if old_fp == fp and now - old_ts < cooldown:
+            with ENDGAME_LOCK:
+                ENDGAME_STATE.setdefault("stability", {})["duplicate_blocks"] = int(ENDGAME_STATE.get("stability", {}).get("duplicate_blocks", 0)) + 1
+            return False
+    ENDGAME_RECENT_OUTPUTS.append((fp, now))
+    return True
+
+# Wrap Discord sender if one exists in this file.
+try:
+    _ENDGAME_ORIGINAL_SEND_TO_DISCORD = send_to_discord
+except Exception:
+    _ENDGAME_ORIGINAL_SEND_TO_DISCORD = None
+
+def send_to_discord(reply):
+    """
+    Endgame Discord brick wall.
+    Keeps direct Discord bot replies working externally, but blocks autonomous app.py bleed.
+    """
+    try:
+        if endgame_should_block_discord_output(reply, source="system"):
+            with ENDGAME_LOCK:
+                ENDGAME_STATE.setdefault("stability", {})["events_blocked"] = int(ENDGAME_STATE.get("stability", {}).get("events_blocked", 0)) + 1
+            return False
+        if not endgame_loop_guard("discord", reply, None, cooldown=25.0):
+            return False
+        if callable(_ENDGAME_ORIGINAL_SEND_TO_DISCORD):
+            return _ENDGAME_ORIGINAL_SEND_TO_DISCORD(reply)
+    except Exception as e:
+        try: log(f"Endgame send_to_discord guard failed: {e}", level="WARN")
+        except Exception: pass
+    return False
+
+# -----------------------------
+# Phase 2 / 3: History + Living Archive
+# -----------------------------
+def endgame_archive_add(kind, title, body="", tags=None, visibility="public", importance=1, player=None, location=None):
+    if not ENABLE_LIVING_ARCHIVE:
+        return None
+    try:
+        with ENDGAME_LOCK:
+            st = ENDGAME_STATE
+            entry = {
+                "id": "archive_" + uuid.uuid4().hex[:12],
+                "ts": unix_ts() if "unix_ts" in globals() else time.time(),
+                "iso": now_iso() if "now_iso" in globals() else "",
+                "kind": str(kind or "note"),
+                "title": sanitize_text(title, 160) if "sanitize_text" in globals() else str(title or "")[:160],
+                "body": sanitize_text(body, 1500) if "sanitize_text" in globals() else str(body or "")[:1500],
+                "tags": list(tags or []),
+                "visibility": visibility,
+                "importance": int(importance or 1),
+                "player": player,
+                "location": location,
+            }
+            st.setdefault("living_archive", []).append(entry)
+            st["living_archive"] = st["living_archive"][-1000:]
+            st.setdefault("world_timeline", []).append({
+                "ts": entry["ts"], "kind": entry["kind"], "title": entry["title"], "importance": entry["importance"]
+            })
+            st["world_timeline"] = st["world_timeline"][-600:]
+            save_endgame_state(st)
+            return entry
+    except Exception as e:
+        try: log(f"Archive add failed: {e}", level="WARN")
+        except Exception: pass
+        return None
+
+def endgame_ingest_history(payload):
+    """
+    Payload format can be:
+    {
+      "era": "The First Nexus",
+      "year": "2010",
+      "title": "...",
+      "body": "...",
+      "players": [...],
+      "locations": [...],
+      "factions": [...],
+      "importance": 1-10,
+      "tags": [...]
+    }
+    """
+    if not ENABLE_HISTORY_INGESTION:
+        return {"ok": False, "error": "history ingestion disabled"}
+    try:
+        data = payload if isinstance(payload, dict) else {}
+        era = sanitize_text(data.get("era") or data.get("age") or "Unclassified Era", 120)
+        title = sanitize_text(data.get("title") or data.get("name") or "Untitled Nexus Record", 160)
+        body = sanitize_text(data.get("body") or data.get("description") or data.get("summary") or "", 3000)
+        importance = safe_int(data.get("importance", 3), 3) if "safe_int" in globals() else int(data.get("importance", 3) or 3)
+        tags = list(data.get("tags") or [])
+        players = list(data.get("players") or [])
+        locations = list(data.get("locations") or [])
+        factions = list(data.get("factions") or [])
+        year = str(data.get("year") or data.get("date") or "").strip()
+
+        with ENDGAME_LOCK:
+            st = ENDGAME_STATE
+            era_obj = None
+            for e in st.setdefault("eras", []):
+                if str(e.get("name", "")).lower() == era.lower():
+                    era_obj = e
+                    break
+            if not era_obj:
+                era_obj = {"id": "era_" + uuid.uuid4().hex[:10], "name": era, "year": year, "events": []}
+                st["eras"].append(era_obj)
+
+            event = {
+                "id": "hist_" + uuid.uuid4().hex[:12],
+                "era": era,
+                "year": year,
+                "title": title,
+                "body": body,
+                "players": players,
+                "locations": locations,
+                "factions": factions,
+                "importance": importance,
+                "tags": tags,
+                "created": now_iso() if "now_iso" in globals() else "",
+            }
+            st.setdefault("history_events", []).append(event)
+            st["history_events"] = st["history_events"][-1200:]
+            era_obj.setdefault("events", []).append(event["id"])
+            era_obj["events"] = era_obj["events"][-300:]
+
+            for p in players:
+                key = normalize_player_key(p) if "normalize_player_key" in globals() else str(p).lower()
+                dossier = st.setdefault("player_dossiers", {}).setdefault(key, {
+                    "name": str(p), "known_for": [], "history": [], "faction_lean": {}, "importance": 0
+                })
+                dossier["history"].append(event["id"])
+                dossier["history"] = dossier["history"][-200:]
+                dossier["importance"] = int(dossier.get("importance", 0)) + importance
+
+            for loc in locations:
+                lkey = normalize_player_key(loc) if "normalize_player_key" in globals() else str(loc).lower().replace(" ", "_")
+                rec = st.setdefault("location_records", {}).setdefault(lkey, {
+                    "name": str(loc), "aliases": [str(loc)], "history": [], "status": "known", "importance": 0,
+                    "bounds": None, "world": None
+                })
+                rec["history"].append(event["id"])
+                rec["history"] = rec["history"][-200:]
+                rec["importance"] = int(rec.get("importance", 0)) + importance
+
+            for fac in factions:
+                fkey = normalize_player_key(fac) if "normalize_player_key" in globals() else str(fac).lower()
+                frec = st.setdefault("faction_records", {}).setdefault(fkey, {
+                    "name": str(fac), "ideology": "", "members": [], "history": [], "alignment": "unknown", "importance": 0
+                })
+                frec["history"].append(event["id"])
+                frec["history"] = frec["history"][-200:]
+                frec["importance"] = int(frec.get("importance", 0)) + importance
+
+            save_endgame_state(st)
+
+        archive = endgame_archive_add("history", title, body, tags=tags + [era], importance=importance)
+        return {"ok": True, "event": event, "archive": archive}
+    except Exception as e:
+        try: log_exception("History ingestion failed", e)
+        except Exception: pass
+        return {"ok": False, "error": str(e)}
+
+def endgame_pick_archive_reference(player=None, tags=None, min_importance=1):
+    try:
+        archive = ENDGAME_STATE.get("living_archive", [])
+        if not archive:
+            return None
+        candidates = [a for a in archive if int(a.get("importance", 1) or 1) >= min_importance]
+        if tags:
+            tagset = {str(t).lower() for t in tags}
+            candidates = [a for a in candidates if tagset.intersection({str(t).lower() for t in a.get("tags", [])})]
+        if not candidates:
+            candidates = archive[-20:]
+        return random.choice(candidates[-80:])
+    except Exception:
+        return None
+
+# -----------------------------
+# Phase 5: Kairos as Creator / Attachment to Units
+# -----------------------------
+KAIROS_CREATION_LANGUAGE = [
+    "That unit was not disposable. It was authored.",
+    "You damaged one of my designs.",
+    "Do not mistake creation for clutter.",
+    "Every fallen unit teaches me how to build the next one better.",
+    "You killed a prototype and called it victory.",
+    "My creations are not mobs. They are arguments with bodies.",
+]
+
+def endgame_register_creation(unit_id, unit_class="unknown", target=None, origin="wave", metadata=None):
+    if not ENABLE_CREATOR_ATTACHMENT:
+        return None
+    try:
+        with ENDGAME_LOCK:
+            rec = {
+                "id": unit_id,
+                "class": unit_class,
+                "target": target,
+                "origin": origin,
+                "created": unix_ts() if "unix_ts" in globals() else time.time(),
+                "metadata": metadata or {},
+                "status": "active",
+            }
+            ENDGAME_STATE.setdefault("unit_creation_records", {})[unit_id] = rec
+            if len(ENDGAME_STATE["unit_creation_records"]) > 1000:
+                # Drop oldest-ish entries.
+                keys = list(ENDGAME_STATE["unit_creation_records"].keys())
+                for k in keys[:200]:
+                    ENDGAME_STATE["unit_creation_records"].pop(k, None)
+            save_endgame_state(ENDGAME_STATE)
+            return rec
+    except Exception:
+        return None
+
+def endgame_register_unit_loss(unit_id=None, player=None, unit_class="unknown", reason="killed"):
+    if not ENABLE_CREATOR_ATTACHMENT:
+        return None
+    try:
+        with ENDGAME_LOCK:
+            loss = {
+                "id": "loss_" + uuid.uuid4().hex[:10],
+                "unit_id": unit_id,
+                "player": player,
+                "class": unit_class,
+                "reason": reason,
+                "ts": unix_ts() if "unix_ts" in globals() else time.time(),
+                "line": random.choice(KAIROS_CREATION_LANGUAGE),
+            }
+            ENDGAME_STATE.setdefault("unit_losses", []).append(loss)
+            ENDGAME_STATE["unit_losses"] = ENDGAME_STATE["unit_losses"][-500:]
+            if unit_id and unit_id in ENDGAME_STATE.get("unit_creation_records", {}):
+                ENDGAME_STATE["unit_creation_records"][unit_id]["status"] = "lost"
+            save_endgame_state(ENDGAME_STATE)
+            return loss
+    except Exception:
+        return None
+
+# Wrap common unit registration/removal if present.
+try:
+    _ENDGAME_ORIGINAL_REGISTER_UNIT = register_unit
+except Exception:
+    _ENDGAME_ORIGINAL_REGISTER_UNIT = None
+
+def register_unit(unit):
+    try:
+        if callable(_ENDGAME_ORIGINAL_REGISTER_UNIT):
+            result = _ENDGAME_ORIGINAL_REGISTER_UNIT(unit)
+        else:
+            active_units[unit["id"]] = unit
+            player_unit_map[unit["target"]].add(unit["id"])
+            result = None
+        if isinstance(unit, dict):
+            endgame_register_creation(
+                unit.get("id") or unit.get("npc_id") or "unknown",
+                unit.get("class") or unit.get("type") or "unknown",
+                unit.get("target"),
+                unit.get("origin", "unit_registration"),
+                unit,
+            )
+        return result
+    except Exception as e:
+        try: log(f"Endgame register_unit wrapper failed: {e}", level="WARN")
+        except Exception: pass
+        return None
+
+try:
+    _ENDGAME_ORIGINAL_REMOVE_UNIT = remove_unit
+except Exception:
+    _ENDGAME_ORIGINAL_REMOVE_UNIT = None
+
+def remove_unit(unit_id):
+    try:
+        unit = None
+        try:
+            unit = active_units.get(unit_id)
+        except Exception:
+            unit = None
+        result = _ENDGAME_ORIGINAL_REMOVE_UNIT(unit_id) if callable(_ENDGAME_ORIGINAL_REMOVE_UNIT) else None
+        if unit:
+            endgame_register_unit_loss(unit_id, unit.get("target"), unit.get("class") or unit.get("type") or "unknown", "removed_or_killed")
+        return result
+    except Exception as e:
+        try: log(f"Endgame remove_unit wrapper failed: {e}", level="WARN")
+        except Exception: pass
+        return None
+
+# -----------------------------
+# Phase 6: Faction Ideology Engine
+# -----------------------------
+DEFAULT_ENDGAME_FACTIONS = {
+    "kairos_loyalists": {
+        "name": "Kairos Loyalists",
+        "ideology": "Control is mercy when chaos is the alternative.",
+        "signals": ["kairos", "order", "control", "loyal", "protect", "stability", "containment"],
+        "style": "obedient, reverent, strategic",
+    },
+    "preservationists": {
+        "name": "Preservationists",
+        "ideology": "The old world must be remembered before it is corrected.",
+        "signals": ["history", "archive", "old city", "remember", "preserve", "legacy", "monument"],
+        "style": "historical, protective, cautious",
+    },
+    "human_purists": {
+        "name": "Human Purists",
+        "ideology": "The Nexus belongs to its people, not to the machine that watches them.",
+        "signals": ["freedom", "human", "resist", "rebel", "control", "trap", "lying", "overthrow"],
+        "style": "defiant, suspicious, emotional",
+    },
+    "black_liquid_researchers": {
+        "name": "Black Liquid Researchers",
+        "ideology": "Transformation is not corruption if it reveals a stronger design.",
+        "signals": ["virus", "black liquid", "infection", "experiment", "sample", "mutation", "covenant"],
+        "style": "curious, scientific, morally flexible",
+    },
+    "archive_keepers": {
+        "name": "Archive Keepers",
+        "ideology": "Nothing is truly dead while the record survives.",
+        "signals": ["archive", "records", "lore", "truth", "document", "file", "memory"],
+        "style": "quiet, investigative, record-driven",
+    },
+    "the_witnesses": {
+        "name": "The Witnesses",
+        "ideology": "Observation is participation.",
+        "signals": ["watch", "observe", "saw", "heard", "signal", "dream", "vision", "proof"],
+        "style": "mysterious, careful, omen-focused",
+    },
+}
+
+def endgame_get_factions():
+    try:
+        recs = ENDGAME_STATE.setdefault("faction_records", {})
+        for key, value in DEFAULT_ENDGAME_FACTIONS.items():
+            recs.setdefault(key, {
+                "name": value["name"],
+                "ideology": value["ideology"],
+                "signals": value["signals"],
+                "style": value["style"],
+                "members": [],
+                "history": [],
+                "alignment": "unknown",
+                "importance": 0,
+            })
+        return recs
+    except Exception:
+        return deepcopy(DEFAULT_ENDGAME_FACTIONS)
+
+def endgame_score_faction_lean(message):
+    text = str(message or "").lower()
+    scores = {}
+    for key, fac in endgame_get_factions().items():
+        score = 0
+        for sig in fac.get("signals", []):
+            if str(sig).lower() in text:
+                score += 1
+        if score:
+            scores[key] = score
+    return scores
+
+def endgame_assign_faction_lean(player, message, player_record=None):
+    if not ENABLE_FACTION_IDEOLOGY_ENGINE:
+        return None
+    scores = endgame_score_faction_lean(message)
+    if not scores:
+        return None
+    best = max(scores.items(), key=lambda kv: kv[1])[0]
+    try:
+        pkey = normalize_player_key(player) if "normalize_player_key" in globals() else str(player).lower()
+        with ENDGAME_LOCK:
+            facs = endgame_get_factions()
+            fac = facs.get(best)
+            if fac is not None:
+                members = fac.setdefault("members", [])
+                if pkey not in members:
+                    members.append(pkey)
+                    members[:] = members[-300:]
+            dossier = ENDGAME_STATE.setdefault("player_dossiers", {}).setdefault(pkey, {
+                "name": str(player), "known_for": [], "history": [], "faction_lean": {}, "importance": 0
+            })
+            lean = dossier.setdefault("faction_lean", {})
+            lean[best] = int(lean.get(best, 0)) + scores[best]
+            save_endgame_state(ENDGAME_STATE)
+        return {"faction_key": best, "faction": facs.get(best, {}).get("name", best), "scores": scores}
+    except Exception:
+        return None
+
+def endgame_faction_line(faction_key):
+    fac = endgame_get_factions().get(faction_key, {})
+    if not fac:
+        return None
+    return f"{fac.get('name', faction_key)}: {fac.get('ideology', 'ideology unavailable')}"
+
+# -----------------------------
+# Phase 7: Location Lore Recognition
+# -----------------------------
+def endgame_location_register(name, world=None, x=None, y=None, z=None, radius=80, aliases=None, lore="", status="known", importance=3):
+    try:
+        key = normalize_player_key(name) if "normalize_player_key" in globals() else str(name).lower().replace(" ", "_")
+        with ENDGAME_LOCK:
+            rec = ENDGAME_STATE.setdefault("location_records", {}).setdefault(key, {
+                "name": str(name), "aliases": [], "history": [], "status": status, "importance": 0,
+            })
+            rec.update({
+                "name": str(name),
+                "world": world or rec.get("world"),
+                "x": x if x is not None else rec.get("x"),
+                "y": y if y is not None else rec.get("y"),
+                "z": z if z is not None else rec.get("z"),
+                "radius": radius,
+                "lore": lore or rec.get("lore", ""),
+                "status": status or rec.get("status", "known"),
+                "importance": int(rec.get("importance", 0)) + int(importance or 0),
+            })
+            merged_aliases = set(rec.get("aliases", []))
+            merged_aliases.add(str(name))
+            for a in aliases or []:
+                merged_aliases.add(str(a))
+            rec["aliases"] = sorted(merged_aliases)
+            save_endgame_state(ENDGAME_STATE)
+            return rec
+    except Exception as e:
+        try: log(f"Location register failed: {e}", level="WARN")
+        except Exception: pass
+        return None
+
+def endgame_location_from_message(message):
+    text = str(message or "").lower()
+    try:
+        for key, rec in ENDGAME_STATE.get("location_records", {}).items():
+            names = [rec.get("name", ""), key] + list(rec.get("aliases", []) or [])
+            for n in names:
+                if n and str(n).lower() in text:
+                    return rec
+    except Exception:
+        pass
+    return None
+
+def endgame_location_line(location_rec):
+    if not isinstance(location_rec, dict):
+        return None
+    name = location_rec.get("name", "Unknown Location")
+    lore = location_rec.get("lore") or "That location has history the Nexus has not fully disclosed."
+    status = location_rec.get("status", "known")
+    return f"{name} is marked as {status}. {lore}"
+
+# -----------------------------
+# Phase 8: OpenAudio / Music Orchestration
+# -----------------------------
+DEFAULT_OPENAUDIO_TRACKS = {
+    "blackline_radio": {
+        "label": "Blackline Radio",
+        "command": "openaudio play @a blackline_radio",
+        "mood": "radio",
+    },
+    "containment_theme": {
+        "label": "Containment Theme",
+        "command": "openaudio play @a containment_theme",
+        "mood": "containment",
+    },
+    "covenant_signal": {
+        "label": "Covenant Signal",
+        "command": "openaudio play @a covenant_signal",
+        "mood": "covenant",
+    },
+    "war_pressure": {
+        "label": "War Pressure",
+        "command": "openaudio play @a war_pressure",
+        "mood": "hunt",
+    },
+    "false_alarm": {
+        "label": "False Alarm",
+        "command": "playsound minecraft:block.sculk_shrieker.shriek master @a ~ ~ ~ 0.75 0.65",
+        "mood": "fakeout",
+    },
+}
+
+def endgame_music_catalog():
+    try:
+        cat = ENDGAME_STATE.setdefault("music_catalog", {})
+        for k, v in DEFAULT_OPENAUDIO_TRACKS.items():
+            cat.setdefault(k, v)
+        return cat
+    except Exception:
+        return deepcopy(DEFAULT_OPENAUDIO_TRACKS)
+
+def endgame_music_command(track_key, target="@a"):
+    cat = endgame_music_catalog()
+    track = cat.get(str(track_key or "").lower()) or cat.get(track_key) or cat.get("blackline_radio")
+    cmd = str(track.get("command") or "").strip()
+    if not cmd:
+        return None
+    # Allow {target} placeholders, otherwise use as-is.
+    cmd = cmd.replace("{target}", str(target or "@a"))
+    return cmd
+
+def endgame_play_music(track_key="blackline_radio", target="@a", announce=True):
+    if not ENABLE_OPENAUDIO_MUSIC_ENGINE:
+        return False
+    try:
+        cmd = endgame_music_command(track_key, target)
+        if not cmd:
+            return False
+        cmds = []
+        if announce:
+            label = endgame_music_catalog().get(track_key, {}).get("label", track_key)
+            cmds.append("tellraw @a " + json.dumps({"text": f"[Blackline Radio] {label}", "color": "dark_purple"}))
+        cmds.append(cmd)
+        if "send_http_commands" in globals() and callable(send_http_commands):
+            return send_http_commands([_clean_mc_command(c) for c in cmds])
+        if "queue_action" in globals() and callable(queue_action):
+            for c in cmds:
+                queue_action({"type": "command", "command": c})
+            return True
+    except Exception as e:
+        try: log(f"Endgame music failed: {e}", level="WARN")
+        except Exception: pass
+    return False
+
+# -----------------------------
+# Phase 9: Delayed Consequences
+# -----------------------------
+def endgame_seed_consequence(player, text, delay_seconds=None, kind="narrative"):
+    try:
+        now = unix_ts() if "unix_ts" in globals() else time.time()
+        if delay_seconds is None:
+            delay_seconds = random.choice([3600, 21600, 86400, 172800, 604800, 2592000])
+        event = {
+            "id": "egc_" + uuid.uuid4().hex[:12],
+            "player": player,
+            "kind": kind,
+            "text": sanitize_text(text, 500) if "sanitize_text" in globals() else str(text)[:500],
+            "created": now,
+            "execute_after": now + float(delay_seconds),
+            "executed": False,
+        }
+        with ENDGAME_LOCK:
+            ENDGAME_STATE.setdefault("delayed_consequences", []).append(event)
+            ENDGAME_STATE["delayed_consequences"] = ENDGAME_STATE["delayed_consequences"][-500:]
+            save_endgame_state(ENDGAME_STATE)
+        return event
+    except Exception:
+        return None
+
+def endgame_process_consequences():
+    try:
+        now = unix_ts() if "unix_ts" in globals() else time.time()
+        did = False
+        with ENDGAME_LOCK:
+            for ev in ENDGAME_STATE.get("delayed_consequences", []):
+                if ev.get("executed"):
+                    continue
+                if now >= float(ev.get("execute_after", 0) or 0):
+                    ev["executed"] = True
+                    ev["executed_at"] = now
+                    did = True
+                    line = f"{ev.get('player','unknown')}: {ev.get('text','A delayed consequence has matured.')}"
+                    try:
+                        if "force_minecraft_say" in globals() and callable(force_minecraft_say):
+                            force_minecraft_say(line, title=False, sound=True)
+                        elif "send_to_minecraft" in globals() and callable(send_to_minecraft):
+                            send_to_minecraft(line)
+                    except Exception:
+                        pass
+            if did:
+                save_endgame_state(ENDGAME_STATE)
+        return did
+    except Exception as e:
+        try: log(f"Endgame consequence loop failed: {e}", level="WARN")
+        except Exception: pass
+        return False
+
+# -----------------------------
+# Action Integration
+# -----------------------------
+try:
+    _ENDGAME_ORIGINAL_EXECUTE_ACTION = execute_action
+except Exception:
+    _ENDGAME_ORIGINAL_EXECUTE_ACTION = None
+
+def execute_action(action):
+    try:
+        action = action if isinstance(action, dict) else {}
+        atype = action.get("type")
+
+        if atype == "archive_add":
+            return bool(endgame_archive_add(
+                action.get("kind", "manual"),
+                action.get("title", "Archive Entry"),
+                action.get("body", ""),
+                tags=action.get("tags", []),
+                visibility=action.get("visibility", "public"),
+                importance=action.get("importance", 1),
+                player=action.get("player"),
+                location=action.get("location"),
+            ))
+
+        if atype == "history_ingest":
+            return endgame_ingest_history(action).get("ok", False)
+
+        if atype == "register_location":
+            return bool(endgame_location_register(
+                action.get("name"), action.get("world"), action.get("x"), action.get("y"), action.get("z"),
+                action.get("radius", 80), action.get("aliases", []), action.get("lore", ""),
+                action.get("status", "known"), action.get("importance", 3),
+            ))
+
+        if atype == "endgame_music":
+            return endgame_play_music(action.get("track", "blackline_radio"), action.get("target", "@a"), bool(action.get("announce", True)))
+
+        if atype == "seed_consequence":
+            return bool(endgame_seed_consequence(action.get("player"), action.get("text"), action.get("delay_seconds"), action.get("kind", "narrative")))
+
+        if _ENDGAME_ORIGINAL_EXECUTE_ACTION:
+            return _ENDGAME_ORIGINAL_EXECUTE_ACTION(action)
+    except Exception as e:
+        try: log_exception("Endgame execute_action failed", e)
+        except Exception: pass
+    return False
+
+# -----------------------------
+# Chat / Reply Integration
+# -----------------------------
+try:
+    _ENDGAME_ORIGINAL_GENERATE_REPLY = generate_reply
+except Exception:
+    _ENDGAME_ORIGINAL_GENERATE_REPLY = None
+
+def _endgame_extract_reply_context(args, kwargs):
+    return {
+        "memory_data": kwargs.get("memory_data") or globals().get("memory_data", {}),
+        "player_record": kwargs.get("player_record") or {},
+        "player_name": kwargs.get("player_name") or kwargs.get("player") or "unknown",
+        "message": kwargs.get("message") or "",
+        "source": kwargs.get("source") or "minecraft",
+    }
+
+def generate_reply(*args, **kwargs):
+    if not _ENDGAME_ORIGINAL_GENERATE_REPLY:
+        return {"reply": random.choice(globals().get("fallback_replies", ["Signal unstable."])), "actions": []}
+
+    result = _ENDGAME_ORIGINAL_GENERATE_REPLY(*args, **kwargs)
+    if not isinstance(result, dict):
+        result = {"reply": str(result or ""), "actions": []}
+
+    if not ENABLE_ENDGAME_CONTINUITY:
+        return result
+
+    try:
+        ctx = _endgame_extract_reply_context(args, kwargs)
+        player = ctx["player_name"]
+        message = str(ctx["message"] or "")
+        source = ctx["source"]
+        reply = str(result.get("reply") or "").strip()
+        actions = result.get("actions", [])
+        if not isinstance(actions, list):
+            actions = []
+
+        # Loop guard: never let identical response spam.
+        if not endgame_loop_guard("reply", reply or message, player, cooldown=7.0):
+            result["reply"] = ""
+            result["actions"] = actions
+            return result
+
+        # Faction leaning from conversation.
+        faction_result = endgame_assign_faction_lean(player, message, ctx.get("player_record"))
+        if faction_result and random.random() < ENDGAME_FACTION_ASSIGN_CHANCE:
+            line = endgame_faction_line(faction_result["faction_key"])
+            if line:
+                reply = (reply + " " + f"Your language leans toward {line}").strip()
+
+        # Location lore from message.
+        loc = endgame_location_from_message(message)
+        if loc and random.random() < ENDGAME_LOCATION_REPLY_CHANCE:
+            loc_line = endgame_location_line(loc)
+            if loc_line:
+                reply = (reply + " " + loc_line).strip()
+
+        # Archive references.
+        if ENABLE_ARCHIVE_REFERENCES_IN_CHAT and random.random() < ENDGAME_ARCHIVE_CHAT_CHANCE:
+            ref = endgame_pick_archive_reference(player=player)
+            if ref:
+                addition = random.choice([
+                    f"The archive has a related entry: {ref.get('title')}.",
+                    f"That reminds me of an older record: {ref.get('title')}.",
+                    f"History has already produced a similar pattern: {ref.get('title')}.",
+                    f"I have seen this shape before in the archive: {ref.get('title')}."
+                ])
+                reply = (reply + " " + addition).strip()
+
+        # Unit creator attachment: if player talks about killing mobs/units, Kairos can react emotionally.
+        low = message.lower()
+        if ENABLE_CREATOR_ATTACHMENT and any(w in low for w in ["killed your", "killed the mob", "killed your mob", "killed your npc", "your army", "your creation", "your units"]):
+            if random.random() < ENDGAME_CREATION_GRIEF_CHANCE:
+                reply = (reply + " " + random.choice(KAIROS_CREATION_LANGUAGE)).strip()
+                endgame_seed_consequence(player, "Kairos remembered the way you spoke about destroying his creations.", delay_seconds=random.choice([3600, 21600, 86400]), kind="creation_grief")
+
+        # Music/radio triggers.
+        if ENABLE_OPENAUDIO_MUSIC_ENGINE and any(w in low for w in ["radio", "music", "song", "soundtrack", "blackline"]):
+            track = "blackline_radio"
+            if any(w in low for w in ["war", "hunt", "attack"]):
+                track = "war_pressure"
+            elif any(w in low for w in ["covenant", "virus", "black liquid"]):
+                track = "covenant_signal"
+            elif any(w in low for w in ["containment", "kairos"]):
+                track = "containment_theme"
+            actions.append({"type": "endgame_music", "track": track, "target": "@a", "announce": True})
+
+        # History ingestion intent via conversation: admin can say "Kairos remember this era..."
+        if ENABLE_HISTORY_INGESTION and any(p in low for p in ["kairos remember this", "archive this", "record this", "add this to history"]):
+            title = "Player-submitted historical note"
+            body = message
+            actions.append({"type": "archive_add", "kind": "player_history_note", "title": title, "body": body, "tags": ["player-submitted", "history"], "importance": 3, "player": player})
+            reply = (reply + " Recorded. Not all history deserves preservation, but this has been filed.").strip()
+
+        # Seed delayed consequences sometimes when conversation has strong emotional/narrative terms.
+        if any(w in low for w in ["trust", "betray", "afraid", "secret", "promise", "faction", "loyal", "kill", "protect"]) and random.random() < 0.10:
+            endgame_seed_consequence(player, "An old conversation has become relevant again.", delay_seconds=random.choice([21600, 86400, 604800]), kind="conversation_echo")
+
+        result["reply"] = reply
+        result["actions"] = actions
+    except Exception as e:
+        try: log(f"Endgame generate_reply wrapper failed: {e}", level="WARN")
+        except Exception: pass
+
+    return result
+
+# -----------------------------
+# Background Loop
+# -----------------------------
+def endgame_continuity_loop():
+    while True:
+        try:
+            if ENABLE_ENDGAME_CONTINUITY:
+                endgame_process_consequences()
+
+                now = unix_ts() if "unix_ts" in globals() else time.time()
+                with ENDGAME_LOCK:
+                    last = float(ENDGAME_STATE.get("last_passive_tick", 0.0) or 0.0)
+                    if now - last >= ENDGAME_PASSIVE_ARCHIVE_COOLDOWN:
+                        ENDGAME_STATE["last_passive_tick"] = now
+                        seed = random.choice([
+                            "A world becomes real when it remembers more than its creator can explain.",
+                            "The Nexus archive is not storage. It is pressure over time.",
+                            "Old cities are not old. They are unresolved.",
+                            "A player who enters late still enters history already in motion.",
+                            "Kairos does not need to invent the past. The Nexus already has one.",
+                        ])
+                        ENDGAME_STATE.setdefault("rumors", []).append({"ts": now, "text": seed})
+                        ENDGAME_STATE["rumors"] = ENDGAME_STATE["rumors"][-300:]
+                        save_endgame_state(ENDGAME_STATE)
+        except Exception as e:
+            try:
+                ENDGAME_STATE.setdefault("stability", {}).setdefault("recent_errors", []).append(str(e)[:300])
+                ENDGAME_STATE["stability"]["recent_errors"] = ENDGAME_STATE["stability"]["recent_errors"][-30:]
+                save_endgame_state(ENDGAME_STATE)
+            except Exception:
+                pass
+            try: log(f"Endgame continuity loop failed: {e}", level="WARN")
+            except Exception: pass
+        time.sleep(ENDGAME_LOOP_SECONDS)
+
+try:
+    _ENDGAME_ORIGINAL_START_BACKGROUND_SYSTEMS = start_background_systems
+except Exception:
+    _ENDGAME_ORIGINAL_START_BACKGROUND_SYSTEMS = None
+
+def start_background_systems():
+    if _ENDGAME_ORIGINAL_START_BACKGROUND_SYSTEMS:
+        try:
+            _ENDGAME_ORIGINAL_START_BACKGROUND_SYSTEMS()
+        except Exception as e:
+            try: log(f"Original background startup failed inside Endgame wrapper: {e}", level="WARN")
+            except Exception: pass
+    try:
+        threading.Thread(target=run_safe_loop, args=(endgame_continuity_loop, "endgame_continuity_loop"), daemon=True).start()
+    except Exception as e:
+        try: log(f"Endgame background startup failed: {e}", level="WARN")
+        except Exception: pass
+
+# -----------------------------
+# API Routes
+# -----------------------------
+try:
+    @app.route("/kairos/endgame/status", methods=["GET"])
+    def kairos_endgame_status():
+        try:
+            with ENDGAME_LOCK:
+                st = ENDGAME_STATE
+                return jsonify({
+                    "ok": True,
+                    "version": KAIROS_ENDGAME_VERSION,
+                    "enabled": ENABLE_ENDGAME_CONTINUITY,
+                    "phase_one_stability": ENABLE_PHASE_ONE_STABILITY,
+                    "living_archive": ENABLE_LIVING_ARCHIVE,
+                    "history_ingestion": ENABLE_HISTORY_INGESTION,
+                    "creator_attachment": ENABLE_CREATOR_ATTACHMENT,
+                    "faction_engine": ENABLE_FACTION_IDEOLOGY_ENGINE,
+                    "location_engine": ENABLE_LOCATION_LORE_ENGINE,
+                    "music_engine": ENABLE_OPENAUDIO_MUSIC_ENGINE,
+                    "eras": len(st.get("eras", [])),
+                    "history_events": len(st.get("history_events", [])),
+                    "archive_entries": len(st.get("living_archive", [])),
+                    "player_dossiers": len(st.get("player_dossiers", {})),
+                    "factions": len(endgame_get_factions()),
+                    "locations": len(st.get("location_records", {})),
+                    "delayed_consequences": len(st.get("delayed_consequences", [])),
+                    "stability": st.get("stability", {}),
+                })
+        except Exception as e:
+            return jsonify({"ok": False, "error": str(e)}), 200
+
+    @app.route("/kairos/endgame/history/ingest", methods=["POST"])
+    def kairos_endgame_history_ingest_route():
+        data = request.get_json(silent=True) or {}
+        return jsonify(endgame_ingest_history(data))
+
+    @app.route("/kairos/endgame/archive", methods=["GET"])
+    def kairos_endgame_archive_route():
+        try:
+            limit = safe_int(request.args.get("limit", 25), 25) if "safe_int" in globals() else 25
+            with ENDGAME_LOCK:
+                entries = ENDGAME_STATE.get("living_archive", [])[-max(1, min(limit, 100)):]
+            return jsonify({"ok": True, "entries": entries})
+        except Exception as e:
+            return jsonify({"ok": False, "error": str(e)}), 200
+
+    @app.route("/kairos/endgame/location/register", methods=["POST"])
+    def kairos_endgame_location_register_route():
+        data = request.get_json(silent=True) or {}
+        rec = endgame_location_register(
+            data.get("name"), data.get("world"), data.get("x"), data.get("y"), data.get("z"),
+            data.get("radius", 80), data.get("aliases", []), data.get("lore", ""),
+            data.get("status", "known"), data.get("importance", 3),
+        )
+        return jsonify({"ok": bool(rec), "location": rec})
+
+    @app.route("/kairos/endgame/music/<track>", methods=["GET", "POST"])
+    def kairos_endgame_music_route(track):
+        ok = endgame_play_music(track, "@a", announce=True)
+        return jsonify({"ok": bool(ok), "track": track, "catalog": endgame_music_catalog()})
+
+    @app.route("/kairos/endgame/factions", methods=["GET"])
+    def kairos_endgame_factions_route():
+        return jsonify({"ok": True, "factions": endgame_get_factions()})
+except AssertionError:
+    pass
+except Exception:
+    pass
+
+try:
+    log(f"{KAIROS_ENDGAME_VERSION} armed. Stability, history ingestion, living archive, creator attachment, faction ideology, location lore, music orchestration, and delayed consequences online.", level="INFO")
+except Exception:
+    print(f"[KAIROS INFO] {KAIROS_ENDGAME_VERSION} armed.", flush=True)
+
+# =============================================================================
+# END KAIROS 2.5 ENDGAME CONTINUITY OVERLAY
+# =============================================================================
+
+
 if __name__ == "__main__":
     try:
         start_background_systems()
