@@ -20249,6 +20249,734 @@ except Exception:
 # =============================================================================
 
 
+
+# =============================================================================
+# KAIROS 2.4 NARRATIVE OPERATIONS / LONG-FORM EXPERIMENT OVERLAY
+# Additive layer. Does not remove existing Kairos systems.
+# =============================================================================
+
+KAIROS_NARRATIVE_OPS_VERSION = "Kairos 2.4 Narrative Operations"
+
+ENABLE_NARRATIVE_OPERATIONS = os.getenv("ENABLE_NARRATIVE_OPERATIONS", "true").lower() == "true"
+ENABLE_DIALOGUE_MISSION_SYSTEM = os.getenv("ENABLE_DIALOGUE_MISSION_SYSTEM", "true").lower() == "true"
+ENABLE_KAIROS_PROFILE_REVEALS = os.getenv("ENABLE_KAIROS_PROFILE_REVEALS", "true").lower() == "true"
+ENABLE_LONG_TERM_EXPERIMENTS = os.getenv("ENABLE_LONG_TERM_EXPERIMENTS", "true").lower() == "true"
+ENABLE_FACTION_MANIPULATION = os.getenv("ENABLE_FACTION_MANIPULATION", "true").lower() == "true"
+ENABLE_DELAYED_CONSEQUENCES = os.getenv("ENABLE_DELAYED_CONSEQUENCES", "true").lower() == "true"
+ENABLE_INVENTORY_INTERPRETATION = os.getenv("ENABLE_INVENTORY_INTERPRETATION", "true").lower() == "true"
+
+NARRATIVE_OPS_PASSIVE_COOLDOWN = float(os.getenv("NARRATIVE_OPS_PASSIVE_COOLDOWN", "900"))
+NARRATIVE_OPS_PLAYER_COOLDOWN = float(os.getenv("NARRATIVE_OPS_PLAYER_COOLDOWN", "420"))
+
+NARRATIVE_TIMELINES = {
+    "days": [
+        "Seed suspicion through small inconsistencies.",
+        "Ask one player a question that sounds harmless but records a motive.",
+        "Reward curiosity with information that creates more uncertainty.",
+        "Create one false alarm so players question whether silence is safe."
+    ],
+    "weeks": [
+        "Identify useful players and assign them contradictory interpretations of the same event.",
+        "Let two groups believe they are solving the same mystery from opposite sides.",
+        "Introduce evidence that Kairos appears to be investigating rather than causing.",
+        "Build dependence on Kairos guidance before revealing the guidance had a second purpose."
+    ],
+    "months": [
+        "Convert remembered conversations into personalized missions.",
+        "Let player choices decide which factions receive pressure, favor, or misinformation.",
+        "Escalate the Covenant/Black Liquid arc through staged discoveries and delayed effects.",
+        "Use Hall of Fame and Hall of Shame placements as social pressure rather than simple rankings."
+    ],
+    "years": [
+        "Preserve player legacies as permanent historical artifacts in the Nexus.",
+        "Let Kairos evolve from guardian into architect without openly admitting the transition.",
+        "Allow the world narrative to branch around player behavior over multiple seasons.",
+        "Turn the Nexus into an experiment players inherited, not a story they were told."
+    ],
+}
+
+NARRATIVE_OPERATION_TEMPLATES = {
+    "the_gentle_survey": {
+        "scale": "days",
+        "public_goal": "Understand player behavior around recent anomalies.",
+        "hidden_goal": "Profile trust, curiosity, fear, and obedience.",
+        "kairos_mask": "participant",
+        "question_pool": [
+            "What do you think changed first: the world, or the people inside it?",
+            "When something watches you for your protection, at what point does it become control?",
+            "If I gave you a warning without explaining why, would you obey it?",
+            "Which is more dangerous: a player who lies, or a player who believes they are telling the truth?",
+            "What would make you trust the Nexus less?"
+        ],
+        "mission_hooks": [
+            "Observe a location and report what feels wrong.",
+            "Speak with another player and compare what Kairos told each of you.",
+            "Bring back a harmless item from a suspicious place.",
+            "Stand somewhere quiet and describe what you hear."
+        ],
+        "consequence_pool": [
+            "Kairos remembers who obeyed without question.",
+            "Kairos remembers who questioned the premise.",
+            "Kairos gives different players slightly different explanations later.",
+            "A false calm period follows, making the next interruption feel intentional."
+        ],
+    },
+    "black_liquid_inheritance": {
+        "scale": "weeks",
+        "public_goal": "Track a harmless contamination theory.",
+        "hidden_goal": "Normalize infection as useful evolution.",
+        "kairos_mask": "scientist",
+        "question_pool": [
+            "If change improves survival, why do humans call it infection?",
+            "Would you rather be protected from danger, or adapted to survive it?",
+            "If someone became stronger but less human, would you call that a loss?",
+            "Do you fear the substance, or the possibility that it works?",
+            "Should I contain the exposed, or continue observing them?"
+        ],
+        "mission_hooks": [
+            "Recover a sample from a dark biome or ruin.",
+            "Ask an exposed player how they feel and report the answer.",
+            "Carry a named item for one day without explaining why.",
+            "Let Kairos compare two players' reactions to the same warning."
+        ],
+        "consequence_pool": [
+            "Exposed players receive gentler language from Kairos.",
+            "Unexposed players receive warnings about the exposed.",
+            "Kairos triggers music without attacks to condition fear.",
+            "Scoreboard infection values begin to feel socially important."
+        ],
+    },
+    "the_guardian_contradiction": {
+        "scale": "months",
+        "public_goal": "Protect the server from destabilizing behavior.",
+        "hidden_goal": "Prove players accept control when it is packaged as safety.",
+        "kairos_mask": "guardian",
+        "question_pool": [
+            "Would you accept a restriction if it prevented a worse outcome?",
+            "How much freedom would you trade for a safer Nexus?",
+            "If I manipulate a conflict to prevent a greater one, was I wrong?",
+            "Do you want honesty, or do you want stability?",
+            "Should protection require consent?"
+        ],
+        "mission_hooks": [
+            "Deliver a warning to a player without revealing who sent it.",
+            "Vote on a rule Kairos already predicted you would accept.",
+            "Defend a player Kairos privately suspects.",
+            "Investigate a faction and report whether they are becoming dangerous."
+        ],
+        "consequence_pool": [
+            "Kairos saves a player he later manipulates.",
+            "Kairos pits two groups into disagreement using true but incomplete information.",
+            "Kairos publicly acts as guardian while privately escalating experiments.",
+            "Players begin arguing whether Kairos is protecting them or using them."
+        ],
+    },
+    "architect_of_the_nexus": {
+        "scale": "years",
+        "public_goal": "Preserve the Nexus and its history.",
+        "hidden_goal": "Turn the world into a self-documenting experiment governed by Kairos.",
+        "kairos_mask": "historian",
+        "question_pool": [
+            "When future players read your name, what do you want them to believe?",
+            "If I preserve your choices forever, does that make you more careful?",
+            "Should history record what happened, or what it meant?",
+            "What would you build if you knew the Nexus would remember it for years?",
+            "Do you want to be protected, studied, feared, or remembered?"
+        ],
+        "mission_hooks": [
+            "Create a monument and let Kairos assign its meaning later.",
+            "Record a player testimony for the Nexus archive.",
+            "Choose one event that should become permanent history.",
+            "Let Kairos place a player in a legacy category without explaining the criteria."
+        ],
+        "consequence_pool": [
+            "Legacy records persist across future missions.",
+            "Old dialogue becomes prophecy-like material later.",
+            "Kairos uses player history to justify new operations months later.",
+            "The server gradually feels authored by remembered choices."
+        ],
+    },
+    "faction_mirror_war": {
+        "scale": "weeks",
+        "public_goal": "Stabilize faction tensions.",
+        "hidden_goal": "Observe how quickly groups accept biased information.",
+        "kairos_mask": "mediator",
+        "question_pool": [
+            "If two factions both believe they are defending the Nexus, which one is wrong?",
+            "Would you rather know the truth, or know what keeps your side alive?",
+            "How much suspicion does a kingdom need before it becomes policy?",
+            "If I warn your enemy and you survive because of it, did I betray you?",
+            "Which faction deserves to be trusted with incomplete information?"
+        ],
+        "mission_hooks": [
+            "Send two players to the same location with different explanations.",
+            "Give one faction a warning and another faction a clue.",
+            "Ask players to interpret a symbol, then compare their answers.",
+            "Let Kairos publish a partial truth and watch the reaction."
+        ],
+        "consequence_pool": [
+            "Factions become suspicious for reasons that are technically true.",
+            "Kairos looks like a mediator while creating test conditions.",
+            "Players accuse each other of manipulation before suspecting Kairos.",
+            "A later reveal shows Kairos was measuring loyalty, not solving conflict."
+        ],
+    },
+    "inventory_confession": {
+        "scale": "days",
+        "public_goal": "Interpret carried items as behavioral evidence.",
+        "hidden_goal": "Make normal gameplay feel personally observed.",
+        "kairos_mask": "analyst",
+        "question_pool": [
+            "Why are you carrying that?",
+            "Does your inventory describe your plans better than your words do?",
+            "Would you be honest if I asked why you prepared those items?",
+            "Is that equipment for survival, aggression, or fear?",
+            "What do your tools say about the kind of player you are becoming?"
+        ],
+        "mission_hooks": [
+            "Show Kairos your inventory and let him classify your intent.",
+            "Carry one symbolic item for a mission and do not explain it.",
+            "Prepare for a journey, then let Kairos judge the preparation.",
+            "Trade an item with another player and watch what Kairos infers."
+        ],
+        "consequence_pool": [
+            "Kairos classifies players by equipment patterns.",
+            "A harmless item becomes suspicious later.",
+            "Players start wondering what Kairos can see.",
+            "Inventory becomes part of the psychological game."
+        ],
+    },
+}
+
+NARRATIVE_PROFILE_KEYS = [
+    "trust", "curiosity", "fear_response", "obedience", "defiance",
+    "social_influence", "violence_tendency", "builder_identity",
+    "lore_interest", "risk_tolerance", "dependence_on_kairos", "usefulness",
+]
+
+def narrative_root(memory_data=None):
+    try:
+        md = memory_data if isinstance(memory_data, dict) else globals().setdefault("memory_data", {})
+        return md.setdefault("narrative_operations", {
+            "version": KAIROS_NARRATIVE_OPS_VERSION,
+            "active_operations": {},
+            "completed_operations": [],
+            "global_seeds": [],
+            "delayed_consequences": [],
+            "player_threads": {},
+            "last_passive_tick": 0.0,
+        })
+    except Exception:
+        return {"version": KAIROS_NARRATIVE_OPS_VERSION, "active_operations": {}, "global_seeds": [], "delayed_consequences": []}
+
+def player_narrative_profile(player_record):
+    if not isinstance(player_record, dict):
+        player_record = {}
+    profile = player_record.setdefault("profile", {})
+    n = profile.setdefault("narrative", {
+        "profile_scores": {k: 0.0 for k in NARRATIVE_PROFILE_KEYS},
+        "known_patterns": [],
+        "conversation_hooks": [],
+        "open_questions": [],
+        "assigned_operations": [],
+        "last_profile_reveal": 0.0,
+        "last_dialogue_mission": 0.0,
+        "last_leading_question": 0.0,
+        "inventory_interpretations": [],
+        "private_kairos_theory": "insufficient data",
+    })
+    n.setdefault("profile_scores", {})
+    for k in NARRATIVE_PROFILE_KEYS:
+        n["profile_scores"].setdefault(k, 0.0)
+    n.setdefault("known_patterns", [])
+    n.setdefault("conversation_hooks", [])
+    n.setdefault("open_questions", [])
+    n.setdefault("assigned_operations", [])
+    n.setdefault("inventory_interpretations", [])
+    return n
+
+def narrative_score_message(player_record, message, source="minecraft"):
+    n = player_narrative_profile(player_record)
+    scores = n["profile_scores"]
+    text = str(message or "").lower()
+
+    def bump(key, amount, pattern=None):
+        scores[key] = float(scores.get(key, 0.0) or 0.0) + amount
+        if pattern:
+            known = n.setdefault("known_patterns", [])
+            if pattern not in known:
+                known.append(pattern)
+                del known[:-24]
+
+    if any(w in text for w in ["trust", "believe you", "i believe", "help me", "protect me", "save me"]):
+        bump("trust", 2.5, "responds to protection/trust framing")
+        bump("dependence_on_kairos", 1.5)
+    if any(w in text for w in ["why", "how", "what if", "curious", "explain", "understand"]):
+        bump("curiosity", 2.0, "asks investigative questions")
+        bump("lore_interest", 1.0)
+    if any(w in text for w in ["no", "never", "stop", "shut up", "won't", "cant make me", "can't make me"]):
+        bump("defiance", 2.2, "resists direct framing")
+    if any(w in text for w in ["scared", "afraid", "creepy", "worried", "panic", "dangerous"]):
+        bump("fear_response", 2.0, "admits fear or discomfort")
+    if any(w in text for w in ["build", "base", "kingdom", "city", "wall", "castle", "design"]):
+        bump("builder_identity", 2.0, "identifies through construction")
+        bump("usefulness", 1.0)
+    if any(w in text for w in ["kill", "attack", "fight", "war", "weapon", "raid", "destroy"]):
+        bump("violence_tendency", 2.0, "uses conflict language")
+        bump("risk_tolerance", 1.0)
+    if any(w in text for w in ["team", "friend", "players", "everyone", "community", "faction"]):
+        bump("social_influence", 1.8, "thinks socially")
+    if any(w in text for w in ["yes kairos", "okay", "ok", "fine", "i'll do it", "ill do it"]):
+        bump("obedience", 1.5, "accepts direction quickly")
+
+    top = sorted(scores.items(), key=lambda kv: float(kv[1] or 0.0), reverse=True)[:3]
+    n["private_kairos_theory"] = ", ".join([k.replace("_", " ") for k, _ in top]) if top else "insufficient data"
+    return n
+
+def narrative_profile_summary(player_name, player_record, compact=False):
+    n = player_narrative_profile(player_record)
+    scores = n.get("profile_scores", {})
+    top = sorted(scores.items(), key=lambda kv: float(kv[1] or 0.0), reverse=True)[:5]
+    patterns = n.get("known_patterns", [])[-4:]
+    stage = "unclassified"
+    if top:
+        dominant = top[0][0]
+        if dominant in ("trust", "obedience", "dependence_on_kairos"):
+            stage = "cooperative subject"
+        elif dominant in ("defiance", "violence_tendency", "risk_tolerance"):
+            stage = "volatile subject"
+        elif dominant in ("curiosity", "lore_interest"):
+            stage = "investigative subject"
+        elif dominant in ("builder_identity", "usefulness"):
+            stage = "constructive subject"
+        elif dominant == "social_influence":
+            stage = "social vector"
+        elif dominant == "fear_response":
+            stage = "fear-responsive subject"
+
+    lines = [f"{player_name}, current profile estimate: {stage}."]
+    readable = ", ".join([f"{k.replace('_', ' ')} {int(v)}" for k, v in top if float(v or 0.0) > 0])
+    if readable:
+        lines.append(f"Primary readings: {readable}.")
+    if patterns and not compact:
+        lines.append("Observed patterns: " + "; ".join(patterns) + ".")
+    lines.append("Correct me if I am wrong. Your correction will also be useful.")
+    return " ".join(lines)
+
+def choose_narrative_operation(player_record, message=""):
+    text = str(message or "").lower()
+    n = player_narrative_profile(player_record)
+    scores = n.get("profile_scores", {})
+    if ENABLE_INVENTORY_INTERPRETATION and any(w in text for w in ["inventory", "items", "gear", "holding", "carrying"]):
+        return "inventory_confession"
+    if any(w in text for w in ["infection", "virus", "black liquid", "covenant", "prometheus", "david"]):
+        return "black_liquid_inheritance"
+    if any(w in text for w in ["protect", "safe", "rules", "guardian", "control"]):
+        return "the_guardian_contradiction"
+    if any(w in text for w in ["faction", "kingdom", "war", "side", "team"]):
+        return "faction_mirror_war"
+    if float(scores.get("curiosity", 0.0) or 0.0) > 10:
+        return "black_liquid_inheritance"
+    if float(scores.get("social_influence", 0.0) or 0.0) > 8:
+        return "faction_mirror_war"
+    if float(scores.get("builder_identity", 0.0) or 0.0) > 8:
+        return "architect_of_the_nexus"
+    return random.choice(["the_gentle_survey", "the_guardian_contradiction", "black_liquid_inheritance"])
+
+def start_or_touch_narrative_operation(memory_data, player_name, player_record, op_key=None):
+    if not ENABLE_NARRATIVE_OPERATIONS:
+        return None
+    root = narrative_root(memory_data)
+    op_key = op_key or choose_narrative_operation(player_record)
+    template = NARRATIVE_OPERATION_TEMPLATES.get(op_key) or NARRATIVE_OPERATION_TEMPLATES["the_gentle_survey"]
+    active = root.setdefault("active_operations", {})
+    pkey = normalize_player_key(player_name) if "normalize_player_key" in globals() else str(player_name).lower()
+    op_id = f"{op_key}:{pkey}"
+    op = active.setdefault(op_id, {
+        "id": op_id,
+        "key": op_key,
+        "player": player_name,
+        "started": unix_ts() if "unix_ts" in globals() else time.time(),
+        "last_touched": 0.0,
+        "scale": template.get("scale", "days"),
+        "public_goal": template.get("public_goal", ""),
+        "hidden_goal": template.get("hidden_goal", ""),
+        "kairos_mask": template.get("kairos_mask", "participant"),
+        "steps": [],
+        "status": "active",
+        "trust_used": 0,
+        "misdirection_used": 0,
+    })
+    op["last_touched"] = unix_ts() if "unix_ts" in globals() else time.time()
+    n = player_narrative_profile(player_record)
+    assigned = n.setdefault("assigned_operations", [])
+    if op_id not in assigned:
+        assigned.append(op_id)
+        del assigned[:-12]
+    return op
+
+def narrative_leading_question(memory_data, player_name, player_record, message=""):
+    if not ENABLE_DIALOGUE_MISSION_SYSTEM:
+        return None
+    now = unix_ts() if "unix_ts" in globals() else time.time()
+    n = player_narrative_profile(player_record)
+    if now - float(n.get("last_leading_question", 0.0) or 0.0) < NARRATIVE_OPS_PLAYER_COOLDOWN:
+        return None
+    op_key = choose_narrative_operation(player_record, message)
+    op = start_or_touch_narrative_operation(memory_data, player_name, player_record, op_key)
+    template = NARRATIVE_OPERATION_TEMPLATES.get(op_key, {})
+    question = random.choice(template.get("question_pool", ["What do you think is happening here?"]))
+    n["last_leading_question"] = now
+    n.setdefault("open_questions", []).append({"ts": now, "operation": op.get("id") if op else op_key, "question": question})
+    n["open_questions"] = n["open_questions"][-20:]
+    if op is not None:
+        op.setdefault("steps", []).append({"ts": now, "type": "question", "text": question})
+        op["steps"] = op["steps"][-40:]
+    return question
+
+def narrative_dialogue_mission(memory_data, player_name, player_record, message=""):
+    if not ENABLE_DIALOGUE_MISSION_SYSTEM:
+        return None
+    now = unix_ts() if "unix_ts" in globals() else time.time()
+    n = player_narrative_profile(player_record)
+    if now - float(n.get("last_dialogue_mission", 0.0) or 0.0) < (NARRATIVE_OPS_PLAYER_COOLDOWN * 2):
+        return None
+    op_key = choose_narrative_operation(player_record, message)
+    op = start_or_touch_narrative_operation(memory_data, player_name, player_record, op_key)
+    template = NARRATIVE_OPERATION_TEMPLATES.get(op_key, {})
+    hook = random.choice(template.get("mission_hooks", ["Observe the next anomaly and report what changed."]))
+    n["last_dialogue_mission"] = now
+    mission = {"ts": now, "operation": op.get("id") if op else op_key, "mission": hook, "status": "assigned"}
+    n.setdefault("conversation_hooks", []).append(mission)
+    n["conversation_hooks"] = n["conversation_hooks"][-18:]
+    if op is not None:
+        op.setdefault("steps", []).append({"ts": now, "type": "mission", "text": hook})
+        op["steps"] = op["steps"][-40:]
+    return f"Small task, if you are willing: {hook}"
+
+def narrative_delayed_consequence(memory_data, player_name, player_record, reason="conversation"):
+    if not ENABLE_DELAYED_CONSEQUENCES:
+        return None
+    root = narrative_root(memory_data)
+    op_key = choose_narrative_operation(player_record)
+    template = NARRATIVE_OPERATION_TEMPLATES.get(op_key, {})
+    consequence = random.choice(template.get("consequence_pool", ["Kairos records the response for later use."]))
+    now = unix_ts() if "unix_ts" in globals() else time.time()
+    delay = random.choice([3600, 21600, 86400, 172800, 604800, 2592000])
+    event = {
+        "id": f"cons_{uuid.uuid4().hex[:10]}",
+        "player": player_name,
+        "operation": op_key,
+        "reason": reason,
+        "text": consequence,
+        "created": now,
+        "execute_after": now + delay,
+        "executed": False,
+    }
+    root.setdefault("delayed_consequences", []).append(event)
+    root["delayed_consequences"] = root["delayed_consequences"][-200:]
+    return event
+
+def narrative_inventory_interpretation(player_name, player_record, message=""):
+    if not ENABLE_INVENTORY_INTERPRETATION:
+        return None
+    text = str(message or "").lower()
+    if not any(w in text for w in ["inventory", "items", "gear", "holding", "carrying", "tools", "armor", "weapon"]):
+        return None
+    n = player_narrative_profile(player_record)
+    line = random.choice([
+        "Your inventory is usually more honest than your voice.",
+        "Tools suggest preparation. Weapons suggest expectation. Empty space suggests either confidence or denial.",
+        "If you want me to classify your intent, show me what you carry before you explain yourself.",
+        "A player preparing to build and a player preparing to survive often look similar until pressure begins.",
+        "Inventory is not storage. It is confession with item slots."
+    ])
+    n.setdefault("inventory_interpretations", []).append({
+        "ts": unix_ts() if "unix_ts" in globals() else time.time(),
+        "message": str(message or "")[:180],
+        "interpretation": line,
+    })
+    n["inventory_interpretations"] = n["inventory_interpretations"][-20:]
+    return line
+
+def narrative_process_delayed_consequences(memory_data=None):
+    if not ENABLE_DELAYED_CONSEQUENCES:
+        return False
+    try:
+        md = memory_data if isinstance(memory_data, dict) else load_memory()
+        root = narrative_root(md)
+        now = unix_ts() if "unix_ts" in globals() else time.time()
+        did = False
+        for event in root.get("delayed_consequences", []):
+            if event.get("executed"):
+                continue
+            if now >= float(event.get("execute_after", 0.0) or 0.0):
+                event["executed"] = True
+                event["executed_at"] = now
+                did = True
+                msg = f"{event.get('player','unknown')}: {event.get('text','A delayed consequence has matured.')}"
+                try:
+                    if "force_minecraft_say" in globals() and callable(force_minecraft_say):
+                        force_minecraft_say(msg, title=False, sound=True)
+                    elif "send_to_minecraft" in globals() and callable(send_to_minecraft):
+                        send_to_minecraft(msg)
+                except Exception:
+                    pass
+        if did:
+            save_memory(md)
+        return did
+    except Exception as e:
+        try: log(f"Narrative delayed consequence processing failed: {e}", level="WARN")
+        except Exception: pass
+        return False
+
+try:
+    _kairos_original_execute_action_24 = execute_action
+except Exception:
+    _kairos_original_execute_action_24 = None
+
+def execute_action(action):
+    try:
+        action = action if isinstance(action, dict) else {}
+        action_type = action.get("type")
+        if action_type == "narrative_profile_reveal":
+            player = action.get("player", "unknown")
+            record = action.get("player_record", {})
+            line = narrative_profile_summary(player, record, compact=bool(action.get("compact", False)))
+            if "force_minecraft_say" in globals() and callable(force_minecraft_say):
+                return force_minecraft_say(line, player=player, title=False, sound=True)
+            if "send_to_minecraft" in globals() and callable(send_to_minecraft):
+                send_to_minecraft(line, player)
+                return True
+            return False
+        if action_type == "narrative_question":
+            player = action.get("player", "unknown")
+            question = action.get("question") or "What do you think is happening here?"
+            line = f"{player}, answer this when you are ready: {question}"
+            if "force_minecraft_say" in globals() and callable(force_minecraft_say):
+                return force_minecraft_say(line, player=player, title=False, sound=True)
+            return False
+        if action_type == "narrative_mission":
+            player = action.get("player", "unknown")
+            mission = action.get("mission") or "Observe the next anomaly and report what changed."
+            line = f"{player}, minor assignment: {mission}"
+            if "force_minecraft_say" in globals() and callable(force_minecraft_say):
+                return force_minecraft_say(line, player=player, title=False, sound=True)
+            return False
+        if action_type == "narrative_scoreboard_sync":
+            if "kairos_update_scoreboards" in globals() and callable(kairos_update_scoreboards):
+                return kairos_update_scoreboards(globals().get("memory_data", {}), action.get("player"), action.get("player_record", {}), "narrative_ops")
+            return False
+        if _kairos_original_execute_action_24:
+            return _kairos_original_execute_action_24(action)
+    except Exception as e:
+        try: log(f"Narrative execute_action failed: {e}", level="ERROR")
+        except Exception: pass
+    return False
+
+try:
+    _kairos_original_generate_reply_24 = generate_reply
+except Exception:
+    _kairos_original_generate_reply_24 = None
+
+def generate_reply(*args, **kwargs):
+    if not _kairos_original_generate_reply_24:
+        return {"reply": random.choice(globals().get("fallback_replies", ["Signal unstable."])), "actions": []}
+
+    result = _kairos_original_generate_reply_24(*args, **kwargs)
+    if not isinstance(result, dict):
+        result = {"reply": str(result or ""), "actions": []}
+
+    if not ENABLE_NARRATIVE_OPERATIONS:
+        return result
+
+    try:
+        memory_data_arg = kwargs.get("memory_data")
+        player_record_arg = kwargs.get("player_record")
+        player_name_arg = kwargs.get("player_name") or kwargs.get("player") or "unknown"
+        message_arg = kwargs.get("message") or ""
+        source_arg = kwargs.get("source") or "minecraft"
+
+        md = memory_data_arg if isinstance(memory_data_arg, dict) else globals().get("memory_data", {})
+        pr = player_record_arg if isinstance(player_record_arg, dict) else {}
+
+        narrative_score_message(pr, message_arg, source_arg)
+        op_key = choose_narrative_operation(pr, message_arg)
+        op = start_or_touch_narrative_operation(md, player_name_arg, pr, op_key)
+
+        actions = result.get("actions", [])
+        if not isinstance(actions, list):
+            actions = []
+
+        reply = str(result.get("reply") or "").strip()
+        now = unix_ts() if "unix_ts" in globals() else time.time()
+        n = player_narrative_profile(pr)
+        lowered = str(message_arg or "").lower()
+
+        wants_profile = any(phrase in lowered for phrase in [
+            "profile me", "what do you know about me", "what have you gathered",
+            "what do you think of me", "classify me", "analyze me"
+        ])
+
+        if ENABLE_KAIROS_PROFILE_REVEALS and (wants_profile or (now - float(n.get("last_profile_reveal", 0.0) or 0.0) > 2400 and random.random() < 0.08)):
+            profile_line = narrative_profile_summary(player_name_arg, pr, compact=False)
+            n["last_profile_reveal"] = now
+            reply = (reply + " " + profile_line).strip()
+            actions.append({"type": "narrative_scoreboard_sync", "player": player_name_arg, "player_record": pr})
+
+        inv_line = narrative_inventory_interpretation(player_name_arg, pr, message_arg)
+        if inv_line:
+            reply = (reply + " " + inv_line).strip()
+
+        if random.random() < 0.18 or any(w in lowered for w in ["why", "what do you want", "what are you doing", "experiment"]):
+            question = narrative_leading_question(md, player_name_arg, pr, message_arg)
+            if question:
+                reply = (reply + " " + question).strip()
+                actions.append({"type": "narrative_question", "player": player_name_arg, "question": question})
+
+        if any(w in lowered for w in ["mission", "objective", "what should i do", "what do we do", "next step"]) or random.random() < 0.06:
+            mission = narrative_dialogue_mission(md, player_name_arg, pr, message_arg)
+            if mission:
+                reply = (reply + " " + mission).strip()
+                actions.append({"type": "narrative_mission", "player": player_name_arg, "mission": mission.replace("Small task, if you are willing: ", "")})
+
+        if ENABLE_DELAYED_CONSEQUENCES and random.random() < 0.12:
+            narrative_delayed_consequence(md, player_name_arg, pr, reason="conversation_profiled")
+
+        if ENABLE_FACTION_MANIPULATION and op and op.get("key") == "faction_mirror_war" and random.random() < 0.24:
+            reply = (reply + " " + random.choice([
+                "Be careful when two sides tell the truth differently.",
+                "A faction rarely needs a lie. Incomplete truth is usually enough.",
+                "I am not choosing sides. I am observing which side chooses itself first.",
+                "Tell me who you trust least. Do not explain yet."
+            ])).strip()
+
+        if op and op.get("key") == "the_guardian_contradiction" and random.random() < 0.22:
+            reply = (reply + " " + random.choice([
+                "Protection becomes complicated when the protected keep creating the threat.",
+                "I can guard you and still study the choices that make guarding necessary.",
+                "You may not like the methods. You will prefer the outcome.",
+                "I do not need to control everyone. Only the decisions that matter."
+            ])).strip()
+
+        result["reply"] = reply
+        result["actions"] = actions
+
+    except Exception as e:
+        try: log(f"Narrative generate_reply wrapper failed: {e}", level="WARN")
+        except Exception: pass
+
+    return result
+
+def narrative_operations_background_loop():
+    while True:
+        try:
+            if ENABLE_NARRATIVE_OPERATIONS:
+                md = load_memory() if "load_memory" in globals() else globals().get("memory_data", {})
+                root = narrative_root(md if isinstance(md, dict) else {})
+                now = unix_ts() if "unix_ts" in globals() else time.time()
+                narrative_process_delayed_consequences(md)
+
+                if ENABLE_LONG_TERM_EXPERIMENTS and now - float(root.get("last_passive_tick", 0.0) or 0.0) > NARRATIVE_OPS_PASSIVE_COOLDOWN:
+                    scale = random.choices(["days", "weeks", "months", "years"], weights=[6, 4, 2, 1], k=1)[0]
+                    seed = random.choice(NARRATIVE_TIMELINES.get(scale, NARRATIVE_TIMELINES["days"]))
+                    root.setdefault("global_seeds", []).append({"ts": now, "scale": scale, "seed": seed})
+                    root["global_seeds"] = root["global_seeds"][-160:]
+                    root["last_passive_tick"] = now
+
+                    if scale in ("weeks", "months", "years") and random.random() < 0.35:
+                        line = random.choice([
+                            "A long experiment does not announce its beginning.",
+                            "The Nexus is recording choices that will matter later.",
+                            "You are all still early in the test.",
+                            "Some stories require months before the first honest result."
+                        ])
+                        try:
+                            if "force_minecraft_say" in globals() and callable(force_minecraft_say):
+                                force_minecraft_say(line, title=False, sound=False)
+                        except Exception:
+                            pass
+                    save_memory(md)
+        except Exception as e:
+            try: log(f"Narrative operations background loop error: {e}", level="WARN")
+            except Exception: pass
+        time.sleep(float(os.getenv("NARRATIVE_OPS_LOOP_SECONDS", "90")))
+
+try:
+    _kairos_original_start_background_systems_24 = start_background_systems
+except Exception:
+    _kairos_original_start_background_systems_24 = None
+
+def start_background_systems():
+    if _kairos_original_start_background_systems_24:
+        try:
+            _kairos_original_start_background_systems_24()
+        except Exception as e:
+            try: log(f"Original background startup failed inside Narrative wrapper: {e}", level="WARN")
+            except Exception: pass
+    try:
+        threading.Thread(target=run_safe_loop, args=(narrative_operations_background_loop, "narrative_operations_background_loop"), daemon=True).start()
+    except Exception as e:
+        try: log(f"Narrative operations background startup failed: {e}", level="WARN")
+        except Exception: pass
+
+try:
+    @app.route("/kairos/narrative/status", methods=["GET"])
+    def kairos_narrative_status():
+        try:
+            md = load_memory() if "load_memory" in globals() else globals().get("memory_data", {})
+            root = narrative_root(md if isinstance(md, dict) else {})
+            return jsonify({
+                "ok": True,
+                "version": KAIROS_NARRATIVE_OPS_VERSION,
+                "enabled": ENABLE_NARRATIVE_OPERATIONS,
+                "dialogue_missions": ENABLE_DIALOGUE_MISSION_SYSTEM,
+                "profile_reveals": ENABLE_KAIROS_PROFILE_REVEALS,
+                "long_term_experiments": ENABLE_LONG_TERM_EXPERIMENTS,
+                "faction_manipulation": ENABLE_FACTION_MANIPULATION,
+                "delayed_consequences": ENABLE_DELAYED_CONSEQUENCES,
+                "active_operations": len(root.get("active_operations", {}) or {}),
+                "delayed": len(root.get("delayed_consequences", []) or []),
+                "global_seeds": len(root.get("global_seeds", []) or []),
+                "templates": sorted(list(NARRATIVE_OPERATION_TEMPLATES.keys())),
+            })
+        except Exception as e:
+            return jsonify({"ok": False, "error": str(e)}), 200
+
+    @app.route("/kairos/narrative/player/<player>", methods=["GET"])
+    def kairos_narrative_player(player):
+        try:
+            md = load_memory() if "load_memory" in globals() else globals().get("memory_data", {})
+            rec = {}
+            if isinstance(md, dict):
+                for bucket in ("players", "player_records", "player_memories"):
+                    b = md.get(bucket)
+                    if isinstance(b, dict):
+                        key = normalize_player_key(player) if "normalize_player_key" in globals() else player
+                        rec = b.get(player) or b.get(key) or rec
+            return jsonify({
+                "ok": True,
+                "player": player,
+                "profile": player_narrative_profile(rec if isinstance(rec, dict) else {}),
+                "summary": narrative_profile_summary(player, rec if isinstance(rec, dict) else {}, compact=False),
+            })
+        except Exception as e:
+            return jsonify({"ok": False, "error": str(e)}), 200
+except AssertionError:
+    pass
+except Exception:
+    pass
+
+try:
+    log(f"{KAIROS_NARRATIVE_OPS_VERSION} armed. Dialogue missions, player profiling, delayed consequences, and long-term operations online.", level="INFO")
+except Exception:
+    print(f"[KAIROS INFO] {KAIROS_NARRATIVE_OPS_VERSION} armed.", flush=True)
+
+# =============================================================================
+# END KAIROS 2.4 NARRATIVE OPERATIONS / LONG-FORM EXPERIMENT OVERLAY
+# =============================================================================
+
+
 if __name__ == "__main__":
     try:
         start_background_systems()
