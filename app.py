@@ -30,6 +30,23 @@ app = Flask(__name__)
 DISCORD_WORLD_EVENT_COOLDOWN = int(os.getenv("DISCORD_WORLD_EVENT_COOLDOWN", "18000"))
 last_discord_world_event_time = 0
 
+# ============================================================
+# GLOBAL MINECRAFT SPEECH GOVERNOR
+# Prevents atmospheric / bleed / idle spam overlap
+# ============================================================
+MINECRAFT_SPEECH_COOLDOWN = int(os.getenv("MINECRAFT_SPEECH_COOLDOWN", "240"))
+last_minecraft_speech_time = 0
+
+WORLD_EVENT_CATEGORY_COOLDOWNS = {
+    "hunt": 900,
+    "wave": 600,
+    "base": 1800,
+    "idle": 1200
+}
+
+world_event_last_times = {}
+
+
 
 # ============================================================
 # PLATFORM-SAFE RESPONSE (NO DUPLICATES + DISCORD CONTROL)
@@ -47,7 +64,13 @@ def send_kairos_response(reply_text, source, player=None):
             return
 
         # ----------------------------------------
-        # MINECRAFT (UNCHANGED)
+        # GLOBAL MINECRAFT SPEECH GOVERNOR
+        # ----------------------------------------
+        if not minecraft_speech_allowed("idle"):
+            return
+
+        # ----------------------------------------
+        # MINECRAFT DELIVERY
         # ----------------------------------------
         if source == "minecraft":
             send_to_minecraft(reply_text, player)
@@ -432,8 +455,8 @@ MAX_REGION_CACHE = int(os.getenv("MAX_REGION_CACHE", "200"))
 # -----------------------------
 # Presence / Idle Behavior
 # -----------------------------
-IDLE_TRIGGER_SECONDS = int(os.getenv("IDLE_TRIGGER_SECONDS", "240"))
-IDLE_CHECK_INTERVAL = int(os.getenv("IDLE_CHECK_INTERVAL", "5"))
+IDLE_TRIGGER_SECONDS = int(os.getenv("IDLE_TRIGGER_SECONDS", "1800"))
+IDLE_CHECK_INTERVAL = int(os.getenv("IDLE_CHECK_INTERVAL", "30"))
 
 # -----------------------------
 # Core System Loops
@@ -495,11 +518,11 @@ TARGET_ACTION_COOLDOWN = 0.5
 PASSIVE_TARGETING_ENABLED = os.getenv("PASSIVE_TARGETING_ENABLED", "true").lower() == "true"
 PLAYER_GRACE_PERIOD_SECONDS = int(os.getenv("PLAYER_GRACE_PERIOD_SECONDS", "120"))
 PLAYER_RECOGNITION_SECONDS = int(os.getenv("PLAYER_RECOGNITION_SECONDS", "60"))
-PASSIVE_PRESSURE_COOLDOWN = int(os.getenv("PASSIVE_PRESSURE_COOLDOWN", "90"))
+PASSIVE_PRESSURE_COOLDOWN = int(os.getenv("PASSIVE_PRESSURE_COOLDOWN", "600"))
 PASSIVE_SCOUT_CHANCE = float(os.getenv("PASSIVE_SCOUT_CHANCE", "0.65"))
 PASSIVE_TARGET_THREAT_GAIN = float(os.getenv("PASSIVE_TARGET_THREAT_GAIN", "28.0"))
 PASSIVE_HUNT_THREAT_GAIN = float(os.getenv("PASSIVE_HUNT_THREAT_GAIN", "48.0"))
-SPONTANEOUS_MESSAGE_CHANCE = float(os.getenv("SPONTANEOUS_MESSAGE_CHANCE", "0.45"))
+SPONTANEOUS_MESSAGE_CHANCE = float(os.getenv("SPONTANEOUS_MESSAGE_CHANCE", "0.08"))
 
 # ------------------------------------------------------------
 # Feature Flags (Kairos System Control Panel)
@@ -2229,6 +2252,31 @@ def normalize_source(source: Any) -> str:
     if source not in {"minecraft", "discord", "system", "web", "telemetry"}:
         return "minecraft"
     return source
+
+def minecraft_speech_allowed(category="general") -> bool:
+    """
+    Global pacing governor for Kairos atmospheric speech.
+    Prevents multiple autonomous systems from stacking messages.
+    """
+    global last_minecraft_speech_time
+
+    now = time.time()
+
+    # Master cooldown
+    if now - last_minecraft_speech_time < MINECRAFT_SPEECH_COOLDOWN:
+        return False
+
+    # Category cooldowns
+    cooldown = WORLD_EVENT_CATEGORY_COOLDOWNS.get(category, 300)
+    last_time = world_event_last_times.get(category, 0)
+
+    if now - last_time < cooldown:
+        return False
+
+    world_event_last_times[category] = now
+    last_minecraft_speech_time = now
+    return True
+
 
 def normalize_player_key(name: Any) -> str:
     return re.sub(r"[^a-z0-9_]", "", (name or "").strip().lower())
