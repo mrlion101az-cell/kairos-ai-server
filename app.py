@@ -22171,6 +22171,290 @@ except Exception:
 # =============================================================================
 
 
+# =============================================================================
+# KAIROS MINECRAFT CHAT MINIMALISM PATCH — 2026-05-10
+# Surgical overlay: preserves all existing systems, actionbars, titles, sounds,
+# combat, bridges, quests, and memory while reducing Minecraft CHAT spam.
+# Direct Minecraft player conversations are allowed through so Kairos can speak
+# back in-game again. Ambient/world-event/idle chat is suppressed or delayed.
+# =============================================================================
+
+KAIROS_MC_CHAT_MINIMALISM_VERSION = "2.5.1-minecraft-chat-minimalism"
+
+try:
+    # Keep direct player chat responsive, but make autonomous chat almost silent.
+    MINECRAFT_DIRECT_CHAT_COOLDOWN = int(os.getenv("MINECRAFT_DIRECT_CHAT_COOLDOWN", "2"))
+    MINECRAFT_AMBIENT_CHAT_COOLDOWN = int(os.getenv("MINECRAFT_AMBIENT_CHAT_COOLDOWN", "7200"))  # 2 hours
+    MINECRAFT_WORLD_CHAT_COOLDOWN = int(os.getenv("MINECRAFT_WORLD_CHAT_COOLDOWN", "10800"))    # 3 hours
+    MINECRAFT_IDLE_CHAT_COOLDOWN = int(os.getenv("MINECRAFT_IDLE_CHAT_COOLDOWN", "21600"))      # 6 hours
+    MINECRAFT_ALLOW_BACKGROUND_ACTIONBAR = os.getenv("MINECRAFT_ALLOW_BACKGROUND_ACTIONBAR", "true").lower() == "true"
+    MINECRAFT_SUPPRESS_AMBIENT_TELLRAW = os.getenv("MINECRAFT_SUPPRESS_AMBIENT_TELLRAW", "true").lower() == "true"
+except Exception:
+    MINECRAFT_DIRECT_CHAT_COOLDOWN = 2
+    MINECRAFT_AMBIENT_CHAT_COOLDOWN = 7200
+    MINECRAFT_WORLD_CHAT_COOLDOWN = 10800
+    MINECRAFT_IDLE_CHAT_COOLDOWN = 21600
+    MINECRAFT_ALLOW_BACKGROUND_ACTIONBAR = True
+    MINECRAFT_SUPPRESS_AMBIENT_TELLRAW = True
+
+# Strongly reduce autonomous text pressure without disabling mechanics.
+try:
+    MINECRAFT_SPEECH_COOLDOWN = int(os.getenv("MINECRAFT_SPEECH_COOLDOWN", str(MINECRAFT_AMBIENT_CHAT_COOLDOWN)))
+except Exception:
+    MINECRAFT_SPEECH_COOLDOWN = MINECRAFT_AMBIENT_CHAT_COOLDOWN
+
+try:
+    WORLD_EVENT_CATEGORY_COOLDOWNS.update({
+        "idle": MINECRAFT_IDLE_CHAT_COOLDOWN,
+        "bleed": MINECRAFT_WORLD_CHAT_COOLDOWN,
+        "world_event": MINECRAFT_WORLD_CHAT_COOLDOWN,
+        "system": MINECRAFT_WORLD_CHAT_COOLDOWN,
+        "hunt": 7200,
+        "wave": 7200,
+        "base": 10800,
+        "general": MINECRAFT_AMBIENT_CHAT_COOLDOWN,
+    })
+except Exception:
+    WORLD_EVENT_CATEGORY_COOLDOWNS = {
+        "idle": MINECRAFT_IDLE_CHAT_COOLDOWN,
+        "bleed": MINECRAFT_WORLD_CHAT_COOLDOWN,
+        "world_event": MINECRAFT_WORLD_CHAT_COOLDOWN,
+        "system": MINECRAFT_WORLD_CHAT_COOLDOWN,
+        "hunt": 7200,
+        "wave": 7200,
+        "base": 10800,
+        "general": MINECRAFT_AMBIENT_CHAT_COOLDOWN,
+    }
+
+try:
+    IDLE_TRIGGER_SECONDS = max(int(globals().get("IDLE_TRIGGER_SECONDS", 1800)), MINECRAFT_IDLE_CHAT_COOLDOWN)
+    PASSIVE_PRESSURE_COOLDOWN = max(int(globals().get("PASSIVE_PRESSURE_COOLDOWN", 600)), 3600)
+    SPONTANEOUS_MESSAGE_CHANCE = min(float(globals().get("SPONTANEOUS_MESSAGE_CHANCE", 0.02)), 0.001)
+except Exception:
+    pass
+
+_kairos_mc_last_direct_chat = {}
+_kairos_mc_last_ambient_chat = 0.0
+
+try:
+    _KAIROS_MC_ORIGINAL_MINECRAFT_SPEECH_ALLOWED = minecraft_speech_allowed
+except Exception:
+    _KAIROS_MC_ORIGINAL_MINECRAFT_SPEECH_ALLOWED = None
+
+try:
+    _KAIROS_MC_ORIGINAL_SEND_TO_MINECRAFT = send_to_minecraft
+except Exception:
+    _KAIROS_MC_ORIGINAL_SEND_TO_MINECRAFT = None
+
+try:
+    _KAIROS_MC_ORIGINAL_SEND_KAIROS_RESPONSE = send_kairos_response
+except Exception:
+    _KAIROS_MC_ORIGINAL_SEND_KAIROS_RESPONSE = None
+
+try:
+    _KAIROS_MC_ORIGINAL_EXECUTE_ACTION = execute_action
+except Exception:
+    _KAIROS_MC_ORIGINAL_EXECUTE_ACTION = None
+
+
+def _kairos_stack_names(limit=18):
+    try:
+        import inspect
+        return [f.function for f in inspect.stack()[1:limit]]
+    except Exception:
+        return []
+
+
+def _kairos_is_direct_minecraft_stack():
+    """Detects real /chat route delivery so direct MC conversations still speak in chat."""
+    names = _kairos_stack_names()
+    direct_markers = {
+        "chat_1",
+        "kairos_surpass_chat_route",
+        "_kairos_chat_safe_route_wrapper",
+        "route_chat",
+        "chat",
+    }
+    for name in names:
+        n = str(name or "").lower()
+        if n in direct_markers:
+            return True
+        if "chat_route" in n or "route_chat" in n or "safe_route_wrapper" in n:
+            return True
+    return False
+
+
+def _kairos_is_background_stack():
+    """Detects idle/world/bleed/narrative loops that should not spam Minecraft chat."""
+    names = _kairos_stack_names()
+    background_terms = (
+        "idle_loop", "idle_cinematic", "world_event", "bleed", "strategic_director",
+        "narrative_process", "endgame_process", "continuity_loop", "delayed_consequence",
+        "commander_loop", "ambient", "autonomous", "purpose_loop", "director_tick",
+    )
+    for name in names:
+        n = str(name or "").lower()
+        if any(term in n for term in background_terms):
+            return True
+    return False
+
+
+def minecraft_speech_allowed(category="general"):
+    """
+    Final speech governor.
+    Direct Minecraft conversations are controlled separately and stay responsive.
+    Ambient/world/idle chat gets long cooldowns.
+    """
+    global last_minecraft_speech_time, _kairos_mc_last_ambient_chat
+    try:
+        category = str(category or "general").lower()
+        now = time.time()
+
+        # Direct route replies bypass the atmospheric governor.
+        if _kairos_is_direct_minecraft_stack():
+            return True
+
+        cooldown = WORLD_EVENT_CATEGORY_COOLDOWNS.get(category, MINECRAFT_AMBIENT_CHAT_COOLDOWN)
+        if category in {"idle", "ambient"}:
+            cooldown = max(cooldown, MINECRAFT_IDLE_CHAT_COOLDOWN)
+        elif category in {"world_event", "bleed", "system"}:
+            cooldown = max(cooldown, MINECRAFT_WORLD_CHAT_COOLDOWN)
+        else:
+            cooldown = max(cooldown, MINECRAFT_AMBIENT_CHAT_COOLDOWN)
+
+        if now - last_minecraft_speech_time < cooldown:
+            return False
+        if now - world_event_last_times.get(category, 0) < cooldown:
+            return False
+
+        world_event_last_times[category] = now
+        last_minecraft_speech_time = now
+        _kairos_mc_last_ambient_chat = now
+        return True
+    except Exception:
+        return False
+
+
+def _kairos_send_actionbar_only(text, selector="@a"):
+    """Allows atmosphere to remain visible without polluting Minecraft chat."""
+    try:
+        if not MINECRAFT_ALLOW_BACKGROUND_ACTIONBAR:
+            return False
+        safe = trim_text(str(text or "").replace("\n", " "), 120) if "trim_text" in globals() else str(text or "")[:120]
+        if not safe:
+            return False
+        cmd = "title %s actionbar %s" % (selector, json.dumps({"text": safe, "color": "dark_purple"}))
+        if "send_http_commands" in globals() and callable(send_http_commands):
+            return bool(send_http_commands([_clean_mc_command(cmd) if "_clean_mc_command" in globals() else cmd]))
+        return False
+    except Exception:
+        return False
+
+
+def send_to_minecraft(reply, player=None):
+    """
+    Final Minecraft delivery.
+    - Direct Minecraft player conversation: tellraw + actionbar, like Kairos is alive.
+    - Background/idle/world-event text: no tellraw spam; optional actionbar only.
+    """
+    global _kairos_mc_last_ambient_chat
+    try:
+        if not reply:
+            return False
+
+        direct = _kairos_is_direct_minecraft_stack()
+        background = _kairos_is_background_stack()
+        now = time.time()
+
+        # Direct player-to-Kairos conversations should feel alive in Minecraft.
+        if direct:
+            key = str(player or "@a").lower()
+            last = _kairos_mc_last_direct_chat.get(key, 0.0)
+            if now - last < MINECRAFT_DIRECT_CHAT_COOLDOWN:
+                return False
+            _kairos_mc_last_direct_chat[key] = now
+            if callable(_KAIROS_MC_ORIGINAL_SEND_TO_MINECRAFT):
+                return _KAIROS_MC_ORIGINAL_SEND_TO_MINECRAFT(reply, player)
+
+        # Background chatter is the exact thing we are minimizing.
+        if background or MINECRAFT_SUPPRESS_AMBIENT_TELLRAW:
+            # Keep the server atmosphere/actionbar, but remove chat spam.
+            if now - _kairos_mc_last_ambient_chat >= MINECRAFT_AMBIENT_CHAT_COOLDOWN:
+                _kairos_mc_last_ambient_chat = now
+                return _kairos_send_actionbar_only(reply)
+            return False
+
+        # Safe fallback: if something is neither clearly direct nor background, use governor.
+        if not minecraft_speech_allowed("general"):
+            return False
+        if callable(_KAIROS_MC_ORIGINAL_SEND_TO_MINECRAFT):
+            return _KAIROS_MC_ORIGINAL_SEND_TO_MINECRAFT(reply, player)
+        return False
+    except Exception as e:
+        try: log(f"Minecraft chat minimalism send failed: {e}", level="WARN")
+        except Exception: pass
+        return False
+
+
+def send_kairos_response(reply_text, source, player=None):
+    """
+    Platform response router tuned for the current goal:
+    Minecraft direct chat works; Discord output remains controlled; autonomous MC chat stays quiet.
+    """
+    try:
+        source = normalize_source(source) if "normalize_source" in globals() else str(source or "minecraft").lower()
+        if source == "discord":
+            return False
+
+        if source == "minecraft":
+            # Direct MC route replies are handled by send_to_minecraft's direct stack detection.
+            return send_to_minecraft(reply_text, player)
+
+        # System/web/telemetry/ambient messages only pass on long governor.
+        if not minecraft_speech_allowed("system"):
+            return False
+        return send_to_minecraft(reply_text, player)
+    except Exception as e:
+        try: log_exception("send_kairos_response minimalism failed", e)
+        except Exception: pass
+        return False
+
+
+def execute_action(action):
+    """
+    Converts background chat announcements to actionbar so world events remain cinematic
+    without flooding Minecraft chat. All combat/action mechanics still pass through.
+    """
+    try:
+        if isinstance(action, dict):
+            atype = str(action.get("type") or "").lower()
+            channel = str(action.get("channel") or "").lower()
+            if atype == "announce" and channel in {"chat", "minecraft_chat", "tellraw", "say", ""}:
+                action = dict(action)
+                action["channel"] = "actionbar"
+        if callable(_KAIROS_MC_ORIGINAL_EXECUTE_ACTION):
+            return _KAIROS_MC_ORIGINAL_EXECUTE_ACTION(action)
+        return False
+    except Exception as e:
+        try: log(f"Minecraft chat minimalism execute_action failed: {e}", level="WARN")
+        except Exception: pass
+        try:
+            if callable(_KAIROS_MC_ORIGINAL_EXECUTE_ACTION):
+                return _KAIROS_MC_ORIGINAL_EXECUTE_ACTION(action)
+        except Exception:
+            pass
+        return False
+
+try:
+    log(f"{KAIROS_MC_CHAT_MINIMALISM_VERSION} armed. Direct Minecraft chat enabled; idle/world-event chat minimized; actionbars preserved.", level="INFO")
+except Exception:
+    print(f"[KAIROS INFO] {KAIROS_MC_CHAT_MINIMALISM_VERSION} armed.", flush=True)
+
+# =============================================================================
+# END KAIROS MINECRAFT CHAT MINIMALISM PATCH
+# =============================================================================
+
+
 if __name__ == "__main__":
     try:
         start_background_systems()
