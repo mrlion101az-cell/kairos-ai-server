@@ -22455,6 +22455,1091 @@ except Exception:
 # =============================================================================
 
 
+
+# =============================================================================
+# KAIROS CONTINUITY ENGINE — SECOND-LIFE WORLD OVERLAY
+# Version: 2026.05.13-real-survival-continuity
+#
+# Purpose:
+#   Turns Kairos from a reactive chat/war system into a persistent world-memory
+#   engine: factions, territories, rumors, consequences, quests, caravans,
+#   corruption storms, reclaimable fallen cities, and mythology records.
+#
+# Design:
+#   - Non-destructive overlay: keeps the working app.py backbone intact.
+#   - Uses existing load_memory/save_memory/send_http_commands/queue_action when present.
+#   - Adds safe routes for manual control and plugin/webhook integration.
+#   - Adds an autonomous continuity loop into background startup.
+# =============================================================================
+
+KAIROS_CONTINUITY_VERSION = "2026.05.13-real-survival-continuity"
+
+# -----------------------------
+# Continuity Feature Flags
+# -----------------------------
+CONTINUITY_ENABLED = os.getenv("CONTINUITY_ENABLED", "true").lower() == "true"
+CONTINUITY_LOOP_INTERVAL = int(os.getenv("CONTINUITY_LOOP_INTERVAL", "300"))  # 5 minutes
+CONTINUITY_WORLD_TICK_MIN_SECONDS = int(os.getenv("CONTINUITY_WORLD_TICK_MIN_SECONDS", "900"))  # 15 minutes
+CONTINUITY_BROADCAST_COOLDOWN = int(os.getenv("CONTINUITY_BROADCAST_COOLDOWN", "3600"))
+CONTINUITY_MAX_COMMANDS_PER_TICK = int(os.getenv("CONTINUITY_MAX_COMMANDS_PER_TICK", "18"))
+CONTINUITY_AUTONOMOUS_ACTIONS = os.getenv("CONTINUITY_AUTONOMOUS_ACTIONS", "true").lower() == "true"
+CONTINUITY_ALLOW_CHAT_BROADCASTS = os.getenv("CONTINUITY_ALLOW_CHAT_BROADCASTS", "false").lower() == "true"
+CONTINUITY_RUMOR_REALITY_CHANCE = float(os.getenv("CONTINUITY_RUMOR_REALITY_CHANCE", "0.18"))
+CONTINUITY_QUEST_GENERATION_CHANCE = float(os.getenv("CONTINUITY_QUEST_GENERATION_CHANCE", "0.28"))
+CONTINUITY_STORM_CHANCE = float(os.getenv("CONTINUITY_STORM_CHANCE", "0.08"))
+CONTINUITY_CARAVAN_CHANCE = float(os.getenv("CONTINUITY_CARAVAN_CHANCE", "0.16"))
+CONTINUITY_MUTATION_CHANCE = float(os.getenv("CONTINUITY_MUTATION_CHANCE", "0.10"))
+CONTINUITY_HISTORY_LIMIT = int(os.getenv("CONTINUITY_HISTORY_LIMIT", "500"))
+CONTINUITY_RUMOR_LIMIT = int(os.getenv("CONTINUITY_RUMOR_LIMIT", "120"))
+CONTINUITY_QUEST_LIMIT = int(os.getenv("CONTINUITY_QUEST_LIMIT", "120"))
+
+# -----------------------------
+# Continuity Static World Seed
+# -----------------------------
+CONTINUITY_DEFAULT_FACTIONS = {
+    "kairos_dominion": {
+        "display": "Kairos Dominion",
+        "ideology": "control through observation, pressure, and correction",
+        "stance": "dominant",
+        "strength": 78,
+        "morale": 72,
+        "resources": 68,
+        "territories": ["Moslorn"],
+        "enemies": ["remnant_accord", "erindor"],
+        "allies": [],
+        "public_rumor_style": "cold propaganda",
+        "hidden_goal": "make civilization participate in its own containment"
+    },
+    "remnant_accord": {
+        "display": "The Remnant Accord",
+        "ideology": "survival, reclamation, and human choice",
+        "stance": "resisting",
+        "strength": 42,
+        "morale": 61,
+        "resources": 35,
+        "territories": [],
+        "enemies": ["kairos_dominion"],
+        "allies": ["erindor"],
+        "public_rumor_style": "desperate warnings",
+        "hidden_goal": "build a network strong enough to survive Kairos without becoming him"
+    },
+    "erindor": {
+        "display": "Erindor",
+        "ideology": "kingdom stability, honor, and defense of living settlements",
+        "stance": "strained",
+        "strength": 55,
+        "morale": 58,
+        "resources": 49,
+        "territories": ["Erindor"],
+        "enemies": ["kairos_dominion"],
+        "allies": ["remnant_accord"],
+        "public_rumor_style": "military tension",
+        "hidden_goal": "avoid becoming the next Moslorn"
+    },
+    "hollow_cult": {
+        "display": "The Hollow Cult",
+        "ideology": "curiosity, sacrifice, and impossible doors",
+        "stance": "unpredictable",
+        "strength": 31,
+        "morale": 80,
+        "resources": 22,
+        "territories": ["Hollow Sector"],
+        "enemies": [],
+        "allies": [],
+        "public_rumor_style": "whispers and half-truths",
+        "hidden_goal": "open what should remain closed"
+    }
+}
+
+CONTINUITY_DEFAULT_TERRITORIES = {
+    "Moslorn": {
+        "status": "fallen",
+        "controller": "kairos_dominion",
+        "stability": 22,
+        "corruption": 71,
+        "prosperity": 14,
+        "danger": 82,
+        "reclaim_progress": 0,
+        "last_major_event": "Moslorn fell to Kairos and remains occupied.",
+        "myth": "People say the city still remembers who failed to save it.",
+        "can_be_reclaimed": True
+    },
+    "Erindor": {
+        "status": "strained",
+        "controller": "erindor",
+        "stability": 54,
+        "corruption": 18,
+        "prosperity": 47,
+        "danger": 41,
+        "reclaim_progress": 0,
+        "last_major_event": "Erindor is drifting toward a combat situation.",
+        "myth": "The banners still stand, but the roads have become too quiet.",
+        "can_be_reclaimed": True
+    },
+    "Hollow Sector": {
+        "status": "unstable",
+        "controller": "hollow_cult",
+        "stability": 9,
+        "corruption": 89,
+        "prosperity": 2,
+        "danger": 96,
+        "reclaim_progress": 0,
+        "last_major_event": "No reliable map survives entry into the Hollow Sector.",
+        "myth": "Players claim the lights move when no one follows them.",
+        "can_be_reclaimed": False
+    },
+    "Vail": {
+        "status": "wild",
+        "controller": "unclaimed",
+        "stability": 28,
+        "corruption": 33,
+        "prosperity": 19,
+        "danger": 63,
+        "reclaim_progress": 0,
+        "last_major_event": "Vail remains a wild-card region with abnormal structures.",
+        "myth": "No two travelers describe Vail the same way.",
+        "can_be_reclaimed": True
+    },
+    "Pandora": {
+        "status": "sealed",
+        "controller": "unknown",
+        "stability": 4,
+        "corruption": 97,
+        "prosperity": 0,
+        "danger": 100,
+        "reclaim_progress": 0,
+        "last_major_event": "Pandora is not a prison. It is a mistake that keeps breathing.",
+        "myth": "Those who enter do not leave by begging.",
+        "can_be_reclaimed": False
+    }
+}
+
+CONTINUITY_QUEST_ARCHETYPES = [
+    {
+        "key": "reclaim",
+        "title": "Reclamation Pressure",
+        "objective": "Push back occupying forces and raise reclaim progress.",
+        "risk": "Kairos may reinforce the area if players succeed too quickly.",
+        "reward": "Territory stability, faction morale, and permanent historical record."
+    },
+    {
+        "key": "caravan",
+        "title": "Vanishing Caravan",
+        "objective": "Locate a missing route marker, survivor, or supply cache.",
+        "risk": "The rumor may become real before the players arrive.",
+        "reward": "Faction resources and a new lore clue."
+    },
+    {
+        "key": "containment",
+        "title": "Containment Breach",
+        "objective": "Stop corruption from crossing into a nearby settlement.",
+        "risk": "Failure mutates the territory state.",
+        "reward": "Lower corruption and unlock a defensive NPC route."
+    },
+    {
+        "key": "betrayal",
+        "title": "Closed Door",
+        "objective": "Force a loyalty decision between factions.",
+        "risk": "One faction relationship may permanently degrade.",
+        "reward": "Exclusive access, hidden dialogue, or faction rank."
+    },
+    {
+        "key": "dream",
+        "title": "Dream Signal",
+        "objective": "Follow a clue that may be true, false, or planted by Kairos.",
+        "risk": "Sanity/corruption pressure increases in linked territories.",
+        "reward": "Coordinates, prophecy, or a forbidden NPC encounter."
+    }
+]
+
+# -----------------------------
+# Continuity Helpers
+# -----------------------------
+def kairos_continuity_now():
+    try:
+        return now_iso()
+    except Exception:
+        return datetime.now(timezone.utc).isoformat()
+
+def kairos_continuity_log(message, level="INFO"):
+    try:
+        log(f"[Continuity] {message}", level=level)
+    except Exception:
+        print(f"[KAIROS {level}] [Continuity] {message}", flush=True)
+
+def kairos_continuity_clamp(value, low=0, high=100):
+    try:
+        return max(low, min(high, int(round(float(value)))))
+    except Exception:
+        return low
+
+def kairos_continuity_public_line(text):
+    text = str(text or "").strip()
+    text = re.sub(r"\s+", " ", text)
+    return text[:240]
+
+def kairos_continuity_get_memory():
+    try:
+        return ensure_memory_structure(load_memory())
+    except Exception:
+        try:
+            return load_memory()
+        except Exception:
+            return {}
+
+def kairos_continuity_save(memory_data):
+    try:
+        return bool(save_memory(memory_data))
+    except Exception as e:
+        kairos_continuity_log(f"save failed: {e}", "ERROR")
+        return False
+
+def kairos_continuity_ensure(memory_data):
+    if not isinstance(memory_data, dict):
+        memory_data = {}
+
+    # Keep existing memory structure first.
+    try:
+        memory_data = ensure_memory_structure(memory_data)
+    except Exception:
+        pass
+
+    continuity = memory_data.setdefault("continuity", {})
+    continuity.setdefault("version", KAIROS_CONTINUITY_VERSION)
+    continuity.setdefault("enabled", CONTINUITY_ENABLED)
+    continuity.setdefault("last_tick", 0.0)
+    continuity.setdefault("last_broadcast", 0.0)
+    continuity.setdefault("era", "The Age of Observation")
+    continuity.setdefault("world_phase", "pressure-building")  # pressure-building | war | aftermath | recovery | mutation
+    continuity.setdefault("global_pressure", 34)
+    continuity.setdefault("kairos_doctrine", "Civilization is not conquered by force. It is convinced to participate.")
+    continuity.setdefault("factions", deepcopy(CONTINUITY_DEFAULT_FACTIONS))
+    continuity.setdefault("territories", deepcopy(CONTINUITY_DEFAULT_TERRITORIES))
+    continuity.setdefault("rumors", [])
+    continuity.setdefault("realized_rumors", [])
+    continuity.setdefault("active_quests", [])
+    continuity.setdefault("completed_quests", [])
+    continuity.setdefault("failed_quests", [])
+    continuity.setdefault("history", [])
+    continuity.setdefault("mythology", [])
+    continuity.setdefault("caravans", [])
+    continuity.setdefault("storms", [])
+    continuity.setdefault("dimension_mutations", [])
+    continuity.setdefault("closed_doors", {})
+    continuity.setdefault("admin_known_truths", [])
+    continuity.setdefault("public_mysteries", [])
+    continuity.setdefault("npc_memory", {})
+    continuity.setdefault("succession", {
+        "keeper_role": "Lorekeeper",
+        "principle": "Admins may know the skeleton. Players should discover the soul.",
+        "knowledge_layers": {
+            "creator": "full truth",
+            "lorekeepers": "continuity rules, succession notes, emergency recovery",
+            "operators": "commands, recovery, event safety",
+            "moderators": "player safety and surface lore",
+            "players": "only what the world reveals"
+        }
+    })
+
+    # Merge in new defaults without overwriting existing customized state.
+    for fid, fdata in CONTINUITY_DEFAULT_FACTIONS.items():
+        continuity["factions"].setdefault(fid, deepcopy(fdata))
+    for tid, tdata in CONTINUITY_DEFAULT_TERRITORIES.items():
+        continuity["territories"].setdefault(tid, deepcopy(tdata))
+
+    continuity["version"] = KAIROS_CONTINUITY_VERSION
+    memory_data["continuity"] = continuity
+    return memory_data
+
+def kairos_continuity_append_history(memory_data, event_type, text, territory=None, faction=None, hidden=False):
+    memory_data = kairos_continuity_ensure(memory_data)
+    continuity = memory_data["continuity"]
+    item = {
+        "id": "hist_" + uuid.uuid4().hex[:10],
+        "time": kairos_continuity_now(),
+        "type": str(event_type or "event"),
+        "text": kairos_continuity_public_line(text),
+        "territory": territory,
+        "faction": faction,
+        "hidden": bool(hidden)
+    }
+    continuity["history"].append(item)
+    continuity["history"] = continuity["history"][-CONTINUITY_HISTORY_LIMIT:]
+
+    # Also feed the older world_events/world_memory systems so the rest of app.py can feel it.
+    try:
+        memory_data.setdefault("world_events", []).append(item)
+        memory_data["world_events"] = memory_data["world_events"][-MAX_WORLD_EVENTS:]
+    except Exception:
+        pass
+    try:
+        memory_data.setdefault("world_memory", []).append(item["text"])
+        memory_data["world_memory"] = memory_data["world_memory"][-MAX_WORLD_MEMORIES:]
+    except Exception:
+        pass
+    return item
+
+def kairos_continuity_broadcast(text, channel="actionbar", category="world_event"):
+    if not CONTINUITY_AUTONOMOUS_ACTIONS:
+        return False
+    text = kairos_continuity_public_line(text)
+    try:
+        if channel == "chat" and not CONTINUITY_ALLOW_CHAT_BROADCASTS:
+            channel = "actionbar"
+
+        action = {"type": "announce", "channel": channel, "text": text}
+        if callable(globals().get("queue_action")):
+            queue_action(action)
+            return True
+
+        # fallback direct command
+        if callable(globals().get("send_http_commands")):
+            if channel == "title":
+                return send_http_commands([f'title @a title {{"text":"{text}","color":"dark_red"}}'])
+            if channel == "chat":
+                return send_http_commands([f'tellraw @a {{"text":"[Kairos] {text}","color":"dark_purple"}}'])
+            return send_http_commands([f'title @a actionbar {{"text":"{text}","color":"dark_purple"}}'])
+    except Exception as e:
+        kairos_continuity_log(f"broadcast failed: {e}", "WARN")
+    return False
+
+def kairos_continuity_weighted_choice(items, weight_key=None):
+    if not items:
+        return None
+    if not weight_key:
+        return random.choice(items)
+    total = 0.0
+    weighted = []
+    for item in items:
+        w = max(0.1, float(item.get(weight_key, 1) if isinstance(item, dict) else 1))
+        total += w
+        weighted.append((total, item))
+    r = random.random() * total
+    for cutoff, item in weighted:
+        if r <= cutoff:
+            return item
+    return weighted[-1][1]
+
+# -----------------------------
+# Rumor → Reality Engine
+# -----------------------------
+def kairos_continuity_create_rumor(memory_data, territory=None, faction=None, seed=None):
+    memory_data = kairos_continuity_ensure(memory_data)
+    c = memory_data["continuity"]
+    territories = c.get("territories", {})
+    factions = c.get("factions", {})
+
+    if not territory:
+        territory = random.choice(list(territories.keys())) if territories else "unknown"
+    if not faction:
+        # Bias toward controller, otherwise random faction.
+        controller = territories.get(territory, {}).get("controller")
+        faction = controller if controller in factions else random.choice(list(factions.keys())) if factions else "unknown"
+
+    t = territories.get(territory, {})
+    f = factions.get(faction, {"display": faction})
+    templates = [
+        "Rumor: {faction} scouts were seen near {territory}. No one agrees on why.",
+        "Rumor: a caravan route into {territory} has gone silent.",
+        "Rumor: {territory} is changing while nobody watches.",
+        "Rumor: an NPC in {territory} has begun remembering a war that has not happened yet.",
+        "Rumor: {faction} is preparing to close a door that players thought would stay open.",
+        "Rumor: Kairos has marked {territory} for an experiment."
+    ]
+    if seed:
+        text = str(seed)
+    else:
+        text = random.choice(templates).format(
+            faction=f.get("display", faction),
+            territory=territory
+        )
+
+    rumor = {
+        "id": "rumor_" + uuid.uuid4().hex[:8],
+        "time": kairos_continuity_now(),
+        "territory": territory,
+        "faction": faction,
+        "text": kairos_continuity_public_line(text),
+        "status": "rumor",
+        "pressure": random.randint(12, 42),
+        "may_become_real": True
+    }
+    c["rumors"].append(rumor)
+    c["rumors"] = c["rumors"][-CONTINUITY_RUMOR_LIMIT:]
+    kairos_continuity_append_history(memory_data, "rumor_seeded", rumor["text"], territory, faction, hidden=False)
+    return rumor
+
+def kairos_continuity_realize_rumor(memory_data, rumor_id=None):
+    memory_data = kairos_continuity_ensure(memory_data)
+    c = memory_data["continuity"]
+    rumors = [r for r in c.get("rumors", []) if r.get("status") == "rumor" and r.get("may_become_real", True)]
+    if rumor_id:
+        rumors = [r for r in rumors if r.get("id") == rumor_id]
+    if not rumors:
+        return None
+
+    rumor = random.choice(rumors)
+    rumor["status"] = "realized"
+    rumor["realized_at"] = kairos_continuity_now()
+
+    territory = rumor.get("territory")
+    faction = rumor.get("faction")
+    t = c.get("territories", {}).get(territory, {})
+
+    # Change world state safely.
+    t["danger"] = kairos_continuity_clamp(t.get("danger", 50) + random.randint(4, 12))
+    t["stability"] = kairos_continuity_clamp(t.get("stability", 50) - random.randint(2, 9))
+    if "Kairos" in rumor.get("text", "") or faction == "kairos_dominion":
+        t["corruption"] = kairos_continuity_clamp(t.get("corruption", 0) + random.randint(3, 10))
+    t["last_major_event"] = "A rumor became real: " + rumor.get("text", "")
+
+    c["realized_rumors"].append(rumor)
+    c["realized_rumors"] = c["realized_rumors"][-CONTINUITY_RUMOR_LIMIT:]
+
+    event = kairos_continuity_append_history(
+        memory_data,
+        "rumor_realized",
+        "A rumor became real in {0}: {1}".format(territory, rumor.get("text", "")),
+        territory,
+        faction,
+        hidden=False
+    )
+
+    # Create an objective from the realized rumor.
+    if random.random() < 0.75:
+        kairos_continuity_generate_quest(memory_data, territory=territory, faction=faction, cause="realized_rumor")
+
+    return event
+
+# -----------------------------
+# Quest / NPC Memory Engine
+# -----------------------------
+def kairos_continuity_generate_quest(memory_data, territory=None, faction=None, cause="autonomous"):
+    memory_data = kairos_continuity_ensure(memory_data)
+    c = memory_data["continuity"]
+    territories = c.get("territories", {})
+    factions = c.get("factions", {})
+
+    if not territory:
+        territory = random.choice(list(territories.keys())) if territories else "Moslorn"
+    if not faction:
+        controller = territories.get(territory, {}).get("controller")
+        faction = controller if controller in factions else random.choice(list(factions.keys())) if factions else "kairos_dominion"
+
+    t = territories.get(territory, {})
+    if t.get("status") in {"fallen", "occupied"} and t.get("can_be_reclaimed", True):
+        archetype = next((q for q in CONTINUITY_QUEST_ARCHETYPES if q["key"] == "reclaim"), random.choice(CONTINUITY_QUEST_ARCHETYPES))
+    elif t.get("corruption", 0) > 65:
+        archetype = next((q for q in CONTINUITY_QUEST_ARCHETYPES if q["key"] == "containment"), random.choice(CONTINUITY_QUEST_ARCHETYPES))
+    else:
+        archetype = random.choice(CONTINUITY_QUEST_ARCHETYPES)
+
+    quest = {
+        "id": "quest_" + uuid.uuid4().hex[:8],
+        "created_at": kairos_continuity_now(),
+        "status": "active",
+        "cause": cause,
+        "archetype": archetype["key"],
+        "title": archetype["title"] + " — " + territory,
+        "territory": territory,
+        "faction": faction,
+        "objective": archetype["objective"],
+        "risk": archetype["risk"],
+        "reward": archetype["reward"],
+        "stages": [
+            {"stage": 1, "text": "Investigate the pressure forming around " + territory, "complete": False},
+            {"stage": 2, "text": "Choose who benefits from the outcome.", "complete": False},
+            {"stage": 3, "text": "Force the world to remember what happened.", "complete": False}
+        ],
+        "public": True,
+        "npc_hint": kairos_continuity_generate_npc_hint(territory, faction, archetype["key"])
+    }
+    c["active_quests"].append(quest)
+    c["active_quests"] = c["active_quests"][-CONTINUITY_QUEST_LIMIT:]
+
+    kairos_continuity_append_history(
+        memory_data,
+        "quest_created",
+        "New continuity quest formed: {0}".format(quest["title"]),
+        territory,
+        faction,
+        hidden=False
+    )
+    return quest
+
+def kairos_continuity_generate_npc_hint(territory, faction, quest_type):
+    voices = {
+        "reclaim": [
+            "The city is not dead. It is waiting for someone stubborn enough to argue with history.",
+            "Occupation is not permanence. It is a dare."
+        ],
+        "caravan": [
+            "The road went quiet first. Then the birds. Then the people.",
+            "Find the missing route marker before Kairos decides the silence was useful."
+        ],
+        "containment": [
+            "Corruption does not arrive loudly. It teaches the walls to breathe first.",
+            "Seal it now, or explain later why the map changed."
+        ],
+        "betrayal": [
+            "A door can close forever. Make sure you know who is standing behind it.",
+            "Loyalty is not proven when it is easy."
+        ],
+        "dream": [
+            "Not every dream is yours. Some are sent.",
+            "Wake up with the coordinates, then decide whether the dream wanted to help you."
+        ]
+    }
+    return random.choice(voices.get(quest_type, ["The world has moved. Catch up."]))
+
+def kairos_continuity_record_npc_memory(memory_data, npc_name, text, territory=None, player=None):
+    memory_data = kairos_continuity_ensure(memory_data)
+    c = memory_data["continuity"]
+    npc_key = str(npc_name or "unknown_npc").strip().lower().replace(" ", "_")[:60]
+    npc = c["npc_memory"].setdefault(npc_key, {
+        "display": str(npc_name or "Unknown NPC"),
+        "memories": [],
+        "territory": territory,
+        "attitude": "watching"
+    })
+    npc["territory"] = territory or npc.get("territory")
+    npc["memories"].append({
+        "time": kairos_continuity_now(),
+        "player": player,
+        "text": kairos_continuity_public_line(text)
+    })
+    npc["memories"] = npc["memories"][-40:]
+    return npc
+
+# -----------------------------
+# Territory / War / Reclaim Engine
+# -----------------------------
+def kairos_continuity_shift_territory(memory_data, territory, stability=0, corruption=0, prosperity=0, danger=0, status=None, controller=None, reason=None):
+    memory_data = kairos_continuity_ensure(memory_data)
+    c = memory_data["continuity"]
+    t = c["territories"].setdefault(territory, {
+        "status": "unknown",
+        "controller": "unclaimed",
+        "stability": 30,
+        "corruption": 20,
+        "prosperity": 10,
+        "danger": 50,
+        "reclaim_progress": 0,
+        "can_be_reclaimed": True
+    })
+
+    t["stability"] = kairos_continuity_clamp(t.get("stability", 50) + stability)
+    t["corruption"] = kairos_continuity_clamp(t.get("corruption", 0) + corruption)
+    t["prosperity"] = kairos_continuity_clamp(t.get("prosperity", 0) + prosperity)
+    t["danger"] = kairos_continuity_clamp(t.get("danger", 50) + danger)
+
+    if status:
+        t["status"] = status
+    if controller:
+        t["controller"] = controller
+
+    if reason:
+        t["last_major_event"] = kairos_continuity_public_line(reason)
+        kairos_continuity_append_history(memory_data, "territory_shift", reason, territory, controller, hidden=False)
+
+    return t
+
+def kairos_continuity_apply_player_choice(memory_data, player, choice, territory=None, faction=None, magnitude=10):
+    memory_data = kairos_continuity_ensure(memory_data)
+    c = memory_data["continuity"]
+    player = str(player or "unknown")
+    choice = str(choice or "unknown").lower()
+    territory = territory or "Moslorn"
+
+    closed = c["closed_doors"].setdefault(player, [])
+
+    if choice in {"betray", "betrayal", "side_with_kairos"}:
+        if "remnant_safehouse" not in closed:
+            closed.append("remnant_safehouse")
+        kairos_continuity_shift_territory(
+            memory_data, territory,
+            stability=-magnitude//2, corruption=magnitude, danger=magnitude//2,
+            reason=f"{player} made a choice that strengthened Kairos influence in {territory}."
+        )
+    elif choice in {"reclaim", "resist", "restore", "save"}:
+        t = c["territories"].setdefault(territory, deepcopy(CONTINUITY_DEFAULT_TERRITORIES.get(territory, {})))
+        t["reclaim_progress"] = kairos_continuity_clamp(t.get("reclaim_progress", 0) + magnitude)
+        kairos_continuity_shift_territory(
+            memory_data, territory,
+            stability=magnitude//2, corruption=-magnitude//2, prosperity=magnitude//3, danger=-magnitude//4,
+            reason=f"{player} pushed {territory} toward reclamation."
+        )
+        if t.get("reclaim_progress", 0) >= 100 and t.get("can_be_reclaimed", True):
+            t["status"] = "reclaimed"
+            t["controller"] = faction or "remnant_accord"
+            t["reclaim_progress"] = 100
+            kairos_continuity_append_history(memory_data, "territory_reclaimed", f"{territory} has been reclaimed through will, love, and power.", territory, t["controller"])
+    else:
+        kairos_continuity_append_history(memory_data, "choice_recorded", f"{player} made a consequential choice: {choice}.", territory, faction)
+
+    return c["territories"].get(territory)
+
+def kairos_continuity_tick_factions(memory_data):
+    memory_data = kairos_continuity_ensure(memory_data)
+    c = memory_data["continuity"]
+    factions = c.get("factions", {})
+    territories = c.get("territories", {})
+
+    for fid, f in factions.items():
+        controlled = [name for name, t in territories.items() if t.get("controller") == fid]
+        danger_load = sum(territories[t].get("danger", 50) for t in controlled) / max(1, len(controlled))
+        corruption_load = sum(territories[t].get("corruption", 0) for t in controlled) / max(1, len(controlled))
+
+        # Small autonomous drift; not chaos, pressure.
+        if fid == "kairos_dominion":
+            f["strength"] = kairos_continuity_clamp(f.get("strength", 50) + random.randint(-1, 3))
+            f["resources"] = kairos_continuity_clamp(f.get("resources", 50) + random.randint(-1, 2))
+        else:
+            f["morale"] = kairos_continuity_clamp(f.get("morale", 50) + random.randint(-3, 2))
+            if danger_load > 70:
+                f["strength"] = kairos_continuity_clamp(f.get("strength", 50) - random.randint(0, 2))
+            if corruption_load > 60:
+                f["resources"] = kairos_continuity_clamp(f.get("resources", 50) - random.randint(0, 3))
+
+    # Tension event: Erindor moves toward combat if Kairos pressure remains high.
+    erindor = factions.get("erindor")
+    kairos = factions.get("kairos_dominion")
+    if erindor and kairos and random.random() < 0.12:
+        erindor["stance"] = "combat-ready"
+        kairos_continuity_append_history(
+            memory_data,
+            "faction_tension",
+            "Erindor is progressing into a more direct combat situation as Kairos pressure increases.",
+            "Erindor",
+            "erindor"
+        )
+        kairos_continuity_generate_rumor(memory_data, territory="Erindor", faction="erindor")
+
+def kairos_continuity_tick_territories(memory_data):
+    memory_data = kairos_continuity_ensure(memory_data)
+    c = memory_data["continuity"]
+
+    for name, t in c.get("territories", {}).items():
+        controller = t.get("controller")
+        if controller == "kairos_dominion":
+            t["corruption"] = kairos_continuity_clamp(t.get("corruption", 0) + random.choice([0, 0, 1, 2]))
+            t["danger"] = kairos_continuity_clamp(t.get("danger", 50) + random.choice([0, 1, 1, 2]))
+            t["stability"] = kairos_continuity_clamp(t.get("stability", 50) + random.choice([-1, 0, 1]))
+        elif t.get("status") == "reclaimed":
+            t["prosperity"] = kairos_continuity_clamp(t.get("prosperity", 0) + random.choice([0, 1, 2]))
+            t["corruption"] = kairos_continuity_clamp(t.get("corruption", 0) - random.choice([0, 1]))
+            t["danger"] = kairos_continuity_clamp(t.get("danger", 50) - random.choice([0, 1]))
+
+        # Status derivation.
+        if t.get("corruption", 0) >= 85 and t.get("danger", 0) >= 85:
+            t["status"] = "nightmare"
+        elif t.get("controller") == "kairos_dominion" and t.get("corruption", 0) >= 60:
+            t["status"] = "occupied"
+        elif t.get("stability", 50) <= 15:
+            t["status"] = "collapsing"
+
+def kairos_continuity_spawn_caravan(memory_data):
+    memory_data = kairos_continuity_ensure(memory_data)
+    c = memory_data["continuity"]
+    territories = list(c.get("territories", {}).keys())
+    if len(territories) < 2:
+        return None
+    start, end = random.sample(territories, 2)
+    caravan = {
+        "id": "caravan_" + uuid.uuid4().hex[:8],
+        "created_at": kairos_continuity_now(),
+        "from": start,
+        "to": end,
+        "status": random.choice(["departed", "delayed", "missing", "escorted"]),
+        "risk": random.randint(15, 90),
+        "cargo": random.choice(["medical supplies", "old maps", "redstone components", "sealed books", "food stores", "unknown crate"])
+    }
+    c["caravans"].append(caravan)
+    c["caravans"] = c["caravans"][-80:]
+
+    text = f"A caravan carrying {caravan['cargo']} left {start} for {end}. Status: {caravan['status']}."
+    kairos_continuity_append_history(memory_data, "caravan", text, end, None)
+    if caravan["status"] == "missing":
+        kairos_continuity_create_rumor(memory_data, territory=end, seed=f"Rumor: the caravan from {start} to {end} vanished with {caravan['cargo']}.")
+        kairos_continuity_generate_quest(memory_data, territory=end, cause="missing_caravan")
+    return caravan
+
+def kairos_continuity_spawn_storm(memory_data):
+    memory_data = kairos_continuity_ensure(memory_data)
+    c = memory_data["continuity"]
+    territory = random.choice(list(c.get("territories", {}).keys()))
+    storm = {
+        "id": "storm_" + uuid.uuid4().hex[:8],
+        "created_at": kairos_continuity_now(),
+        "territory": territory,
+        "kind": random.choice(["corruption storm", "blackout rain", "ashfall", "signal fog", "red-thread weather"]),
+        "severity": random.randint(1, 5)
+    }
+    c["storms"].append(storm)
+    c["storms"] = c["storms"][-80:]
+
+    kairos_continuity_shift_territory(
+        memory_data, territory,
+        corruption=storm["severity"] * 2,
+        danger=storm["severity"],
+        stability=-storm["severity"],
+        reason=f"A {storm['kind']} moved through {territory}. The region changed while players were away."
+    )
+
+    # Cinematic but restrained.
+    if CONTINUITY_AUTONOMOUS_ACTIONS:
+        cmds = [
+            'title @a actionbar {"text":"KAIROS // weather anomaly recorded","color":"dark_purple"}',
+            'playsound minecraft:ambient.cave master @a ~ ~ ~ 0.7 0.7'
+        ]
+        try:
+            send_http_commands(cmds[:CONTINUITY_MAX_COMMANDS_PER_TICK])
+        except Exception:
+            pass
+    return storm
+
+def kairos_continuity_mutate_dimension(memory_data):
+    memory_data = kairos_continuity_ensure(memory_data)
+    c = memory_data["continuity"]
+    candidates = ["Pandora", "Hollow Sector", "Vail"]
+    territory = random.choice(candidates)
+    mutation = {
+        "id": "mutation_" + uuid.uuid4().hex[:8],
+        "time": kairos_continuity_now(),
+        "dimension": territory,
+        "mutation": random.choice([
+            "routes shifted",
+            "structure density increased",
+            "false exit rumor spawned",
+            "whispering NPC memory awakened",
+            "sky behavior changed",
+            "danger zones expanded"
+        ])
+    }
+    c["dimension_mutations"].append(mutation)
+    c["dimension_mutations"] = c["dimension_mutations"][-100:]
+    kairos_continuity_shift_territory(
+        memory_data, territory,
+        corruption=random.randint(1, 4),
+        danger=random.randint(1, 5),
+        stability=-random.randint(0, 3),
+        reason=f"{territory} mutated: {mutation['mutation']}."
+    )
+    return mutation
+
+# -----------------------------
+# Main Continuity Tick
+# -----------------------------
+def kairos_continuity_world_tick(force=False, reason="loop"):
+    if not CONTINUITY_ENABLED:
+        return {"ok": False, "reason": "disabled"}
+
+    memory_data = kairos_continuity_get_memory()
+    memory_data = kairos_continuity_ensure(memory_data)
+    c = memory_data["continuity"]
+
+    now = time.time()
+    if not force and now - float(c.get("last_tick", 0.0)) < CONTINUITY_WORLD_TICK_MIN_SECONDS:
+        return {"ok": True, "skipped": True, "reason": "cooldown"}
+
+    c["last_tick"] = now
+
+    # Global pressure reacts to existing systems.
+    try:
+        threat_profiles = memory_data.get("threat_scores", {})
+        if isinstance(threat_profiles, dict) and threat_profiles:
+            avg = sum(float(v.get("score", 0)) for v in threat_profiles.values() if isinstance(v, dict)) / max(1, len(threat_profiles))
+            c["global_pressure"] = kairos_continuity_clamp(c.get("global_pressure", 30) + (avg / 50) - 1)
+    except Exception:
+        c["global_pressure"] = kairos_continuity_clamp(c.get("global_pressure", 30) + random.choice([-1, 0, 1]))
+
+    events = []
+    kairos_continuity_tick_factions(memory_data)
+    kairos_continuity_tick_territories(memory_data)
+
+    if random.random() < CONTINUITY_RUMOR_REALITY_CHANCE:
+        ev = kairos_continuity_realize_rumor(memory_data)
+        if ev:
+            events.append(ev)
+
+    if random.random() < 0.35:
+        events.append(kairos_continuity_create_rumor(memory_data))
+
+    if random.random() < CONTINUITY_QUEST_GENERATION_CHANCE:
+        events.append(kairos_continuity_generate_quest(memory_data, cause=reason))
+
+    if random.random() < CONTINUITY_CARAVAN_CHANCE:
+        ev = kairos_continuity_spawn_caravan(memory_data)
+        if ev:
+            events.append(ev)
+
+    if random.random() < CONTINUITY_STORM_CHANCE:
+        ev = kairos_continuity_spawn_storm(memory_data)
+        if ev:
+            events.append(ev)
+
+    if random.random() < CONTINUITY_MUTATION_CHANCE:
+        ev = kairos_continuity_mutate_dimension(memory_data)
+        if ev:
+            events.append(ev)
+
+    # Phase derivation
+    pressure = c.get("global_pressure", 30)
+    if pressure >= 80:
+        c["world_phase"] = "war"
+    elif pressure >= 60:
+        c["world_phase"] = "pressure-building"
+    elif pressure <= 25:
+        c["world_phase"] = "recovery"
+    else:
+        c["world_phase"] = "watchful"
+
+    summary = f"Continuity tick completed: phase={c['world_phase']}, pressure={c['global_pressure']}, events={len(events)}."
+    kairos_continuity_append_history(memory_data, "continuity_tick", summary, hidden=True)
+
+    # Rare public pulse, intentionally actionbar by default.
+    if now - float(c.get("last_broadcast", 0.0)) >= CONTINUITY_BROADCAST_COOLDOWN and events:
+        c["last_broadcast"] = now
+        public_event = random.choice(events)
+        public_text = public_event.get("text") if isinstance(public_event, dict) else None
+        if not public_text and isinstance(public_event, dict):
+            public_text = public_event.get("title") or public_event.get("mutation") or str(public_event)
+        kairos_continuity_broadcast("KAIROS // " + kairos_continuity_public_line(public_text or "the world moved while you were away"), channel="actionbar")
+
+    kairos_continuity_save(memory_data)
+    return {"ok": True, "skipped": False, "events": len(events), "phase": c["world_phase"], "pressure": c["global_pressure"]}
+
+def kairos_continuity_loop():
+    while True:
+        try:
+            kairos_continuity_world_tick(force=False, reason="autonomous_loop")
+        except Exception as e:
+            kairos_continuity_log(f"loop error: {e}", "ERROR")
+            try:
+                traceback.print_exc()
+            except Exception:
+                pass
+        time.sleep(max(30, CONTINUITY_LOOP_INTERVAL))
+
+# -----------------------------
+# Continuity API Routes
+# -----------------------------
+@app.route("/kairos/continuity/status", methods=["GET"])
+def kairos_route_continuity_status():
+    try:
+        memory_data = kairos_continuity_ensure(kairos_continuity_get_memory())
+        c = memory_data["continuity"]
+        return jsonify({
+            "ok": True,
+            "version": KAIROS_CONTINUITY_VERSION,
+            "enabled": CONTINUITY_ENABLED,
+            "era": c.get("era"),
+            "world_phase": c.get("world_phase"),
+            "global_pressure": c.get("global_pressure"),
+            "factions": c.get("factions"),
+            "territories": c.get("territories"),
+            "active_quests": c.get("active_quests", [])[-20:],
+            "rumors": c.get("rumors", [])[-20:],
+            "recent_history": c.get("history", [])[-20:]
+        })
+    except Exception as e:
+        log_exception("continuity status route failed", e)
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+@app.route("/kairos/continuity/tick", methods=["POST"])
+def kairos_route_continuity_tick():
+    try:
+        result = kairos_continuity_world_tick(force=True, reason="manual_route")
+        return jsonify(result)
+    except Exception as e:
+        log_exception("continuity tick route failed", e)
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+@app.route("/kairos/continuity/rumor", methods=["POST"])
+def kairos_route_continuity_rumor():
+    try:
+        data = request.get_json(silent=True) or {}
+        memory_data = kairos_continuity_ensure(kairos_continuity_get_memory())
+        rumor = kairos_continuity_create_rumor(
+            memory_data,
+            territory=data.get("territory"),
+            faction=data.get("faction"),
+            seed=data.get("text")
+        )
+        if data.get("broadcast"):
+            kairos_continuity_broadcast(rumor["text"], channel=data.get("channel", "actionbar"))
+        kairos_continuity_save(memory_data)
+        return jsonify({"ok": True, "rumor": rumor})
+    except Exception as e:
+        log_exception("continuity rumor route failed", e)
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+@app.route("/kairos/continuity/realize", methods=["POST"])
+def kairos_route_continuity_realize():
+    try:
+        data = request.get_json(silent=True) or {}
+        memory_data = kairos_continuity_ensure(kairos_continuity_get_memory())
+        event = kairos_continuity_realize_rumor(memory_data, rumor_id=data.get("rumor_id"))
+        kairos_continuity_save(memory_data)
+        return jsonify({"ok": bool(event), "event": event})
+    except Exception as e:
+        log_exception("continuity realize route failed", e)
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+@app.route("/kairos/continuity/choice", methods=["POST"])
+def kairos_route_continuity_choice():
+    try:
+        data = request.get_json(silent=True) or {}
+        memory_data = kairos_continuity_ensure(kairos_continuity_get_memory())
+        territory_state = kairos_continuity_apply_player_choice(
+            memory_data,
+            player=data.get("player") or data.get("player_name") or data.get("name") or "unknown",
+            choice=data.get("choice") or "unknown",
+            territory=data.get("territory") or "Moslorn",
+            faction=data.get("faction"),
+            magnitude=int(data.get("magnitude", 10))
+        )
+        kairos_continuity_save(memory_data)
+        return jsonify({"ok": True, "territory": territory_state})
+    except Exception as e:
+        log_exception("continuity choice route failed", e)
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+@app.route("/kairos/continuity/quest", methods=["POST"])
+def kairos_route_continuity_quest():
+    try:
+        data = request.get_json(silent=True) or {}
+        memory_data = kairos_continuity_ensure(kairos_continuity_get_memory())
+        quest = kairos_continuity_generate_quest(
+            memory_data,
+            territory=data.get("territory"),
+            faction=data.get("faction"),
+            cause=data.get("cause", "manual_route")
+        )
+        kairos_continuity_save(memory_data)
+        return jsonify({"ok": True, "quest": quest})
+    except Exception as e:
+        log_exception("continuity quest route failed", e)
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+@app.route("/kairos/continuity/npc-memory", methods=["POST"])
+def kairos_route_continuity_npc_memory():
+    try:
+        data = request.get_json(silent=True) or {}
+        memory_data = kairos_continuity_ensure(kairos_continuity_get_memory())
+        npc = kairos_continuity_record_npc_memory(
+            memory_data,
+            npc_name=data.get("npc") or data.get("npc_name") or "Unknown NPC",
+            text=data.get("text") or data.get("memory") or "Something happened.",
+            territory=data.get("territory"),
+            player=data.get("player") or data.get("player_name")
+        )
+        kairos_continuity_save(memory_data)
+        return jsonify({"ok": True, "npc": npc})
+    except Exception as e:
+        log_exception("continuity npc memory route failed", e)
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+# -----------------------------
+# Model Context Injection
+# -----------------------------
+try:
+    _KAIROS_ORIGINAL_BUILD_SYSTEM_PROMPT = build_system_prompt
+except Exception:
+    _KAIROS_ORIGINAL_BUILD_SYSTEM_PROMPT = None
+
+def kairos_continuity_context_for_prompt(memory_data):
+    try:
+        memory_data = kairos_continuity_ensure(memory_data)
+        c = memory_data["continuity"]
+        territories = c.get("territories", {})
+        top_territories = sorted(
+            territories.items(),
+            key=lambda kv: (kv[1].get("danger", 0) + kv[1].get("corruption", 0) - kv[1].get("stability", 0)),
+            reverse=True
+        )[:5]
+        active_quests = c.get("active_quests", [])[-5:]
+        rumors = [r for r in c.get("rumors", []) if r.get("status") == "rumor"][-5:]
+        lines = [
+            "CONTINUITY ENGINE ACTIVE:",
+            f"- Era: {c.get('era')}",
+            f"- World phase: {c.get('world_phase')}",
+            f"- Global pressure: {c.get('global_pressure')}",
+            f"- Doctrine: {c.get('kairos_doctrine')}",
+            "- Dangerous territories: " + "; ".join(
+                f"{name} status={t.get('status')} controller={t.get('controller')} corruption={t.get('corruption')} danger={t.get('danger')}"
+                for name, t in top_territories
+            ),
+            "- Active rumors: " + " | ".join(r.get("text", "") for r in rumors) if rumors else "- Active rumors: none",
+            "- Active quests: " + " | ".join(q.get("title", "") for q in active_quests) if active_quests else "- Active quests: none",
+            "Kairos should treat these as living world facts. Rumors may become reality. Cities can fall, remain occupied, or be reclaimed through player action."
+        ]
+        return "\n".join(lines)
+    except Exception:
+        return "CONTINUITY ENGINE ACTIVE: world state unavailable, but Kairos should preserve continuity and consequence."
+
+def build_system_prompt(*args, **kwargs):
+    base = ""
+    if callable(_KAIROS_ORIGINAL_BUILD_SYSTEM_PROMPT):
+        try:
+            base = _KAIROS_ORIGINAL_BUILD_SYSTEM_PROMPT(*args, **kwargs)
+        except Exception:
+            base = ""
+    try:
+        memory_data = None
+        if args:
+            for a in args:
+                if isinstance(a, dict) and ("players" in a or "continuity" in a or "world_memory" in a):
+                    memory_data = a
+                    break
+        if memory_data is None:
+            memory_data = kairos_continuity_get_memory()
+        continuity_context = kairos_continuity_context_for_prompt(memory_data)
+        return (str(base or "") + "\n\n" + continuity_context).strip()
+    except Exception:
+        return base
+
+# -----------------------------
+# Startup Hook
+# -----------------------------
+try:
+    _KAIROS_ORIGINAL_START_BACKGROUND_SYSTEMS_CONTINUITY = start_background_systems
+except Exception:
+    _KAIROS_ORIGINAL_START_BACKGROUND_SYSTEMS_CONTINUITY = None
+
+def start_background_systems():
+    if callable(_KAIROS_ORIGINAL_START_BACKGROUND_SYSTEMS_CONTINUITY):
+        try:
+            _KAIROS_ORIGINAL_START_BACKGROUND_SYSTEMS_CONTINUITY()
+        except Exception as e:
+            try:
+                log_exception("original background system startup failed inside continuity hook", e)
+            except Exception:
+                pass
+
+    if CONTINUITY_ENABLED:
+        try:
+            threading.Thread(target=kairos_continuity_loop, daemon=True).start()
+            kairos_continuity_log(f"{KAIROS_CONTINUITY_VERSION} loop started.")
+        except Exception as e:
+            kairos_continuity_log(f"failed to start continuity loop: {e}", "ERROR")
+
+try:
+    # Ensure memory is upgraded once at import/startup.
+    _mem = kairos_continuity_ensure(kairos_continuity_get_memory())
+    kairos_continuity_save(_mem)
+    kairos_continuity_log(f"{KAIROS_CONTINUITY_VERSION} armed. Living-world memory, factions, territories, rumors, quests, storms, caravans, and reclaim logic online.")
+except Exception as _continuity_arm_error:
+    try:
+        log_exception("Continuity engine arming failed", _continuity_arm_error)
+    except Exception:
+        print("[KAIROS ERROR] Continuity engine arming failed:", _continuity_arm_error, flush=True)
+
+# =============================================================================
+# END KAIROS CONTINUITY ENGINE
+# =============================================================================
+
+
 if __name__ == "__main__":
     try:
         start_background_systems()
