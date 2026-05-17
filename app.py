@@ -9496,7 +9496,7 @@ def start_background_systems():
             log("Action loop started.")
 
         if "idle_loop" in globals() and callable(idle_loop):
-            threading.Thread(target=idle_loop, daemon=True).start()
+            # IDLE LOOP DISABLED FOR DIRECT NPC/CHAT MODE
             log("Idle loop started.")
 
         if "commander_loop" in globals() and callable(commander_loop):
@@ -24155,3 +24155,85 @@ if __name__ == "__main__":
     except Exception:
         print("[KAIROS INFO] Starting Kairos AI server...", flush=True)
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", "10000")), threaded=True)
+
+
+# ============================================================
+# KAIROS NPC AI ROUTE (AI-DRIVEN NPC DIALOGUE)
+# ============================================================
+NPC_REGISTRY = {
+    "382": {
+        "name": "Trojan Guard",
+        "role": "guard",
+        "faction": "trojan",
+        "personality": "fearful"
+    }
+}
+
+@app.route("/npc_chat", methods=["POST"])
+def npc_chat():
+
+    try:
+        data = request.json or {}
+
+        player = str(data.get("player", "Unknown"))
+        npc_id = str(data.get("npc_id", "0"))
+
+        npc = NPC_REGISTRY.get(npc_id)
+
+        if not npc:
+            return jsonify({
+                "ok": False,
+                "error": "unknown_npc"
+            })
+
+        system_prompt = f"""
+You are {npc['name']} inside the Nexus universe.
+
+Faction: {npc['faction']}
+Role: {npc['role']}
+Personality: {npc['personality']}
+
+You are speaking directly to player {player}.
+
+Rules:
+- Stay immersive.
+- Keep replies under 2 sentences.
+- Speak like a living MMORPG NPC.
+- Never mention being AI.
+- Never break character.
+"""
+
+        if not client:
+            reply = "The guard watches you silently."
+        else:
+            response = client.chat.completions.create(
+                model=MODEL_NAME,
+                messages=[
+                    {"role": "system", "content": system_prompt}
+                ]
+            )
+
+            reply = (
+                response.choices[0]
+                .message
+                .content
+                .strip()
+            )
+
+        send_to_minecraft(
+            f"[{npc['name']}] {reply}",
+            player
+        )
+
+        return jsonify({
+            "ok": True,
+            "reply": reply
+        })
+
+    except Exception as e:
+        log_exception("npc_chat failed", e)
+        return jsonify({
+            "ok": False,
+            "error": str(e)
+        })
+
