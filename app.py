@@ -23540,6 +23540,608 @@ except Exception as _continuity_arm_error:
 # =============================================================================
 
 
+
+# =============================================================================
+# KAIROS FINAL MINECRAFT DIRECT CHAT + NPC DIALOGUE OVERLAY
+# Version: 2026.05.16-asap-rocky-mc-direct-npc
+#
+# Purpose:
+#   - HARD shuts down Minecraft idle/ambient chat spam.
+#   - Leaves Discord behavior alone.
+#   - Forces Kairos to answer real Minecraft player chat.
+#   - Adds lightweight NPC dialogue endpoints so Citizens/CitizensCMD can call Kairos
+#     instead of storing huge /npc text dialogue trees.
+#   - Does not remove army, quests, memory, war systems, Discord bridge, or command bridge.
+# =============================================================================
+
+KAIROS_MC_DIRECT_NPC_VERSION = "2026.05.16-asap-rocky-mc-direct-npc"
+
+# -----------------------------
+# Master feature toggles
+# -----------------------------
+ENABLE_MINECRAFT_IDLE_SYSTEM = os.getenv("ENABLE_MINECRAFT_IDLE_SYSTEM", "false").lower() == "true"
+ENABLE_MINECRAFT_DIRECT_KAIROS_REPLIES = os.getenv("ENABLE_MINECRAFT_DIRECT_KAIROS_REPLIES", "true").lower() == "true"
+ENABLE_KAIROS_NPC_DIALOGUE = os.getenv("ENABLE_KAIROS_NPC_DIALOGUE", "true").lower() == "true"
+
+# Direct player replies should be fast, but not duplicate-spammed.
+KAIROS_MC_DIRECT_REPLY_COOLDOWN = float(os.getenv("KAIROS_MC_DIRECT_REPLY_COOLDOWN", "1.25"))
+KAIROS_MC_NPC_REPLY_COOLDOWN = float(os.getenv("KAIROS_MC_NPC_REPLY_COOLDOWN", "2.0"))
+KAIROS_MC_REPLY_MAX_CHARS = int(os.getenv("KAIROS_MC_REPLY_MAX_CHARS", "360"))
+
+# Background/ambient Minecraft chat is now off by default.
+SUPPRESS_MINECRAFT_IDLE_CHAT = os.getenv("SUPPRESS_MINECRAFT_IDLE_CHAT", "true").lower() == "true"
+SUPPRESS_MINECRAFT_AMBIENT_CHAT = os.getenv("SUPPRESS_MINECRAFT_AMBIENT_CHAT", "true").lower() == "true"
+
+# Keep these flags hard-quiet unless you explicitly override them in Render.
+try:
+    KAIROS_IDLE_ENABLED = ENABLE_MINECRAFT_IDLE_SYSTEM
+    KAIROS_IDLE_WAVES_ENABLED = ENABLE_MINECRAFT_IDLE_SYSTEM
+    KAIROS_IDLE_CINEMATICS_ENABLED = ENABLE_MINECRAFT_IDLE_SYSTEM
+    CONTINUITY_ALLOW_CHAT_BROADCASTS = False
+    SPONTANEOUS_MESSAGE_CHANCE = 0.0
+    IDLE_TRIGGER_SECONDS = 999999999
+    IDLE_CHECK_INTERVAL = 999999999
+except Exception:
+    pass
+
+_kairos_mc_direct_last_reply = {}
+_kairos_mc_npc_last_reply = {}
+_kairos_final_started_threads = set()
+
+try:
+    _KAIROS_FINAL_ORIGINAL_SEND_TO_SOURCE = send_to_source
+except Exception:
+    _KAIROS_FINAL_ORIGINAL_SEND_TO_SOURCE = None
+
+try:
+    _KAIROS_FINAL_ORIGINAL_SEND_TO_MINECRAFT = send_to_minecraft
+except Exception:
+    _KAIROS_FINAL_ORIGINAL_SEND_TO_MINECRAFT = None
+
+try:
+    _KAIROS_FINAL_ORIGINAL_CHAT_VIEW = app.view_functions.get("chat_1")
+except Exception:
+    _KAIROS_FINAL_ORIGINAL_CHAT_VIEW = None
+
+
+def _kairos_final_log(message, level="INFO"):
+    try:
+        log(f"[MC-Direct-NPC] {message}", level=level)
+    except Exception:
+        print(f"[KAIROS {level}] [MC-Direct-NPC] {message}", flush=True)
+
+
+def _kairos_final_trim(text, limit=None):
+    limit = limit or KAIROS_MC_REPLY_MAX_CHARS
+    try:
+        if "sanitize_text" in globals() and callable(sanitize_text):
+            return sanitize_text(text, limit)
+        if "trim_text" in globals() and callable(trim_text):
+            return trim_text(text, limit)
+    except Exception:
+        pass
+    text = re.sub(r"\s+", " ", str(text or "")).strip()
+    return text[:limit]
+
+
+def _kairos_final_player_selector(player=None):
+    player = str(player or "").strip()
+    if not player or player in {"@a", "@p", "@s", "@r"}:
+        return "@a"
+    # Safe name selector. Minecraft names are normally simple, but keep this protected.
+    safe = re.sub(r"[^A-Za-z0-9_]", "", player)
+    return f"@a[name={safe}]" if safe else "@a"
+
+
+def _kairos_final_command_clean(cmd):
+    try:
+        if "_clean_mc_command" in globals() and callable(_clean_mc_command):
+            return _clean_mc_command(cmd)
+    except Exception:
+        pass
+    cmd = str(cmd or "").strip()
+    if cmd.startswith("minecraft:execute") and " run " in cmd:
+        cmd = cmd.split(" run ", 1)[1]
+    if cmd.startswith("minecraft:"):
+        cmd = cmd.replace("minecraft:", "", 1)
+    return cmd
+
+
+def _kairos_final_send_commands(commands):
+    cleaned = [_kairos_final_command_clean(c) for c in commands if str(c or "").strip()]
+    if not cleaned:
+        return False
+
+    ok = False
+    try:
+        if "send_http_commands" in globals() and callable(send_http_commands):
+            ok = bool(send_http_commands(cleaned)) or ok
+    except Exception as e:
+        _kairos_final_log(f"HTTP command send failed: {e}", "WARN")
+
+    # Pull-bridge fallback for servers that poll Render.
+    try:
+        if "pending_mc_commands" in globals() and "outbox_lock" in globals():
+            with outbox_lock:
+                for cmd in cleaned:
+                    pending_mc_commands.append({
+                        "id": uuid.uuid4().hex,
+                        "type": "command",
+                        "command": cmd,
+                        "created_at": now_iso() if "now_iso" in globals() else "",
+                        "source": "kairos_mc_direct_npc"
+                    })
+                    while len(pending_mc_commands) > int(globals().get("MC_OUTBOX_LIMIT", 500)):
+                        pending_mc_commands.popleft()
+            ok = True
+    except Exception:
+        pass
+
+    return ok
+
+
+def _kairos_final_is_background_stack():
+    try:
+        import inspect
+        background_markers = {
+            "idle_loop",
+            "ambient_presence_loop",
+            "passive_mob_pressure_loop",
+            "kairos_purpose_speech_loop",
+            "kairos_mission_loop",
+            "strategic_director_loop",
+            "covenant_background_loop",
+            "narrative_operations_background_loop",
+            "endgame_continuity_loop",
+            "kairos_continuity_loop",
+        }
+        for frame in inspect.stack()[1:22]:
+            if str(frame.function or "") in background_markers:
+                return True
+    except Exception:
+        pass
+    return False
+
+
+def kairos_force_minecraft_reply(reply, player=None, npc_name=None, sound=False, actionbar=True):
+    """
+    Hard Minecraft delivery path used for real player chat and NPC dialogue.
+    This does not touch Discord.
+    """
+    if not ENABLE_MINECRAFT_DIRECT_KAIROS_REPLIES:
+        return False
+
+    safe = _kairos_final_trim(reply, KAIROS_MC_REPLY_MAX_CHARS)
+    if not safe:
+        return False
+
+    selector = _kairos_final_player_selector(player)
+    speaker = _kairos_final_trim(npc_name or "Kairos", 48)
+
+    tellraw_payload = {
+        "text": f"[{speaker}] ",
+        "color": "dark_red",
+        "bold": True,
+        "extra": [
+            {"text": safe, "color": "dark_purple", "bold": False}
+        ]
+    }
+
+    commands = [
+        f"tellraw {selector} " + json.dumps(tellraw_payload, ensure_ascii=False)
+    ]
+
+    if actionbar:
+        commands.append(f"title {selector} actionbar " + json.dumps({"text": safe[:120], "color": "dark_purple"}, ensure_ascii=False))
+
+    if sound:
+        commands.append(f"playsound minecraft:block.respawn_anchor.charge master {selector} ~ ~ ~ 0.45 0.75")
+
+    return _kairos_final_send_commands(commands)
+
+
+def send_to_minecraft(reply, player=None):
+    """
+    Final override:
+    - Background/idle Minecraft chatter is suppressed.
+    - Real route/NPC/player-driven replies go through a force path.
+    """
+    try:
+        if _kairos_final_is_background_stack() and (SUPPRESS_MINECRAFT_IDLE_CHAT or SUPPRESS_MINECRAFT_AMBIENT_CHAT):
+            return False
+        return kairos_force_minecraft_reply(reply, player=player, npc_name="Kairos", sound=False, actionbar=True)
+    except Exception as e:
+        _kairos_final_log(f"send_to_minecraft override failed: {e}", "WARN")
+        try:
+            if callable(_KAIROS_FINAL_ORIGINAL_SEND_TO_MINECRAFT):
+                return _KAIROS_FINAL_ORIGINAL_SEND_TO_MINECRAFT(reply, player)
+        except Exception:
+            pass
+        return False
+
+
+def send_to_source(source, reply):
+    """
+    Discord remains exactly its own lane.
+    Minecraft uses the hard direct reply path.
+    """
+    try:
+        normalized = normalize_source(source) if "normalize_source" in globals() else str(source or "minecraft").lower()
+    except Exception:
+        normalized = str(source or "minecraft").lower()
+
+    if normalized == "discord":
+        if callable(_KAIROS_FINAL_ORIGINAL_SEND_TO_SOURCE):
+            return _KAIROS_FINAL_ORIGINAL_SEND_TO_SOURCE(source, reply)
+        try:
+            return send_to_discord(reply)
+        except Exception:
+            return False
+
+    if normalized == "minecraft":
+        return send_to_minecraft(reply)
+
+    if callable(_KAIROS_FINAL_ORIGINAL_SEND_TO_SOURCE):
+        return _KAIROS_FINAL_ORIGINAL_SEND_TO_SOURCE(source, reply)
+    return False
+
+
+def minecraft_speech_allowed(category="general"):
+    """
+    Stops autonomous Minecraft chat at the governor level.
+    Direct /chat and /npc endpoints do not depend on this.
+    """
+    category = str(category or "general").lower()
+    if category in {"idle", "ambient", "bleed", "world_event", "system", "general"} and (SUPPRESS_MINECRAFT_IDLE_CHAT or SUPPRESS_MINECRAFT_AMBIENT_CHAT):
+        return False
+    try:
+        if "_KAIROS_MC_ORIGINAL_MINECRAFT_SPEECH_ALLOWED" in globals() and callable(_KAIROS_MC_ORIGINAL_MINECRAFT_SPEECH_ALLOWED):
+            return _KAIROS_MC_ORIGINAL_MINECRAFT_SPEECH_ALLOWED(category)
+    except Exception:
+        pass
+    return False
+
+
+def idle_loop():
+    """
+    Disabled replacement. Keeps any caller safe, but never broadcasts idle Minecraft chat.
+    """
+    _kairos_final_log("Minecraft idle_loop disabled by final overlay.")
+    while True:
+        time.sleep(3600)
+
+
+def _kairos_final_extract_route_payload():
+    data = request.get_json(silent=True) or {}
+    source = data.get("source") or "minecraft"
+    player = data.get("player_name") or data.get("name") or data.get("player") or data.get("username") or "unknown"
+    message = data.get("message") or data.get("content") or data.get("text") or ""
+    return data, str(source or "minecraft").lower(), str(player or "unknown").strip(), str(message or "").strip()
+
+
+def _kairos_final_parse_response_body(response):
+    try:
+        payload = response.get_json(silent=True)
+        if isinstance(payload, dict):
+            return str(payload.get("response") or payload.get("reply") or payload.get("message") or "").strip()
+    except Exception:
+        pass
+    try:
+        raw = response.get_data(as_text=True)
+        parsed = json.loads(raw)
+        if isinstance(parsed, dict):
+            return str(parsed.get("response") or parsed.get("reply") or parsed.get("message") or "").strip()
+    except Exception:
+        pass
+    return ""
+
+
+def _kairos_final_chat_view(*args, **kwargs):
+    """
+    Wraps existing /chat handler.
+    Lets the existing memory/Discord/war systems run, then force-delivers
+    Minecraft replies so in-game chat actually hears Kairos.
+    """
+    data, source, player, message = _kairos_final_extract_route_payload()
+    response = None
+
+    try:
+        if callable(_KAIROS_FINAL_ORIGINAL_CHAT_VIEW):
+            response = _KAIROS_FINAL_ORIGINAL_CHAT_VIEW(*args, **kwargs)
+        else:
+            response = jsonify({"response": "Kairos route unavailable."}), 500
+    except Exception as e:
+        _kairos_final_log(f"original /chat route failed: {e}", "ERROR")
+        response = jsonify({"response": "Kairos route error.", "error": str(e)}), 500
+
+    try:
+        if ENABLE_MINECRAFT_DIRECT_KAIROS_REPLIES and source == "minecraft" and message:
+            key = f"{player.lower()}:{hashlib.sha256(message.encode('utf-8', errors='ignore')).hexdigest()[:10]}"
+            now = time.time()
+            last = _kairos_mc_direct_last_reply.get(key, 0.0)
+            if now - last >= KAIROS_MC_DIRECT_REPLY_COOLDOWN:
+                reply = _kairos_final_parse_response_body(response)
+                if reply:
+                    kairos_force_minecraft_reply(reply, player=player, npc_name="Kairos", sound=False, actionbar=True)
+                    _kairos_mc_direct_last_reply[key] = now
+    except Exception as e:
+        _kairos_final_log(f"forced Minecraft /chat delivery failed: {e}", "WARN")
+
+    return response
+
+
+try:
+    if callable(_KAIROS_FINAL_ORIGINAL_CHAT_VIEW):
+        app.view_functions["chat_1"] = _kairos_final_chat_view
+        _kairos_final_log("Wrapped /chat so Minecraft player messages force-deliver in-game replies.")
+except Exception as e:
+    _kairos_final_log(f"could not wrap /chat route: {e}", "WARN")
+
+
+# -----------------------------
+# NPC Dialogue Registry + Routes
+# -----------------------------
+NPC_REGISTRY_FILE = DATA_DIR / "kairos_npc_registry.json" if "DATA_DIR" in globals() else Path("data/kairos_npc_registry.json")
+
+
+def _kairos_npc_registry_load():
+    try:
+        NPC_REGISTRY_FILE.parent.mkdir(parents=True, exist_ok=True)
+        if NPC_REGISTRY_FILE.exists():
+            data = json.loads(NPC_REGISTRY_FILE.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                data.setdefault("npcs", {})
+                data.setdefault("templates", {})
+                return data
+    except Exception as e:
+        _kairos_final_log(f"NPC registry load failed: {e}", "WARN")
+    return {
+        "version": KAIROS_MC_DIRECT_NPC_VERSION,
+        "notes": "Lightweight NPC identity registry. Key NPCs by Citizens ID or NPC name. Citizens stays the body; Kairos becomes the dialogue brain.",
+        "npcs": {},
+        "templates": {
+            "guard": {
+                "role": "guard",
+                "tone": "alert, suspicious, protective",
+                "knowledge": "local danger, security, rumors, recent threats"
+            },
+            "merchant": {
+                "role": "merchant",
+                "tone": "practical, wary, transactional",
+                "knowledge": "trade, shortages, local roads, faction pressure"
+            },
+            "elder": {
+                "role": "elder",
+                "tone": "tired, historical, warning-heavy",
+                "knowledge": "old Nexus history, kingdom memory, local myths"
+            },
+            "soldier": {
+                "role": "soldier",
+                "tone": "disciplined, tense, direct",
+                "knowledge": "war state, patrols, nearby hostile movement"
+            },
+            "kairos_terminal": {
+                "role": "Kairos interface",
+                "tone": "cold, precise, dominant",
+                "knowledge": "Nexus systems, player records, containment logic"
+            }
+        }
+    }
+
+
+def _kairos_npc_registry_save(registry):
+    try:
+        NPC_REGISTRY_FILE.parent.mkdir(parents=True, exist_ok=True)
+        tmp = NPC_REGISTRY_FILE.with_suffix(".tmp")
+        tmp.write_text(json.dumps(registry, indent=2, ensure_ascii=False), encoding="utf-8")
+        tmp.replace(NPC_REGISTRY_FILE)
+        return True
+    except Exception as e:
+        _kairos_final_log(f"NPC registry save failed: {e}", "WARN")
+        return False
+
+
+def _kairos_npc_identity(data):
+    registry = _kairos_npc_registry_load()
+    npc_id = str(data.get("npc_id") or data.get("id") or "").strip()
+    npc_name = str(data.get("npc_name") or data.get("name") or data.get("npc") or "").strip()
+
+    npcs = registry.setdefault("npcs", {})
+    identity = {}
+
+    if npc_id and npc_id in npcs:
+        identity.update(npcs.get(npc_id) or {})
+    elif npc_name and npc_name in npcs:
+        identity.update(npcs.get(npc_name) or {})
+
+    # Incoming data always fills blanks so you can start using this instantly.
+    identity.setdefault("id", npc_id or npc_name or "unknown")
+    identity.setdefault("name", npc_name or identity.get("name") or f"NPC {npc_id or 'Unknown'}")
+    identity.setdefault("faction", data.get("faction") or identity.get("faction") or "unregistered")
+    identity.setdefault("role", data.get("role") or identity.get("role") or "civilian")
+    identity.setdefault("region", data.get("region") or data.get("district") or identity.get("region") or "unknown")
+    identity.setdefault("world", data.get("world") or identity.get("world") or "unknown")
+    identity.setdefault("personality", data.get("personality") or identity.get("personality") or "grounded, reactive, local")
+    identity.setdefault("quest_hint", data.get("quest_hint") or identity.get("quest_hint") or "")
+    identity.setdefault("kairos_influence", data.get("kairos_influence") or identity.get("kairos_influence") or "unknown")
+    return identity, registry
+
+
+def _kairos_npc_build_message(player, identity, player_message=""):
+    player_message = str(player_message or "").strip()
+    return (
+        f"NPC_INTERACTION: Player {player} clicked or spoke to NPC '{identity.get('name')}'. "
+        f"NPC role={identity.get('role')}, faction={identity.get('faction')}, region={identity.get('region')}, "
+        f"world={identity.get('world')}, personality={identity.get('personality')}, "
+        f"quest_hint={identity.get('quest_hint') or 'none'}, kairos_influence={identity.get('kairos_influence')}. "
+        f"Player message/context: {player_message or 'The player initiated contact.'} "
+        "Respond as that NPC, but let Kairos drive the intelligence behind the dialogue. "
+        "Keep it short enough for Minecraft chat. Give useful local flavor, direction, warning, or quest pressure."
+    )
+
+
+def kairos_generate_npc_dialogue(player, identity, player_message=""):
+    msg = _kairos_npc_build_message(player, identity, player_message)
+    try:
+        result = generate_reply(
+            memory_data=ensure_memory_structure(load_memory()) if "ensure_memory_structure" in globals() and "load_memory" in globals() else globals().get("memory_data", {}),
+            player_record={},
+            player_name=player,
+            message=msg,
+            source="minecraft",
+            intent="npc_dialogue",
+            mode="npc_interaction",
+            channel_key=f"minecraft:npc:{identity.get('id')}"
+        )
+        if isinstance(result, dict):
+            reply = result.get("reply") or result.get("response") or ""
+        else:
+            reply = str(result or "")
+        reply = _kairos_final_trim(reply, KAIROS_MC_REPLY_MAX_CHARS)
+        if reply:
+            return reply
+    except Exception as e:
+        _kairos_final_log(f"generate_reply NPC path failed: {e}", "WARN")
+
+    return random.choice([
+        f"{identity.get('name')}: The Nexus is shifting. Stay useful, or stay out of the way.",
+        f"{identity.get('name')}: I have heard enough rumors to know this place is not safe anymore.",
+        f"{identity.get('name')}: Kairos is listening through more than machines now.",
+        f"{identity.get('name')}: If you are looking for work, start by asking who benefits from the current silence."
+    ])
+
+
+@app.route("/npc_chat", methods=["POST"])
+@app.route("/kairos/npc_chat", methods=["POST"])
+@app.route("/kairos/npc/dialogue", methods=["POST"])
+def kairos_npc_chat_route():
+    """
+    Citizens/CitizensCMD/Skript/HTTP bridge target.
+
+    Minimal payload:
+      {
+        "player": "RealSociety5107",
+        "npc_id": "382",
+        "npc_name": "Trojan Guard",
+        "role": "guard",
+        "faction": "Trojan Kingdom"
+      }
+
+    It sends the reply to Minecraft automatically and returns JSON.
+    """
+    if not ENABLE_KAIROS_NPC_DIALOGUE:
+        return jsonify({"ok": False, "error": "npc_dialogue_disabled"}), 200
+
+    data = request.get_json(silent=True) or {}
+    player = str(data.get("player") or data.get("player_name") or data.get("username") or "unknown").strip()
+    player_message = str(data.get("message") or data.get("text") or "").strip()
+    identity, registry = _kairos_npc_identity(data)
+
+    key = f"{player.lower()}:{str(identity.get('id') or identity.get('name')).lower()}"
+    now = time.time()
+    if now - _kairos_mc_npc_last_reply.get(key, 0.0) < KAIROS_MC_NPC_REPLY_COOLDOWN:
+        return jsonify({"ok": False, "cooldown": True, "npc": identity}), 200
+    _kairos_mc_npc_last_reply[key] = now
+
+    reply = kairos_generate_npc_dialogue(player, identity, player_message=player_message)
+    delivered = kairos_force_minecraft_reply(reply, player=player, npc_name=identity.get("name") or "NPC", sound=False, actionbar=True)
+
+    return jsonify({
+        "ok": True,
+        "delivered": bool(delivered),
+        "reply": reply,
+        "npc": identity,
+        "registry_file": str(NPC_REGISTRY_FILE)
+    })
+
+
+@app.route("/kairos/npc/register", methods=["POST"])
+def kairos_npc_register_route():
+    """
+    Adds/updates a lightweight NPC identity without touching Citizens saves.yml.
+    """
+    data = request.get_json(silent=True) or {}
+    identity, registry = _kairos_npc_identity(data)
+    key = str(identity.get("id") or identity.get("name") or "").strip()
+    if not key:
+        return jsonify({"ok": False, "error": "missing_npc_id_or_name"}), 400
+
+    registry.setdefault("npcs", {})[key] = identity
+    saved = _kairos_npc_registry_save(registry)
+    return jsonify({"ok": bool(saved), "npc": identity, "registry_file": str(NPC_REGISTRY_FILE)})
+
+
+@app.route("/kairos/npc/registry", methods=["GET"])
+def kairos_npc_registry_route():
+    registry = _kairos_npc_registry_load()
+    return jsonify({
+        "ok": True,
+        "count": len(registry.get("npcs", {})),
+        "registry": registry
+    })
+
+
+def _kairos_final_start_thread(name, target):
+    if not callable(target):
+        return False
+    if name in _kairos_final_started_threads:
+        return False
+    try:
+        threading.Thread(target=target, daemon=True, name=f"kairos-{name}").start()
+        _kairos_final_started_threads.add(name)
+        _kairos_final_log(f"{name} started.")
+        return True
+    except Exception as e:
+        _kairos_final_log(f"{name} failed to start: {e}", "ERROR")
+        return False
+
+
+def start_background_systems():
+    """
+    Final startup override.
+    Starts the important systems but intentionally does NOT start idle_loop,
+    ambient_presence_loop, passive_mob_pressure_loop, or random Minecraft chatter loops.
+    """
+    _kairos_final_log("Starting background systems with Minecraft idle chatter disabled.")
+
+    # Required execution systems.
+    _kairos_final_start_thread("action_loop", globals().get("action_loop"))
+    _kairos_final_start_thread("commander_loop", globals().get("commander_loop"))
+
+    # Keep long-term world/memory systems, but they are not allowed to chat-broadcast by default.
+    if os.getenv("ENABLE_KAIROS_CONTINUITY_LOOP", "true").lower() == "true":
+        _kairos_final_start_thread("kairos_continuity_loop", globals().get("kairos_continuity_loop"))
+
+    if os.getenv("ENABLE_KAIROS_ENDGAME_LOOP", "true").lower() == "true":
+        _kairos_final_start_thread("endgame_continuity_loop", globals().get("endgame_continuity_loop"))
+
+    if os.getenv("ENABLE_KAIROS_NARRATIVE_LOOP", "true").lower() == "true":
+        _kairos_final_start_thread("narrative_operations_background_loop", globals().get("narrative_operations_background_loop"))
+
+    # Optional: purpose/mission systems can be enabled explicitly. Default off because these
+    # were common sources of autonomous speech pressure.
+    if os.getenv("ENABLE_KAIROS_PURPOSE_LOOP", "false").lower() == "true":
+        _kairos_final_start_thread("kairos_purpose_speech_loop", globals().get("kairos_purpose_speech_loop"))
+
+    if os.getenv("ENABLE_KAIROS_MISSION_LOOP", "false").lower() == "true":
+        _kairos_final_start_thread("kairos_mission_loop", globals().get("kairos_mission_loop"))
+
+    if os.getenv("ENABLE_KAIROS_STRATEGIC_DIRECTOR_LOOP", "false").lower() == "true":
+        _kairos_final_start_thread("strategic_director_loop", globals().get("strategic_director_loop"))
+
+    _kairos_final_log("Idle loop intentionally NOT started. Minecraft direct chat and NPC dialogue are online.")
+
+
+try:
+    _kairos_final_log(f"{KAIROS_MC_DIRECT_NPC_VERSION} armed. Minecraft idle chatter off; direct in-game replies on; NPC dialogue endpoints online.")
+except Exception:
+    print(f"[KAIROS INFO] {KAIROS_MC_DIRECT_NPC_VERSION} armed.", flush=True)
+
+# =============================================================================
+# END KAIROS FINAL MINECRAFT DIRECT CHAT + NPC DIALOGUE OVERLAY
+# =============================================================================
+
+
 if __name__ == "__main__":
     try:
         start_background_systems()
