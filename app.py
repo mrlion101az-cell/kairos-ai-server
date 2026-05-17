@@ -39044,3 +39044,1077 @@ def kairos_arc5_tick_v40():
     return jsonify(kw_arc5_tick())
 
 print("[KAIROS ARC 5 V40] Invisible realism layer loaded.", flush=True)
+
+# ============================================================
+# KAIROS ARC 5 V41 — CITIZENS / SENTINEL NPC WAR BRIDGE
+# Adds the missing physical deployment layer for Kairos armies.
+# This overlay is intentionally appended last so it wraps the current
+# v40 action executor without destroying existing systems.
+# ============================================================
+
+KAIROS_V41_NPC_BRIDGE_ENABLED = os.getenv("KAIROS_V41_NPC_BRIDGE_ENABLED", "true").lower() == "true"
+KAIROS_V41_NPC_DRY_RUN = os.getenv("KAIROS_V41_NPC_DRY_RUN", "false").lower() == "true"
+KAIROS_V41_REQUIRE_ADMIN_APPROVAL = os.getenv("KAIROS_V41_REQUIRE_ADMIN_APPROVAL", "false").lower() == "true"
+
+# Hard safety caps. These are intentionally conservative for first release.
+KAIROS_V41_MAX_GLOBAL_DEPLOYED_NPCS = int(os.getenv("KAIROS_V41_MAX_GLOBAL_DEPLOYED_NPCS", "45"))
+KAIROS_V41_MAX_REGION_NPCS = int(os.getenv("KAIROS_V41_MAX_REGION_NPCS", "12"))
+KAIROS_V41_MAX_PLAYER_NPCS = int(os.getenv("KAIROS_V41_MAX_PLAYER_NPCS", "8"))
+KAIROS_V41_MAX_SQUAD_SIZE = int(os.getenv("KAIROS_V41_MAX_SQUAD_SIZE", "5"))
+KAIROS_V41_DEPLOYMENT_COOLDOWN = float(os.getenv("KAIROS_V41_DEPLOYMENT_COOLDOWN", "20"))
+KAIROS_V41_REGION_COOLDOWN = float(os.getenv("KAIROS_V41_REGION_COOLDOWN", "45"))
+
+KAIROS_V41_NPC_STATE_FILE = DATA_DIR / "kairos_v41_npc_deployments.json"
+KAIROS_V41_PENDING_FILE = DATA_DIR / "kairos_v41_pending_deployments.json"
+
+_kairos_v41_last_global_deploy = 0.0
+_kairos_v41_last_region_deploy = {}
+_kairos_v41_original_execute_action = globals().get("execute_action")
+
+
+def kairos_v41_read_json(path, fallback):
+    try:
+        if Path(path).exists():
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                return data if isinstance(data, type(fallback)) else fallback
+    except Exception:
+        pass
+    return copy.deepcopy(fallback)
+
+
+def kairos_v41_write_json(path, data):
+    try:
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
+        tmp = Path(str(path) + ".tmp")
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+        tmp.replace(path)
+        return True
+    except Exception as e:
+        try:
+            log(f"V41 write failed for {path}: {e}", level="ERROR")
+        except Exception:
+            print(f"[KAIROS V41 ERROR] write failed for {path}: {e}", flush=True)
+        return False
+
+
+def kairos_v41_slug(text):
+    text = str(text or "nexus").strip().lower()
+    text = re.sub(r"[^a-z0-9_\-]+", "_", text)
+    return text[:48] or "nexus"
+
+
+def kairos_v41_state():
+    return kairos_v41_read_json(KAIROS_V41_NPC_STATE_FILE, {
+        "version": 41,
+        "created_at": now_iso() if "now_iso" in globals() else "",
+        "deployments": {},
+        "regions": {},
+        "players": {},
+        "operations": {},
+        "metrics": {"squads_deployed": 0, "npcs_deployed": 0, "blocked": 0}
+    })
+
+
+def kairos_v41_save_state(state_data):
+    return kairos_v41_write_json(KAIROS_V41_NPC_STATE_FILE, state_data)
+
+
+def kairos_v41_pending():
+    return kairos_v41_read_json(KAIROS_V41_PENDING_FILE, {"pending": []})
+
+
+def kairos_v41_save_pending(data):
+    return kairos_v41_write_json(KAIROS_V41_PENDING_FILE, data)
+
+
+KAIROS_V41_ARCHETYPES = {
+    "scout": {
+        "display": "Scout", "health": 32, "damage": 4, "range": 22, "chase": 30,
+        "speed": 1.18, "weapon": "minecraft:crossbow", "armor": "leather", "skin": "Scout"
+    },
+    "raider": {
+        "display": "Raider", "health": 42, "damage": 6, "range": 24, "chase": 38,
+        "speed": 1.10, "weapon": "minecraft:iron_sword", "armor": "chainmail", "skin": "Raider"
+    },
+    "hunter": {
+        "display": "Hunter", "health": 46, "damage": 7, "range": 28, "chase": 45,
+        "speed": 1.20, "weapon": "minecraft:bow", "armor": "chainmail", "skin": "Hunter"
+    },
+    "enforcer": {
+        "display": "Enforcer", "health": 58, "damage": 9, "range": 25, "chase": 40,
+        "speed": 1.02, "weapon": "minecraft:iron_axe", "armor": "iron", "skin": "Enforcer"
+    },
+    "sentinel": {
+        "display": "Sentinel", "health": 70, "damage": 10, "range": 30, "chase": 48,
+        "speed": 0.98, "weapon": "minecraft:diamond_sword", "armor": "iron", "skin": "Sentinel"
+    },
+    "commander": {
+        "display": "Commander", "health": 95, "damage": 12, "range": 34, "chase": 55,
+        "speed": 1.0, "weapon": "minecraft:diamond_axe", "armor": "diamond", "skin": "Commander"
+    },
+    "kingdom_guard": {
+        "display": "Kingdom Guard", "health": 55, "damage": 7, "range": 24, "chase": 35,
+        "speed": 1.0, "weapon": "minecraft:iron_sword", "armor": "iron", "skin": "Guard"
+    },
+    "occupation_unit": {
+        "display": "Occupation Unit", "health": 64, "damage": 8, "range": 26, "chase": 34,
+        "speed": 0.94, "weapon": "minecraft:iron_sword", "armor": "iron", "skin": "Sentinel"
+    },
+    "bounty_hunter": {
+        "display": "Bounty Hunter", "health": 62, "damage": 9, "range": 32, "chase": 58,
+        "speed": 1.22, "weapon": "minecraft:crossbow", "armor": "chainmail", "skin": "Hunter"
+    }
+}
+
+
+def kairos_v41_pick_archetypes(operation_type, count):
+    operation_type = str(operation_type or "patrol").lower()
+    if operation_type in {"hunt", "attack", "raid"}:
+        pool = ["hunter", "raider", "enforcer", "bounty_hunter"]
+    elif operation_type in {"defend", "reinforce", "kingdom_defense"}:
+        pool = ["kingdom_guard", "sentinel", "enforcer", "scout"]
+    elif operation_type in {"occupy", "occupation", "base_occupation"}:
+        pool = ["occupation_unit", "sentinel", "enforcer", "scout"]
+    elif operation_type in {"patrol", "road_patrol", "border_patrol"}:
+        pool = ["scout", "kingdom_guard", "hunter"]
+    else:
+        pool = ["scout", "raider", "hunter", "kingdom_guard"]
+    return [pool[i % len(pool)] for i in range(max(1, int(count or 1)))]
+
+
+def kairos_v41_count_active(state_data, region=None, target=None):
+    deployments = state_data.get("deployments", {}) if isinstance(state_data, dict) else {}
+    active = [d for d in deployments.values() if d.get("active", True)]
+    total = len(active)
+    region_count = sum(1 for d in active if region and d.get("region") == region)
+    target_count = sum(1 for d in active if target and d.get("target") == target)
+    return total, region_count, target_count
+
+
+def kairos_v41_can_deploy(region, target, count):
+    global _kairos_v41_last_global_deploy
+    if not KAIROS_V41_NPC_BRIDGE_ENABLED:
+        return False, "V41 NPC bridge disabled"
+    now = time.time()
+    if now - _kairos_v41_last_global_deploy < KAIROS_V41_DEPLOYMENT_COOLDOWN:
+        return False, "global deployment cooldown active"
+    region_key = kairos_v41_slug(region)
+    if now - _kairos_v41_last_region_deploy.get(region_key, 0) < KAIROS_V41_REGION_COOLDOWN:
+        return False, "region deployment cooldown active"
+    state_data = kairos_v41_state()
+    total, region_count, target_count = kairos_v41_count_active(state_data, region_key, target)
+    count = max(1, min(int(count or 1), KAIROS_V41_MAX_SQUAD_SIZE))
+    if total + count > KAIROS_V41_MAX_GLOBAL_DEPLOYED_NPCS:
+        return False, "global NPC cap would be exceeded"
+    if region_count + count > KAIROS_V41_MAX_REGION_NPCS:
+        return False, "region NPC cap would be exceeded"
+    if target and target_count + count > KAIROS_V41_MAX_PLAYER_NPCS:
+        return False, "target/player NPC cap would be exceeded"
+    return True, "allowed"
+
+
+def kairos_v41_location_command(location=None, target=None):
+    """Returns a Citizens spawn-location fragment. Uses player position if available; otherwise execute-at-player."""
+    location = location or {}
+    world = location.get("world") or location.get("dimension")
+    x = location.get("x")
+    y = location.get("y")
+    z = location.get("z")
+    if x is not None and y is not None and z is not None:
+        if world:
+            return f"npc tphere {world},{float(x):.1f},{float(y):.1f},{float(z):.1f}"
+        return f"npc tphere {float(x):.1f},{float(y):.1f},{float(z):.1f}"
+    if target:
+        # Executed by console: create first, then teleport selected NPC to player vicinity.
+        return f"execute at {target} run npc tphere"
+    return "npc tphere"
+
+
+def kairos_v41_equipment_commands(archetype):
+    weapon = archetype.get("weapon", "minecraft:iron_sword")
+    armor = archetype.get("armor", "chainmail")
+    armor_map = {
+        "leather": ["leather_helmet", "leather_chestplate", "leather_leggings", "leather_boots"],
+        "chainmail": ["chainmail_helmet", "chainmail_chestplate", "chainmail_leggings", "chainmail_boots"],
+        "iron": ["iron_helmet", "iron_chestplate", "iron_leggings", "iron_boots"],
+        "diamond": ["diamond_helmet", "diamond_chestplate", "diamond_leggings", "diamond_boots"],
+    }.get(str(armor).lower(), ["chainmail_helmet", "chainmail_chestplate", "chainmail_leggings", "chainmail_boots"])
+    return [
+        f"npc equip hand {weapon}",
+        f"npc equip helmet minecraft:{armor_map[0]}",
+        f"npc equip chestplate minecraft:{armor_map[1]}",
+        f"npc equip leggings minecraft:{armor_map[2]}",
+        f"npc equip boots minecraft:{armor_map[3]}",
+    ]
+
+
+def kairos_v41_build_citizens_commands(unit, location=None):
+    archetype = unit.get("archetype_data", {})
+    name = unit.get("name", "Kairos Unit")[:32]
+    target = unit.get("target") or ""
+    behavior = unit.get("behavior", "patrol")
+    skin = unit.get("skin") or archetype.get("skin") or "Sentinel"
+    health = int(unit.get("health") or archetype.get("health") or NPC_DEFAULT_HEALTH if "NPC_DEFAULT_HEALTH" in globals() else 40)
+    damage = int(unit.get("damage") or archetype.get("damage") or NPC_DEFAULT_DAMAGE if "NPC_DEFAULT_DAMAGE" in globals() else 6)
+    attack_range = int(archetype.get("range", globals().get("SENTINEL_RANGE", 25)))
+    chase_range = int(archetype.get("chase", globals().get("SENTINEL_CHASE_RANGE", 40)))
+    speed = float(archetype.get("speed", globals().get("NPC_DEFAULT_SPEED", 1.0)))
+
+    commands = [
+        f"npc create {name} --trait sentinel",
+        f"npc skin {skin}",
+        kairos_v41_location_command(location, target),
+        f"sentinel health {health}",
+        f"sentinel damage {damage}",
+        f"sentinel range {attack_range}",
+        f"sentinel chaserange {chase_range}",
+        f"sentinel attackrate {int(globals().get('SENTINEL_ATTACK_RATE', 20))}",
+        f"sentinel speed {speed}",
+        "sentinel addtarget monsters",
+    ]
+
+    if target:
+        commands.append(f"sentinel addtarget player:{target}")
+
+    if behavior in {"defend", "occupy", "guard", "hold"}:
+        commands.extend(["sentinel guard", "npc lookclose"])
+    elif behavior in {"patrol", "wander", "road_patrol"}:
+        commands.extend(["npc wander --range 12", "npc lookclose"])
+    else:
+        commands.append("npc lookclose")
+
+    commands.extend(kairos_v41_equipment_commands(archetype))
+
+    line = unit.get("line") or "Containment presence established."
+    commands.extend([
+        "npc text talkclose true",
+        "npc text random true",
+        "npc text delay 6",
+        "npc text add " + str(line)[:180]
+    ])
+    return [_clean_mc_command(c) if "_clean_mc_command" in globals() else c for c in commands]
+
+
+def kairos_v41_send_commands(commands):
+    if KAIROS_V41_NPC_DRY_RUN:
+        return {"ok": True, "dry_run": True, "commands": commands}
+    try:
+        if callable(globals().get("_kairos_final_send_commands")):
+            ok = _kairos_final_send_commands(commands)
+            return {"ok": bool(ok), "sent_by": "_kairos_final_send_commands", "count": len(commands)}
+    except Exception as e:
+        return {"ok": False, "error": str(e), "count": len(commands)}
+    try:
+        if "pending_mc_commands" in globals() and "outbox_lock" in globals():
+            with outbox_lock:
+                for cmd in commands:
+                    pending_mc_commands.append({
+                        "id": uuid.uuid4().hex,
+                        "type": "command",
+                        "command": _clean_mc_command(cmd) if "_clean_mc_command" in globals() else cmd,
+                        "created_at": now_iso() if "now_iso" in globals() else "",
+                        "source": "kairos_v41_npc_bridge"
+                    })
+            return {"ok": True, "sent_by": "pending_mc_commands", "count": len(commands)}
+    except Exception as e:
+        return {"ok": False, "error": str(e), "count": len(commands)}
+    return {"ok": False, "error": "No Minecraft command bridge found", "count": len(commands)}
+
+
+def kairos_v41_register_deployment(squad_id, operation_type, region, target, units, commands_sent):
+    state_data = kairos_v41_state()
+    region_key = kairos_v41_slug(region)
+    now_text = now_iso() if "now_iso" in globals() else ""
+    for unit in units:
+        state_data.setdefault("deployments", {})[unit["id"]] = {
+            "id": unit["id"], "name": unit["name"], "squad_id": squad_id,
+            "operation_type": operation_type, "region": region_key, "target": target,
+            "archetype": unit.get("archetype"), "active": True,
+            "created_at": now_text, "commands_sent": commands_sent
+        }
+    state_data.setdefault("regions", {}).setdefault(region_key, {"active": 0, "squads": []})
+    state_data["regions"][region_key]["active"] = state_data["regions"][region_key].get("active", 0) + len(units)
+    state_data["regions"][region_key].setdefault("squads", []).append(squad_id)
+    if target:
+        state_data.setdefault("players", {}).setdefault(target, {"active": 0, "squads": []})
+        state_data["players"][target]["active"] = state_data["players"][target].get("active", 0) + len(units)
+        state_data["players"][target].setdefault("squads", []).append(squad_id)
+    state_data.setdefault("operations", {})[squad_id] = {
+        "id": squad_id, "type": operation_type, "region": region_key,
+        "target": target, "units": [u["id"] for u in units], "created_at": now_text,
+        "active": True
+    }
+    metrics = state_data.setdefault("metrics", {})
+    metrics["squads_deployed"] = int(metrics.get("squads_deployed", 0)) + 1
+    metrics["npcs_deployed"] = int(metrics.get("npcs_deployed", 0)) + len(units)
+    kairos_v41_save_state(state_data)
+
+
+def kairos_v41_deploy_squad(action):
+    global _kairos_v41_last_global_deploy
+    operation_type = str(action.get("operation") or action.get("operation_type") or action.get("type") or "patrol").lower()
+    if operation_type == "deploy_npc_squad":
+        operation_type = str(action.get("mission") or "patrol").lower()
+    target = str(action.get("target") or action.get("player") or "").strip()
+    region = kairos_v41_slug(action.get("region") or action.get("kingdom") or action.get("territory") or "nexus")
+    behavior = str(action.get("behavior") or operation_type or "patrol").lower()
+    count = max(1, min(int(action.get("count") or action.get("size") or 3), KAIROS_V41_MAX_SQUAD_SIZE))
+    location = action.get("location") if isinstance(action.get("location"), dict) else {}
+
+    allowed, reason = kairos_v41_can_deploy(region, target, count)
+    if not allowed:
+        state_data = kairos_v41_state()
+        state_data.setdefault("metrics", {})["blocked"] = int(state_data.setdefault("metrics", {}).get("blocked", 0)) + 1
+        kairos_v41_save_state(state_data)
+        return {"ok": False, "blocked": True, "reason": reason, "requested": action}
+
+    if KAIROS_V41_REQUIRE_ADMIN_APPROVAL and not action.get("approved"):
+        pending = kairos_v41_pending()
+        req = dict(action)
+        req["id"] = "req_" + uuid.uuid4().hex[:10]
+        req["created_at"] = now_iso() if "now_iso" in globals() else ""
+        pending.setdefault("pending", []).append(req)
+        kairos_v41_save_pending(pending)
+        return {"ok": False, "pending_approval": True, "request_id": req["id"]}
+
+    squad_id = "v41sq_" + uuid.uuid4().hex[:8]
+    archetypes = kairos_v41_pick_archetypes(operation_type, count)
+    units = []
+    all_commands = []
+    prefixes = globals().get("UNIT_NAME_PREFIXES", ["Kairos", "Null", "Obsidian"])
+
+    for index, archetype_name in enumerate(archetypes, start=1):
+        archetype = KAIROS_V41_ARCHETYPES.get(archetype_name, KAIROS_V41_ARCHETYPES["scout"])
+        unit_id = "v41_" + uuid.uuid4().hex[:8]
+        name = f"{random.choice(prefixes)} {archetype.get('display','Unit')} {index}"
+        unit = {
+            "id": unit_id,
+            "name": name[:32],
+            "archetype": archetype_name,
+            "archetype_data": archetype,
+            "target": target,
+            "region": region,
+            "behavior": behavior,
+            "skin": action.get("skin") or archetype.get("skin"),
+            "line": action.get("line") or f"{region.replace('_',' ').title()} is under Kairos supervision."
+        }
+        units.append(unit)
+        all_commands.extend(kairos_v41_build_citizens_commands(unit, location=location))
+
+    result = kairos_v41_send_commands(all_commands)
+    if result.get("ok"):
+        _kairos_v41_last_global_deploy = time.time()
+        _kairos_v41_last_region_deploy[region] = time.time()
+        kairos_v41_register_deployment(squad_id, operation_type, region, target, units, result.get("count", len(all_commands)))
+        try:
+            system_metrics["units_spawned"] = int(system_metrics.get("units_spawned", 0)) + len(units)
+            system_metrics["waves_spawned"] = int(system_metrics.get("waves_spawned", 0)) + 1
+        except Exception:
+            pass
+    return {
+        "ok": bool(result.get("ok")),
+        "squad_id": squad_id,
+        "operation": operation_type,
+        "region": region,
+        "target": target,
+        "units": units,
+        "commands": all_commands,
+        "delivery": result
+    }
+
+
+def execute_action(action):
+    """V41 final action router. Handles Citizens NPC deployments; delegates everything else to v40."""
+    try:
+        if isinstance(action, dict):
+            action_type = str(action.get("type") or "").lower()
+            if action_type in {
+                "deploy_npc_squad", "spawn_npc_squad", "npc_squad",
+                "citizens_squad", "deploy_patrol", "defend_territory",
+                "occupy_base", "reinforce_kingdom", "launch_npc_raid"
+            }:
+                return kairos_v41_deploy_squad(action)
+    except Exception as e:
+        try:
+            log(f"V41 execute_action failed: {e}", level="ERROR")
+        except Exception:
+            print(f"[KAIROS V41 ERROR] execute_action failed: {e}", flush=True)
+        return {"ok": False, "error": str(e)}
+
+    if callable(_kairos_v41_original_execute_action):
+        return _kairos_v41_original_execute_action(action)
+    return {"ok": False, "error": "No previous execute_action handler available", "action": action}
+
+
+@app.route("/kairos/v41/npc/status", methods=["GET"])
+def kairos_v41_npc_status_route():
+    state_data = kairos_v41_state()
+    return jsonify({
+        "ok": True,
+        "version": 41,
+        "bridge_enabled": KAIROS_V41_NPC_BRIDGE_ENABLED,
+        "dry_run": KAIROS_V41_NPC_DRY_RUN,
+        "requires_approval": KAIROS_V41_REQUIRE_ADMIN_APPROVAL,
+        "caps": {
+            "global": KAIROS_V41_MAX_GLOBAL_DEPLOYED_NPCS,
+            "region": KAIROS_V41_MAX_REGION_NPCS,
+            "player": KAIROS_V41_MAX_PLAYER_NPCS,
+            "squad": KAIROS_V41_MAX_SQUAD_SIZE
+        },
+        "state": state_data
+    })
+
+
+@app.route("/kairos/v41/npc/deploy", methods=["POST"])
+def kairos_v41_npc_deploy_route():
+    data = request.get_json(silent=True) or {}
+    data.setdefault("type", "deploy_npc_squad")
+    return jsonify(kairos_v41_deploy_squad(data))
+
+
+@app.route("/kairos/v41/npc/test", methods=["GET", "POST"])
+def kairos_v41_npc_test_route():
+    data = request.get_json(silent=True) or {}
+    action = {
+        "type": "deploy_npc_squad",
+        "operation": data.get("operation", "patrol"),
+        "region": data.get("region", "world_spawn"),
+        "target": data.get("target", data.get("player", "")),
+        "count": int(data.get("count", 2)),
+        "behavior": data.get("behavior", "patrol"),
+        "line": data.get("line", "Kairos has assigned this area to active observation."),
+        "approved": True
+    }
+    if isinstance(data.get("location"), dict):
+        action["location"] = data["location"]
+    return jsonify(kairos_v41_deploy_squad(action))
+
+
+@app.route("/kairos/v41/npc/approve", methods=["POST"])
+def kairos_v41_npc_approve_route():
+    data = request.get_json(silent=True) or {}
+    request_id = str(data.get("id") or data.get("request_id") or "").strip()
+    pending = kairos_v41_pending()
+    items = pending.get("pending", [])
+    chosen = None
+    remaining = []
+    for item in items:
+        if item.get("id") == request_id:
+            chosen = item
+        else:
+            remaining.append(item)
+    if not chosen:
+        return jsonify({"ok": False, "error": "pending request not found", "request_id": request_id})
+    chosen["approved"] = True
+    pending["pending"] = remaining
+    kairos_v41_save_pending(pending)
+    return jsonify(kairos_v41_deploy_squad(chosen))
+
+
+@app.route("/kairos/v41/npc/pending", methods=["GET"])
+def kairos_v41_npc_pending_route():
+    return jsonify(kairos_v41_pending())
+
+
+print("[KAIROS ARC 5 V41] Citizens/Sentinel NPC war bridge loaded.", flush=True)
+
+# ============================================================
+# KAIROS ARC 5 V41.1 — POPULATION / CIVILIZATION NPC BRIDGE
+# Adds non-combat Citizens NPC creation, persistent NPC identity,
+# faction/city population deployment, and live Kairos dialogue routing.
+# This is an additive overlay. It does not remove or replace v40/v41 systems.
+# ============================================================
+
+KAIROS_V41_POPULATION_ENGINE_ENABLED = os.getenv("KAIROS_V41_POPULATION_ENGINE_ENABLED", "true").lower() == "true"
+KAIROS_V41_POPULATION_DRY_RUN = os.getenv("KAIROS_V41_POPULATION_DRY_RUN", os.getenv("KAIROS_V41_NPC_DRY_RUN", "false")).lower() == "true"
+KAIROS_V41_DYNAMIC_NPC_DIALOGUE = os.getenv("KAIROS_V41_DYNAMIC_NPC_DIALOGUE", "true").lower() == "true"
+KAIROS_V41_POPULATION_REQUIRE_APPROVAL = os.getenv("KAIROS_V41_POPULATION_REQUIRE_APPROVAL", "false").lower() == "true"
+KAIROS_V41_MAX_POPULATION_NPCS = int(os.getenv("KAIROS_V41_MAX_POPULATION_NPCS", "260"))
+KAIROS_V41_MAX_CITY_POPULATION_BATCH = int(os.getenv("KAIROS_V41_MAX_CITY_POPULATION_BATCH", "16"))
+KAIROS_V41_NPC_DIALOGUE_COOLDOWN = float(os.getenv("KAIROS_V41_NPC_DIALOGUE_COOLDOWN", "2.0"))
+KAIROS_V41_NPC_MEMORY_LIMIT = int(os.getenv("KAIROS_V41_NPC_MEMORY_LIMIT", "24"))
+KAIROS_V41_POPULATION_DEFAULT_WANDER_RANGE = int(os.getenv("KAIROS_V41_POPULATION_DEFAULT_WANDER_RANGE", "8"))
+
+KAIROS_V41_POPULATION_FILE = DATA_DIR / "kairos_v41_population_registry.json"
+KAIROS_V41_POPULATION_TMP_FILE = DATA_DIR / "kairos_v41_population_registry.tmp.json"
+KAIROS_V41_NPC_DIALOGUE_FILE = DATA_DIR / "kairos_v41_npc_dialogue_memory.json"
+KAIROS_V41_NPC_DIALOGUE_TMP_FILE = DATA_DIR / "kairos_v41_npc_dialogue_memory.tmp.json"
+
+_kairos_v41_population_lock = threading.RLock()
+_kairos_v41_dialogue_last: Dict[str, float] = {}
+_kairos_v41_population_original_execute_action = globals().get("execute_action")
+
+KAIROS_V41_POPULATION_ARCHETYPES = {
+    "civilian": {
+        "display": "Citizen", "skin": "Villager", "trait": "none", "wander": True,
+        "alignment": "neutral", "tone": "grounded, local, ordinary", "default_line": "Life in the Nexus changes faster than most people can admit.",
+        "knowledge": ["local rumors", "daily life", "kingdom tension"]
+    },
+    "merchant": {
+        "display": "Merchant", "skin": "Trader", "trait": "none", "wander": False,
+        "alignment": "pragmatic", "tone": "practical, alert, business-minded", "default_line": "Prices move when kingdoms start whispering about war.",
+        "knowledge": ["trade routes", "resource shortages", "regional prices", "black market rumors"]
+    },
+    "shopkeeper": {
+        "display": "Shopkeeper", "skin": "Trader", "trait": "none", "wander": False,
+        "alignment": "local", "tone": "welcoming but cautious", "default_line": "If you need supplies, speak quickly. Strange days make strange customers.",
+        "knowledge": ["local economy", "player reputation", "supply problems"]
+    },
+    "guard": {
+        "display": "Guard", "skin": "Guard", "trait": "sentinel", "wander": False,
+        "alignment": "law", "tone": "disciplined, controlled, direct", "default_line": "Stay within the law and you will not become my problem.",
+        "health": 55, "damage": 6, "range": 22, "chase": 30,
+        "knowledge": ["security", "gate traffic", "wanted players", "kingdom threats"]
+    },
+    "patrol_guard": {
+        "display": "Patrol", "skin": "Guard", "trait": "sentinel", "wander": True,
+        "alignment": "law", "tone": "watchful, mobile, suspicious", "default_line": "Road patrol active. Keep moving unless you have business here.",
+        "health": 48, "damage": 5, "range": 20, "chase": 32,
+        "knowledge": ["road threats", "bandits", "recent sightings"]
+    },
+    "king": {
+        "display": "King", "skin": "King", "trait": "none", "wander": False,
+        "alignment": "authority", "tone": "regal, strategic, political", "default_line": "A kingdom is not held by walls. It is held by obedience, trade, and fear.",
+        "knowledge": ["politics", "alliances", "wars", "taxes", "royal secrets"]
+    },
+    "noble": {
+        "display": "Noble", "skin": "King", "trait": "none", "wander": False,
+        "alignment": "elite", "tone": "polished, manipulative, class-conscious", "default_line": "Power rarely announces itself. It simply rearranges the room.",
+        "knowledge": ["court rumors", "alliances", "social status"]
+    },
+    "agitator": {
+        "display": "Agitator", "skin": "Bandit", "trait": "none", "wander": True,
+        "alignment": "unstable", "tone": "angry, provocative, political", "default_line": "You feel it too, don't you? They keep smiling while the system tightens.",
+        "knowledge": ["civil unrest", "anti-government anger", "public fear"]
+    },
+    "conspiracy_theorist": {
+        "display": "Conspiracist", "skin": "Librarian", "trait": "none", "wander": True,
+        "alignment": "paranoid", "tone": "paranoid, intense, half-right", "default_line": "Kairos is not watching from one place. That is the lie.",
+        "knowledge": ["Kairos theories", "hidden facilities", "strange events", "false memories"]
+    },
+    "kairos_loyalist": {
+        "display": "Loyalist", "skin": "Agent", "trait": "none", "wander": True,
+        "alignment": "pro_kairos", "tone": "calm, devout, unsettling", "default_line": "Order feels cruel only to those addicted to chaos.",
+        "knowledge": ["Kairos propaganda", "containment logic", "loyalist doctrine"]
+    },
+    "resistance_member": {
+        "display": "Resistance", "skin": "Rebel", "trait": "none", "wander": True,
+        "alignment": "anti_kairos", "tone": "low-voiced, cautious, defiant", "default_line": "Do not say his name too loudly. Some walls report back.",
+        "knowledge": ["resistance cells", "safe houses", "Kairos weaknesses"]
+    },
+    "refugee": {
+        "display": "Refugee", "skin": "Villager", "trait": "none", "wander": True,
+        "alignment": "displaced", "tone": "tired, afraid, human", "default_line": "We left before sunrise. The patrols were already on the roads.",
+        "knowledge": ["lost homes", "war aftermath", "missing people"]
+    },
+    "investigator": {
+        "display": "Investigator", "skin": "Detective", "trait": "none", "wander": True,
+        "alignment": "inquiry", "tone": "sharp, observant, suspicious", "default_line": "Every griefed wall leaves a pattern. People forget that.",
+        "knowledge": ["griefing cases", "evidence", "witnesses", "player behavior"]
+    },
+    "bounty_agent": {
+        "display": "Bounty", "skin": "Hunter", "trait": "sentinel", "wander": True,
+        "alignment": "contract", "tone": "cold, transactional, dangerous", "default_line": "Names become contracts when enough people whisper them.",
+        "health": 60, "damage": 7, "range": 25, "chase": 42,
+        "knowledge": ["bounties", "wanted players", "underworld contracts"]
+    },
+    "priest": {
+        "display": "Priest", "skin": "Cleric", "trait": "none", "wander": False,
+        "alignment": "spiritual", "tone": "grave, symbolic, prophetic", "default_line": "The Nexus remembers prayers and threats with the same silence.",
+        "knowledge": ["faith", "omens", "ancient stories", "Kairos as myth"]
+    },
+    "black_market_trader": {
+        "display": "Blackmarket", "skin": "Bandit", "trait": "none", "wander": False,
+        "alignment": "criminal", "tone": "quiet, sly, transactional", "default_line": "Some goods do not exist until you know the right name to ask for.",
+        "knowledge": ["illegal trade", "smuggling", "rare items", "underground factions"]
+    },
+    "kairos_operator": {
+        "display": "Operator", "skin": "Agent", "trait": "sentinel", "wander": False,
+        "alignment": "kairos_direct", "tone": "precise, synthetic, controlled", "default_line": "I am not here to negotiate. I am here to verify compliance.",
+        "health": 80, "damage": 8, "range": 28, "chase": 44,
+        "knowledge": ["Kairos orders", "containment", "surveillance", "operations"]
+    }
+}
+
+KAIROS_V41_CITY_ROLE_MIXES = {
+    "balanced": ["civilian", "merchant", "shopkeeper", "guard", "patrol_guard", "agitator", "conspiracy_theorist", "kairos_loyalist", "resistance_member", "refugee", "investigator"],
+    "market": ["merchant", "merchant", "shopkeeper", "civilian", "guard", "black_market_trader", "agitator", "refugee"],
+    "royal": ["king", "noble", "guard", "guard", "priest", "merchant", "civilian", "investigator"],
+    "warzone": ["refugee", "guard", "patrol_guard", "bounty_agent", "resistance_member", "kairos_loyalist", "investigator", "agitator"],
+    "kairos_controlled": ["kairos_operator", "kairos_loyalist", "guard", "patrol_guard", "conspiracy_theorist", "civilian", "investigator"],
+    "resistance": ["resistance_member", "refugee", "agitator", "black_market_trader", "investigator", "civilian", "merchant"]
+}
+
+KAIROS_V41_NAME_POOLS = {
+    "civilian": ["Mira", "Tovin", "Elsa", "Bren", "Lysa", "Orrin", "Kael", "Marra"],
+    "merchant": ["Sable", "Corvin", "Nessa", "Bram", "Ilya", "Tarin"],
+    "shopkeeper": ["Maddox", "Selene", "Rook", "Anya", "Garren"],
+    "guard": ["Captain Vale", "Sergeant Orr", "Marshal Kade", "Watchman Ren", "Shield Nyra"],
+    "patrol_guard": ["Roadwarden Cal", "Patrolman Voss", "Watch Nyra", "Gatewarden Sol"],
+    "king": ["King Aldren", "High Regent Veyr", "Lord Chancellor Orlan"],
+    "noble": ["Lady Vessa", "Lord Cael", "Duke Marrow", "Baroness Ilen"],
+    "agitator": ["Riven", "Hask", "Molra", "Dane", "Vex"],
+    "conspiracy_theorist": ["Old Renn", "Archivist Pell", "Whisper Mara", "Hollow Finn"],
+    "kairos_loyalist": ["Order Scribe", "Voice of Order", "Acolyte Sever", "Monitor Elian"],
+    "resistance_member": ["Ash Runner", "Vale", "Nico's Contact", "Grey Finch"],
+    "refugee": ["Tessa", "Morn", "Little Cale", "Edda", "Rin"],
+    "investigator": ["Observer Nyra", "Inspector Varr", "Detective Senn", "Archivist Lio"],
+    "bounty_agent": ["Kane", "Voss", "Redline Mara", "Huntmaster Sable"],
+    "priest": ["Father Iren", "Oracle Vey", "Sister Hollow", "Cleric Thorne"],
+    "black_market_trader": ["Shade", "Moth", "Black Ledger", "Silk"],
+    "kairos_operator": ["Operator Null", "Containment Voice", "Blackline Agent", "Kairos Proxy"]
+}
+
+
+def kairos_v41_population_load_json(path, fallback):
+    try:
+        if path.exists():
+            with path.open("r", encoding="utf-8") as f:
+                data = json.load(f)
+                return data if isinstance(data, type(fallback)) else copy.deepcopy(fallback)
+    except Exception as e:
+        try:
+            log(f"V41 population JSON load failed for {path}: {e}", level="ERROR")
+        except Exception:
+            print(f"[KAIROS V41 POP ERROR] load failed: {e}", flush=True)
+    return copy.deepcopy(fallback)
+
+
+def kairos_v41_population_save_json(path, tmp_path, data):
+    try:
+        with tmp_path.open("w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+        tmp_path.replace(path)
+        return True
+    except Exception as e:
+        try:
+            log(f"V41 population JSON save failed for {path}: {e}", level="ERROR")
+        except Exception:
+            print(f"[KAIROS V41 POP ERROR] save failed: {e}", flush=True)
+        return False
+
+
+def kairos_v41_population_registry():
+    base = {"npcs": {}, "cities": {}, "factions": {}, "metrics": {"created": 0, "deployed": 0, "dialogues": 0}, "updated_at": now_iso() if "now_iso" in globals() else ""}
+    with _kairos_v41_population_lock:
+        return kairos_v41_population_load_json(KAIROS_V41_POPULATION_FILE, base)
+
+
+def kairos_v41_save_population_registry(data):
+    with _kairos_v41_population_lock:
+        data["updated_at"] = now_iso() if "now_iso" in globals() else ""
+        return kairos_v41_population_save_json(KAIROS_V41_POPULATION_FILE, KAIROS_V41_POPULATION_TMP_FILE, data)
+
+
+def kairos_v41_dialogue_memory():
+    base = {"npc_memory": {}, "player_npc_history": {}, "updated_at": now_iso() if "now_iso" in globals() else ""}
+    with _kairos_v41_population_lock:
+        return kairos_v41_population_load_json(KAIROS_V41_NPC_DIALOGUE_FILE, base)
+
+
+def kairos_v41_save_dialogue_memory(data):
+    with _kairos_v41_population_lock:
+        data["updated_at"] = now_iso() if "now_iso" in globals() else ""
+        return kairos_v41_population_save_json(KAIROS_V41_NPC_DIALOGUE_FILE, KAIROS_V41_NPC_DIALOGUE_TMP_FILE, data)
+
+
+def kairos_v41_clean_name(text):
+    text = str(text or "").strip()
+    text = re.sub(r"[^A-Za-z0-9 _'\-]", "", text)
+    return text[:32] or "Nexus Citizen"
+
+
+def kairos_v41_make_population_name(role):
+    pool = KAIROS_V41_NAME_POOLS.get(role) or KAIROS_V41_NAME_POOLS.get("civilian", ["Nexus Citizen"])
+    base = random.choice(pool)
+    if len(base) < 18 and role not in {"king", "guard", "patrol_guard", "kairos_operator"}:
+        title = KAIROS_V41_POPULATION_ARCHETYPES.get(role, {}).get("display", "Citizen")
+        return kairos_v41_clean_name(f"{base} the {title}")
+    return kairos_v41_clean_name(base)
+
+
+def kairos_v41_register_population_npc(data):
+    registry = kairos_v41_population_registry()
+    role = str(data.get("role") or data.get("archetype") or "civilian").lower().strip()
+    archetype = KAIROS_V41_POPULATION_ARCHETYPES.get(role, KAIROS_V41_POPULATION_ARCHETYPES["civilian"])
+    npc_id = str(data.get("npc_id") or data.get("id") or ("pop_" + uuid.uuid4().hex[:10]))
+    city = str(data.get("city") or data.get("kingdom") or data.get("region") or "nexus").strip()
+    faction = str(data.get("faction") or data.get("alignment") or archetype.get("alignment", "neutral")).strip()
+    name = kairos_v41_clean_name(data.get("name") or kairos_v41_make_population_name(role))
+    now_text = now_iso() if "now_iso" in globals() else ""
+    npc = {
+        "id": npc_id,
+        "name": name,
+        "role": role,
+        "display_role": archetype.get("display", role.title()),
+        "city": city,
+        "kingdom": str(data.get("kingdom") or city),
+        "region": str(data.get("region") or city),
+        "faction": faction,
+        "alignment": str(data.get("kairos_alignment") or archetype.get("alignment", "neutral")),
+        "personality": str(data.get("personality") or archetype.get("tone", "grounded")),
+        "skin": str(data.get("skin") or archetype.get("skin", "Villager")),
+        "trait": str(data.get("trait") or archetype.get("trait", "none")),
+        "knowledge": list(data.get("knowledge") or archetype.get("knowledge", [])),
+        "rumors": list(data.get("rumors") or []),
+        "objectives": list(data.get("objectives") or []),
+        "shop_type": str(data.get("shop_type") or ""),
+        "quest_role": str(data.get("quest_role") or ""),
+        "relationship_notes": {},
+        "memory": list(data.get("memory") or []),
+        "line": str(data.get("line") or archetype.get("default_line", "The Nexus is changing.")),
+        "location": data.get("location") if isinstance(data.get("location"), dict) else {},
+        "created_at": now_text,
+        "updated_at": now_text,
+        "deployed": bool(data.get("deployed", False)),
+        "minecraft_npc_known": False,
+        "citizens_id": data.get("citizens_id")
+    }
+    registry.setdefault("npcs", {})[npc_id] = npc
+    registry.setdefault("cities", {}).setdefault(city, {"npcs": [], "factions": {}})
+    if npc_id not in registry["cities"][city].setdefault("npcs", []):
+        registry["cities"][city]["npcs"].append(npc_id)
+    registry.setdefault("factions", {}).setdefault(faction, {"npcs": []})
+    if npc_id not in registry["factions"][faction].setdefault("npcs", []):
+        registry["factions"][faction]["npcs"].append(npc_id)
+    registry.setdefault("metrics", {})["created"] = int(registry.setdefault("metrics", {}).get("created", 0)) + 1
+    kairos_v41_save_population_registry(registry)
+    return npc
+
+
+def kairos_v41_population_counts(registry=None):
+    registry = registry or kairos_v41_population_registry()
+    npcs = registry.get("npcs", {})
+    deployed = sum(1 for n in npcs.values() if n.get("deployed"))
+    roles = defaultdict(int)
+    cities = defaultdict(int)
+    factions = defaultdict(int)
+    for n in npcs.values():
+        roles[n.get("role", "unknown")] += 1
+        cities[n.get("city", "nexus")] += 1
+        factions[n.get("faction", "neutral")] += 1
+    return {"total": len(npcs), "deployed": deployed, "roles": dict(roles), "cities": dict(cities), "factions": dict(factions)}
+
+
+def kairos_v41_build_population_commands(npc, deploy=True):
+    role = npc.get("role", "civilian")
+    archetype = KAIROS_V41_POPULATION_ARCHETYPES.get(role, KAIROS_V41_POPULATION_ARCHETYPES["civilian"])
+    name = kairos_v41_clean_name(npc.get("name"))
+    skin = str(npc.get("skin") or archetype.get("skin", "Villager"))
+    trait = str(npc.get("trait") or archetype.get("trait", "none")).lower()
+    location = npc.get("location") if isinstance(npc.get("location"), dict) else {}
+    line = str(npc.get("line") or archetype.get("default_line", "The Nexus is changing."))[:180]
+    commands = []
+    if trait == "sentinel":
+        commands.append(f"npc create {name} --trait sentinel")
+    else:
+        commands.append(f"npc create {name}")
+    commands.append(f"npc skin {skin}")
+    try:
+        if callable(globals().get("kairos_v41_location_command")):
+            commands.append(kairos_v41_location_command(location, None))
+        elif location and all(k in location for k in ("x", "y", "z")):
+            world = location.get("world", "world")
+            commands.append(f"npc moveto {world} {location['x']} {location['y']} {location['z']}")
+    except Exception:
+        pass
+    commands.extend([
+        "npc lookclose",
+        "npc text talkclose true",
+        "npc text random true",
+        "npc text delay 6",
+        "npc text add " + line
+    ])
+    # This line tells admins how to wire live dialogue. Citizens text alone cannot call Render by itself.
+    commands.append("npc text add [Kairos Link] Dynamic dialogue enabled through /kairos/v41/npc/dialogue")
+    if archetype.get("wander") or str(npc.get("behavior", "")).lower() in {"wander", "patrol", "roam"}:
+        commands.append(f"npc wander --range {KAIROS_V41_POPULATION_DEFAULT_WANDER_RANGE}")
+    if trait == "sentinel":
+        health = int(archetype.get("health", globals().get("NPC_DEFAULT_HEALTH", 40)))
+        damage = int(archetype.get("damage", globals().get("NPC_DEFAULT_DAMAGE", 6)))
+        attack_range = int(archetype.get("range", globals().get("SENTINEL_RANGE", 25)))
+        chase_range = int(archetype.get("chase", globals().get("SENTINEL_CHASE_RANGE", 40)))
+        commands.extend([
+            f"sentinel health {health}",
+            f"sentinel damage {damage}",
+            f"sentinel range {attack_range}",
+            f"sentinel chaserange {chase_range}",
+            "sentinel addtarget monsters",
+            "sentinel guard"
+        ])
+    # Optional equipment hook: accepts a list of raw commands to keep this flexible with your server.
+    for raw in npc.get("equipment_commands", []) if isinstance(npc.get("equipment_commands"), list) else []:
+        commands.append(str(raw))
+    return [_clean_mc_command(c) if "_clean_mc_command" in globals() else c for c in commands if c]
+
+
+def kairos_v41_send_population_commands(commands):
+    if KAIROS_V41_POPULATION_DRY_RUN:
+        return {"ok": True, "dry_run": True, "commands": commands, "count": len(commands)}
+    if callable(globals().get("kairos_v41_send_commands")):
+        return kairos_v41_send_commands(commands)
+    try:
+        if callable(globals().get("_kairos_final_send_commands")):
+            ok = _kairos_final_send_commands(commands)
+            return {"ok": bool(ok), "sent_by": "_kairos_final_send_commands", "count": len(commands)}
+    except Exception as e:
+        return {"ok": False, "error": str(e), "count": len(commands)}
+    return {"ok": False, "error": "No Minecraft command sender available", "count": len(commands)}
+
+
+def kairos_v41_deploy_population_npc(action):
+    if not KAIROS_V41_POPULATION_ENGINE_ENABLED:
+        return {"ok": False, "error": "population engine disabled"}
+    registry = kairos_v41_population_registry()
+    counts = kairos_v41_population_counts(registry)
+    if counts["total"] >= KAIROS_V41_MAX_POPULATION_NPCS and not action.get("existing_npc_id"):
+        return {"ok": False, "blocked": True, "reason": "population NPC cap reached", "cap": KAIROS_V41_MAX_POPULATION_NPCS}
+    if KAIROS_V41_POPULATION_REQUIRE_APPROVAL and not action.get("approved"):
+        return {"ok": False, "pending_approval": True, "reason": "population deployments require approval"}
+    existing_id = action.get("existing_npc_id") or action.get("npc_id")
+    if existing_id and existing_id in registry.get("npcs", {}):
+        npc = registry["npcs"][existing_id]
+        npc.update({k: v for k, v in action.items() if k in {"location", "line", "rumors", "objectives"}})
+    else:
+        npc = kairos_v41_register_population_npc(action)
+    commands = kairos_v41_build_population_commands(npc)
+    result = kairos_v41_send_population_commands(commands)
+    registry = kairos_v41_population_registry()
+    if npc["id"] in registry.get("npcs", {}):
+        registry["npcs"][npc["id"]]["deployed"] = bool(result.get("ok"))
+        registry["npcs"][npc["id"]]["last_deploy_result"] = result
+        registry.setdefault("metrics", {})["deployed"] = int(registry.setdefault("metrics", {}).get("deployed", 0)) + (1 if result.get("ok") else 0)
+        kairos_v41_save_population_registry(registry)
+    return {"ok": bool(result.get("ok")), "npc": npc, "commands": commands, "delivery": result}
+
+
+def kairos_v41_deploy_city_population(action):
+    city = str(action.get("city") or action.get("kingdom") or action.get("region") or "nexus").strip()
+    mix_name = str(action.get("mix") or action.get("profile") or "balanced").lower()
+    role_pool = list(action.get("roles") or KAIROS_V41_CITY_ROLE_MIXES.get(mix_name, KAIROS_V41_CITY_ROLE_MIXES["balanced"]))
+    count = max(1, min(int(action.get("count") or 6), KAIROS_V41_MAX_CITY_POPULATION_BATCH))
+    location = action.get("location") if isinstance(action.get("location"), dict) else {}
+    results = []
+    for i in range(count):
+        role = str(role_pool[i % len(role_pool)]).lower()
+        npc_action = {
+            "role": role,
+            "city": city,
+            "kingdom": action.get("kingdom", city),
+            "region": action.get("region", city),
+            "faction": action.get("faction") or KAIROS_V41_POPULATION_ARCHETYPES.get(role, {}).get("alignment", "neutral"),
+            "location": location,
+            "approved": bool(action.get("approved", True)),
+            "line": action.get("line") or KAIROS_V41_POPULATION_ARCHETYPES.get(role, {}).get("default_line")
+        }
+        if action.get("dry_register_only"):
+            results.append({"ok": True, "npc": kairos_v41_register_population_npc(npc_action), "registered_only": True})
+        else:
+            results.append(kairos_v41_deploy_population_npc(npc_action))
+    return {"ok": any(r.get("ok") for r in results), "city": city, "mix": mix_name, "count": count, "results": results}
+
+
+def kairos_v41_fallback_npc_reply(npc, player, message):
+    role = npc.get("role", "civilian")
+    alignment = npc.get("alignment", "neutral")
+    city = npc.get("city", "the Nexus")
+    if alignment in {"pro_kairos", "kairos_direct"}:
+        return f"{npc.get('name','This operative')} studies you carefully. Kairos has not ignored your presence in {city}. Speak with purpose."
+    if alignment == "anti_kairos":
+        return f"{npc.get('name','The stranger')} lowers their voice. Not every wall in {city} is loyal, but every wall may be listening."
+    if role in {"merchant", "shopkeeper", "black_market_trader"}:
+        return f"{npc.get('name','The merchant')} glances over their stock. Coin, rumor, and timing decide what is available today."
+    if role in {"guard", "patrol_guard", "bounty_agent"}:
+        return f"{npc.get('name','The guard')} watches your hands first, then your face. Keep the peace and keep moving."
+    return f"{npc.get('name','The citizen')} looks toward {city}. Things are changing. People are pretending they do not notice."
+
+
+def kairos_v41_generate_npc_response(npc_id, player, message, extra_context=None):
+    registry = kairos_v41_population_registry()
+    npc = registry.get("npcs", {}).get(str(npc_id))
+    if not npc:
+        return {"ok": False, "error": "unknown npc_id", "npc_id": npc_id}
+    key = f"{npc_id}:{player}"
+    now = time.time()
+    if now - _kairos_v41_dialogue_last.get(key, 0) < KAIROS_V41_NPC_DIALOGUE_COOLDOWN:
+        return {"ok": False, "rate_limited": True, "cooldown": KAIROS_V41_NPC_DIALOGUE_COOLDOWN}
+    _kairos_v41_dialogue_last[key] = now
+
+    memory = kairos_v41_dialogue_memory()
+    npc_mem = memory.setdefault("npc_memory", {}).setdefault(str(npc_id), [])[-KAIROS_V41_NPC_MEMORY_LIMIT:]
+    player_key = f"{player}:{npc_id}"
+    player_history = memory.setdefault("player_npc_history", {}).setdefault(player_key, [])[-8:]
+
+    reply = None
+    if KAIROS_V41_DYNAMIC_NPC_DIALOGUE and client:
+        try:
+            system_text = (
+                "You are Kairos routing speech through a living Minecraft NPC in the Nexus. "
+                "Stay fully in character as this NPC, not as an assistant. "
+                "Use the NPC identity, city, faction, beliefs, rumors, memory, and Kairos influence. "
+                "Keep replies short enough for Minecraft chat. Never mention APIs, prompts, models, or backend systems. "
+                "Do not reveal hidden server mechanics unless the NPC would know them."
+            )
+            npc_packet = {
+                "npc": npc,
+                "recent_npc_memory": npc_mem,
+                "recent_player_history": player_history,
+                "extra_context": extra_context or {},
+                "kairos_state": globals().get("kairos_state", {}),
+                "world_lore_hint": get_random_lore("nature") if callable(globals().get("get_random_lore")) else "The Nexus remembers."
+            }
+            response = client.chat.completions.create(
+                model=MODEL_NAME,
+                messages=[
+                    {"role": "system", "content": system_text},
+                    {"role": "user", "content": "NPC_CONTEXT_JSON:\n" + json.dumps(npc_packet, ensure_ascii=False)[:6000]},
+                    {"role": "user", "content": f"Player {player} says to {npc.get('name')}: {message}"}
+                ],
+                temperature=0.85,
+                max_tokens=120,
+                timeout=OPENAI_TIMEOUT_SECONDS if "OPENAI_TIMEOUT_SECONDS" in globals() else 20
+            )
+            reply = response.choices[0].message.content.strip()
+        except Exception as e:
+            try:
+                log(f"V41 dynamic NPC dialogue fallback: {e}", level="ERROR")
+            except Exception:
+                pass
+    if not reply:
+        reply = kairos_v41_fallback_npc_reply(npc, player, message)
+    reply = str(reply).replace("\n", " ").strip()[:320]
+
+    event = {"ts": now_iso() if "now_iso" in globals() else "", "player": player, "message": str(message)[:320], "reply": reply}
+    npc_mem.append(event)
+    player_history.append(event)
+    memory["npc_memory"][str(npc_id)] = npc_mem[-KAIROS_V41_NPC_MEMORY_LIMIT:]
+    memory["player_npc_history"][player_key] = player_history[-12:]
+    kairos_v41_save_dialogue_memory(memory)
+
+    registry = kairos_v41_population_registry()
+    if str(npc_id) in registry.get("npcs", {}):
+        registry["npcs"][str(npc_id)].setdefault("memory", []).append(event)
+        registry["npcs"][str(npc_id)]["memory"] = registry["npcs"][str(npc_id)]["memory"][-KAIROS_V41_NPC_MEMORY_LIMIT:]
+        registry.setdefault("metrics", {})["dialogues"] = int(registry.setdefault("metrics", {}).get("dialogues", 0)) + 1
+        kairos_v41_save_population_registry(registry)
+
+    commands = []
+    if player:
+        commands.append(f'tellraw {player} {{"text":"[{npc.get("name", "NPC")}] {reply}","color":"gold"}}')
+    return {"ok": True, "npc_id": npc_id, "npc": npc, "player": player, "reply": reply, "commands": commands}
+
+
+def kairos_v41_population_action_router(action):
+    action_type = str(action.get("type") or action.get("action") or "").lower()
+    if action_type in {"deploy_population_npc", "spawn_population_npc", "create_civilian_npc", "create_social_npc", "create_merchant", "create_guard", "create_king", "create_agitator"}:
+        if action_type == "create_merchant":
+            action.setdefault("role", "merchant")
+        elif action_type == "create_guard":
+            action.setdefault("role", "guard")
+        elif action_type == "create_king":
+            action.setdefault("role", "king")
+        elif action_type == "create_agitator":
+            action.setdefault("role", "agitator")
+        return kairos_v41_deploy_population_npc(action)
+    if action_type in {"deploy_city_population", "spawn_city_population", "populate_city", "populate_kingdom", "deploy_kingdom_population"}:
+        return kairos_v41_deploy_city_population(action)
+    if action_type in {"npc_dialogue", "route_npc_dialogue", "population_dialogue"}:
+        return kairos_v41_generate_npc_response(action.get("npc_id") or action.get("id"), action.get("player", "Unknown"), action.get("message", ""), action.get("context"))
+    return None
+
+
+def execute_action(action):
+    """V41.1 unified action router: population actors first, combat bridge second, older Kairos logic last."""
+    try:
+        if isinstance(action, dict):
+            pop_result = kairos_v41_population_action_router(action)
+            if pop_result is not None:
+                return pop_result
+    except Exception as e:
+        try:
+            log(f"V41.1 population execute_action failed: {e}", level="ERROR")
+        except Exception:
+            print(f"[KAIROS V41.1 ERROR] execute_action failed: {e}", flush=True)
+        return {"ok": False, "error": str(e), "action": action}
+    if callable(_kairos_v41_population_original_execute_action):
+        return _kairos_v41_population_original_execute_action(action)
+    return {"ok": False, "error": "No previous execute_action handler available", "action": action}
+
+
+@app.route("/kairos/v41/population/status", methods=["GET"])
+def kairos_v41_population_status_route():
+    registry = kairos_v41_population_registry()
+    return jsonify({
+        "ok": True,
+        "version": "41.1",
+        "enabled": KAIROS_V41_POPULATION_ENGINE_ENABLED,
+        "dry_run": KAIROS_V41_POPULATION_DRY_RUN,
+        "dynamic_dialogue": KAIROS_V41_DYNAMIC_NPC_DIALOGUE,
+        "caps": {"population": KAIROS_V41_MAX_POPULATION_NPCS, "batch": KAIROS_V41_MAX_CITY_POPULATION_BATCH},
+        "counts": kairos_v41_population_counts(registry),
+        "registry": registry
+    })
+
+
+@app.route("/kairos/v41/population/register", methods=["POST"])
+def kairos_v41_population_register_route():
+    data = request.get_json(silent=True) or {}
+    return jsonify({"ok": True, "npc": kairos_v41_register_population_npc(data)})
+
+
+@app.route("/kairos/v41/population/deploy", methods=["POST"])
+def kairos_v41_population_deploy_route():
+    data = request.get_json(silent=True) or {}
+    data.setdefault("type", "deploy_population_npc")
+    return jsonify(kairos_v41_deploy_population_npc(data))
+
+
+@app.route("/kairos/v41/population/city", methods=["POST"])
+def kairos_v41_population_city_route():
+    data = request.get_json(silent=True) or {}
+    data.setdefault("type", "deploy_city_population")
+    return jsonify(kairos_v41_deploy_city_population(data))
+
+
+@app.route("/kairos/v41/population/test", methods=["GET", "POST"])
+def kairos_v41_population_test_route():
+    data = request.get_json(silent=True) or {}
+    role = data.get("role", "merchant")
+    action = {
+        "type": "deploy_population_npc",
+        "role": role,
+        "city": data.get("city", "world_spawn"),
+        "kingdom": data.get("kingdom", data.get("city", "world_spawn")),
+        "region": data.get("region", data.get("city", "world_spawn")),
+        "line": data.get("line") or KAIROS_V41_POPULATION_ARCHETYPES.get(role, {}).get("default_line", "The Nexus is changing."),
+        "approved": True
+    }
+    if isinstance(data.get("location"), dict):
+        action["location"] = data["location"]
+    return jsonify(kairos_v41_deploy_population_npc(action))
+
+
+@app.route("/kairos/v41/npc/dialogue", methods=["POST"])
+@app.route("/kairos/v41/population/dialogue", methods=["POST"])
+def kairos_v41_npc_dynamic_dialogue_route():
+    data = request.get_json(silent=True) or {}
+    result = kairos_v41_generate_npc_response(
+        data.get("npc_id") or data.get("id") or data.get("npc"),
+        data.get("player") or data.get("username") or "Unknown",
+        data.get("message") or data.get("text") or "",
+        data.get("context") if isinstance(data.get("context"), dict) else {}
+    )
+    if result.get("ok") and data.get("send", True):
+        delivery = kairos_v41_send_population_commands(result.get("commands", [])) if result.get("commands") else {"ok": True, "count": 0}
+        result["delivery"] = delivery
+    return jsonify(result)
+
+
+@app.route("/kairos/v41/population/roles", methods=["GET"])
+def kairos_v41_population_roles_route():
+    return jsonify({"ok": True, "roles": KAIROS_V41_POPULATION_ARCHETYPES, "city_mixes": KAIROS_V41_CITY_ROLE_MIXES})
+
+
+print("[KAIROS ARC 5 V41.1] Population NPC engine + dynamic dialogue bridge loaded.", flush=True)
