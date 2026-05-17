@@ -24142,6 +24142,390 @@ except Exception:
 # =============================================================================
 
 
+
+# [V42] Early app.run block moved to bottom so all overlays load first.
+
+# ============================================================
+# V42 DEPLOYMENT INTENT BRIDGE
+# Strategic Fix:
+# - v41 population/NPC systems must load before Flask blocks.
+# - deployment phrases from /chat must create real NPC actions.
+# - action executor must translate those actions into Citizens commands.
+# ============================================================
+
+V42_DEPLOYMENT_ROLES = {
+    "guard": {
+        "npc_name": "KairosGuard",
+        "skin": "guard",
+        "weapon": "iron_sword",
+        "sentinel": True,
+        "lookclose": True,
+        "wander": False,
+        "dialogue": [
+            "I am stationed here under Kairos authority.",
+            "This area is being monitored.",
+            "Disruption will be reported."
+        ],
+    },
+    "merchant": {
+        "npc_name": "KairosMerchant",
+        "skin": "merchant",
+        "weapon": None,
+        "sentinel": False,
+        "lookclose": True,
+        "wander": False,
+        "dialogue": [
+            "Trade keeps a kingdom breathing.",
+            "Prices change when the world becomes unstable.",
+            "Kairos watches commerce as closely as war."
+        ],
+    },
+    "citizen": {
+        "npc_name": "NexusCitizen",
+        "skin": "villager",
+        "weapon": None,
+        "sentinel": False,
+        "lookclose": True,
+        "wander": True,
+        "dialogue": [
+            "Something has changed in the Nexus lately.",
+            "People are starting to notice Kairos more.",
+            "I try not to ask too many questions."
+        ],
+    },
+    "agitator": {
+        "npc_name": "NexusAgitator",
+        "skin": "pillager",
+        "weapon": None,
+        "sentinel": False,
+        "lookclose": True,
+        "wander": True,
+        "dialogue": [
+            "You think the kingdoms are telling you everything?",
+            "Kairos is not the only thing controlling this world.",
+            "Wake up before the system writes your ending."
+        ],
+    },
+    "loyalist": {
+        "npc_name": "KairosLoyalist",
+        "skin": "agent",
+        "weapon": None,
+        "sentinel": False,
+        "lookclose": True,
+        "wander": True,
+        "dialogue": [
+            "Kairos brought order where people brought chaos.",
+            "The system sees what rulers refuse to admit.",
+            "Compliance is not weakness. It is survival."
+        ],
+    },
+    "resistance": {
+        "npc_name": "ResistanceVoice",
+        "skin": "rebel",
+        "weapon": "stone_sword",
+        "sentinel": True,
+        "lookclose": True,
+        "wander": True,
+        "dialogue": [
+            "Keep your voice down.",
+            "Not everyone here trusts Kairos.",
+            "Some of us still remember what freedom sounded like."
+        ],
+    },
+    "king": {
+        "npc_name": "NexusKing",
+        "skin": "king",
+        "weapon": "golden_sword",
+        "sentinel": True,
+        "lookclose": True,
+        "wander": False,
+        "dialogue": [
+            "A kingdom survives through memory, law, and force.",
+            "Kairos may advise the realm, but crowns still cast shadows.",
+            "Power is never as stable as it appears."
+        ],
+    },
+}
+
+def kairos_v42_log(message: str):
+    try:
+        log(f"[KAIROS V42] {message}")
+    except Exception:
+        print(f"[KAIROS V42] {message}", flush=True)
+
+def kairos_v42_detect_role(text: str) -> str:
+    text = str(text or "").lower()
+    role_words = {
+        "merchant": ["merchant", "shopkeeper", "shop", "trader", "vendor"],
+        "king": ["king", "queen", "ruler", "lord", "leader"],
+        "agitator": ["agitator", "aggravator", "conspiracy", "conspiracy theorist"],
+        "loyalist": ["loyalist", "pro-kairos", "pro kairos", "kairos supporter"],
+        "resistance": ["resistance", "anti-kairos", "anti kairos", "rebel"],
+        "citizen": ["citizen", "civilian", "villager", "resident", "people"],
+        "guard": ["guard", "soldier", "patrol", "defender"],
+    }
+    for role, words in role_words.items():
+        if any(word in text for word in words):
+            return role
+    return "guard"
+
+def kairos_v42_detect_count(text: str) -> int:
+    text = str(text or "").lower()
+    words = {
+        "one": 1, "a ": 1, "single": 1,
+        "two": 2, "couple": 2,
+        "three": 3,
+        "four": 4,
+        "five": 5,
+    }
+    for k, v in words.items():
+        if k in text:
+            return v
+    m = re.search(r"\b([1-5])\b", text)
+    if m:
+        return int(m.group(1))
+    return 1
+
+def kairos_v42_is_deployment_request(message: str) -> bool:
+    text = str(message or "").lower()
+    deployment_words = [
+        "deploy", "spawn", "create", "place", "station", "send",
+        "add npc", "make npc", "bring in", "put an npc"
+    ]
+    npc_words = [
+        "npc", "citizen", "guard", "merchant", "shopkeeper", "king",
+        "patrol", "loyalist", "resistance", "agitator", "conspiracy",
+        "civilian", "villager", "soldier", "defender"
+    ]
+    return any(w in text for w in deployment_words) and any(w in text for w in npc_words)
+
+def kairos_v42_build_population_action(message: str, player: str = None) -> dict:
+    role = kairos_v42_detect_role(message)
+    count = max(1, min(5, kairos_v42_detect_count(message)))
+    faction = "Trojan Kingdom" if "trojan" in str(message or "").lower() else "Nexus"
+    return {
+        "type": "spawn_population_npc",
+        "role": role,
+        "count": count,
+        "faction": faction,
+        "target": player,
+        "target_player": player,
+        "source": "chat",
+        "created_at": time.time(),
+        "message": str(message or ""),
+    }
+
+def kairos_v42_send_commands(commands):
+    cleaned = []
+    for cmd in commands:
+        cmd = str(cmd).strip()
+        if not cmd:
+            continue
+        if cmd.startswith("/"):
+            cmd = cmd[1:]
+        cleaned.append(cmd)
+
+    if not cleaned:
+        return False
+
+    if callable(globals().get("_kairos_final_send_commands")):
+        return _kairos_final_send_commands(cleaned)
+
+    if callable(globals().get("send_mc_commands")):
+        return send_mc_commands(cleaned)
+
+    if callable(globals().get("send_minecraft_commands")):
+        return send_minecraft_commands(cleaned)
+
+    if callable(globals().get("queue_mc_command")):
+        for c in cleaned:
+            queue_mc_command(c)
+        return True
+
+    kairos_v42_log(f"No command sender found. Commands were: {cleaned}")
+    return False
+
+def kairos_v42_build_citizens_commands(action: dict):
+    role = str(action.get("role") or "guard").lower()
+    spec = V42_DEPLOYMENT_ROLES.get(role, V42_DEPLOYMENT_ROLES["guard"])
+    count = max(1, min(5, int(action.get("count") or 1)))
+    faction = str(action.get("faction") or "Nexus")
+
+    commands = []
+    created_names = []
+
+    for i in range(count):
+        suffix = uuid.uuid4().hex[:4]
+        base_name = spec["npc_name"]
+        npc_name = f"{base_name}_{suffix}" if count > 1 else f"{base_name}_{suffix}"
+        created_names.append(npc_name)
+
+        # Citizens core creation
+        commands.append(f"npc create {npc_name}")
+        commands.append("npc lookclose")
+
+        if spec.get("wander"):
+            commands.append("npc wander")
+
+        # Optional skin. These are deliberately non-fatal if your skin names are not valid.
+        skin = spec.get("skin")
+        if skin:
+            commands.append(f"npc skin {skin}")
+
+        # Dialogue via Citizens text.
+        commands.append("npc text talkclose")
+        commands.append("npc text random")
+        commands.append("npc text delay 4")
+        for line in spec.get("dialogue", [])[:4]:
+            safe_line = str(line).replace('"', "'")
+            commands.append(f"npc text add {safe_line}")
+
+        # Sentinel only for combat-capable actors.
+        if spec.get("sentinel"):
+            commands.append("trait sentinel")
+            commands.append("sentinel health 40")
+            commands.append("sentinel damage 6")
+            commands.append("sentinel range 25")
+            commands.append("sentinel chaserange 40")
+
+        weapon = spec.get("weapon")
+        if weapon:
+            commands.append(f"npc equip hand {weapon}")
+
+    return commands, created_names
+
+def kairos_v42_deploy_population_npc(action: dict):
+    try:
+        if not globals().get("ENABLE_CITIZENS_NPCS", True):
+            kairos_v42_log("Citizens NPC deployment blocked by ENABLE_CITIZENS_NPCS=false.")
+            return False
+
+        commands, names = kairos_v42_build_citizens_commands(action)
+        ok = kairos_v42_send_commands(commands)
+
+        # Best-effort registry write for later dialogue routing / tracking.
+        registry = globals().setdefault("npc_registry", {})
+        for name in names:
+            registry[name] = {
+                "id": name,
+                "name": name,
+                "role": action.get("role", "guard"),
+                "faction": action.get("faction", "Nexus"),
+                "target_player": action.get("target_player") or action.get("target"),
+                "created_at": now_iso() if callable(globals().get("now_iso")) else str(time.time()),
+                "source": "v42_deployment_bridge",
+                "active": True,
+            }
+
+        kairos_v42_log(f"Citizens deployment batch sent: role={action.get('role')} count={action.get('count')} names={names}")
+        return ok
+
+    except Exception as e:
+        kairos_v42_log(f"population deployment failed: {e}")
+        try:
+            traceback.print_exc()
+        except Exception:
+            pass
+        return False
+
+# Patch execute_action so queued v42/v41 deployment actions physically run.
+_original_execute_action_v42 = globals().get("execute_action")
+
+def execute_action(action):
+    try:
+        action = action or {}
+        action_type = str(action.get("type") or action.get("action") or "").lower()
+
+        if action_type in {
+            "spawn_population_npc",
+            "deploy_population_npc",
+            "create_population_npc",
+            "spawn_citizens_npc",
+            "deploy_citizens_npc",
+            "create_guard",
+            "deploy_guard",
+        }:
+            return kairos_v42_deploy_population_npc(action)
+
+    except Exception as e:
+        kairos_v42_log(f"execute_action deployment router failed: {e}")
+
+    if callable(_original_execute_action_v42):
+        return _original_execute_action_v42(action)
+
+    kairos_v42_log(f"No original execute_action available for action={action}")
+    return None
+
+# Patch generate_reply to detect natural chat deployment requests and enqueue actions.
+_original_generate_reply_v42 = globals().get("generate_reply")
+
+if callable(_original_generate_reply_v42):
+    def generate_reply(*args, **kwargs):
+        result = _original_generate_reply_v42(*args, **kwargs)
+
+        try:
+            message = kwargs.get("message")
+            player = kwargs.get("player") or kwargs.get("player_name")
+
+            # Positional fallback for your older route styles.
+            for arg in args:
+                if isinstance(arg, str) and message is None:
+                    message = arg
+                elif isinstance(arg, dict):
+                    message = message or arg.get("message")
+                    player = player or arg.get("player") or arg.get("player_name")
+
+            if kairos_v42_is_deployment_request(message):
+                action = kairos_v42_build_population_action(message, player)
+                kairos_v42_log(f"Deployment request detected from chat: {action}")
+
+                if callable(globals().get("queue_action")):
+                    queue_action(action)
+                else:
+                    execute_action(action)
+
+        except Exception as e:
+            kairos_v42_log(f"generate_reply deployment hook failed: {e}")
+
+        return result
+
+# Direct test endpoint for Render/Postman/browser-side testing.
+try:
+    @app.route("/kairos/v42/deploy_npc", methods=["POST"])
+    def kairos_v42_deploy_npc_route():
+        data = request.get_json(silent=True) or {}
+        role = str(data.get("role") or "guard").lower()
+        count = max(1, min(5, int(data.get("count") or 1)))
+        faction = str(data.get("faction") or "Nexus")
+        target = data.get("player") or data.get("target_player") or data.get("target")
+
+        action = {
+            "type": "spawn_population_npc",
+            "role": role,
+            "count": count,
+            "faction": faction,
+            "target": target,
+            "target_player": target,
+            "source": "v42_test_endpoint",
+            "created_at": time.time(),
+        }
+
+        ok = kairos_v42_deploy_population_npc(action)
+        return jsonify({"ok": bool(ok), "action": action})
+
+    kairos_v42_log("Deployment bridge loaded. Test endpoint: /kairos/v42/deploy_npc")
+except Exception as e:
+    kairos_v42_log(f"Could not register v42 deploy route: {e}")
+
+# ============================================================
+# END V42 DEPLOYMENT INTENT BRIDGE
+# ============================================================
+
+
+# ============================================================
+# V42 FINAL RUNTIME STARTUP
+# Kept at bottom so all overlays/routes/patches load before Flask blocks.
+# ============================================================
 if __name__ == "__main__":
     try:
         start_background_systems()
