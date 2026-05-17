@@ -24522,25 +24522,9 @@ except Exception as e:
 # ============================================================
 
 
-# ============================================================
-# V42 FINAL RUNTIME STARTUP
-# Kept at bottom so all overlays/routes/patches load before Flask blocks.
-# ============================================================
-if __name__ == "__main__":
-    try:
-        start_background_systems()
-    except Exception as e:
-        try:
-            log_exception("start_background_systems failed", e)
-        except Exception:
-            print("[KAIROS ERROR] start_background_systems failed:", e, flush=True)
-    try:
-        log("Starting Kairos AI server...")
-    except Exception:
-        print("[KAIROS INFO] Starting Kairos AI server...", flush=True)
-    app.run(host="0.0.0.0", port=int(os.getenv("PORT", "10000")), threaded=True)
+# [V43] Old V42 final startup header removed.
 
-
+# [V43] Removed early startup block #1; final startup lives at true EOF.
 # ============================================================
 # KAIROS NPC AI ROUTE (AI-DRIVEN NPC DIALOGUE)
 # ============================================================
@@ -40502,3 +40486,304 @@ def kairos_v41_population_roles_route():
 
 
 print("[KAIROS ARC 5 V41.1] Population NPC engine + dynamic dialogue bridge loaded.", flush=True)
+
+# ============================================================
+# V43 FINAL LOAD-ORDER + DEPLOYMENT SAFETY BRIDGE
+# This must remain near the true bottom of the file, after every older overlay.
+# Purpose:
+#   1) Let every route/overlay load before Flask starts.
+#   2) Give NPC deployment requests one final clean dispatch path.
+#   3) Avoid losing older Kairos systems by wrapping instead of deleting.
+# ============================================================
+
+KAIROS_V43_VERSION = "arc5_v43_final_startup_and_citizens_dispatch"
+
+def kairos_v43_log(message: str, level: str = "INFO"):
+    try:
+        log(f"[KAIROS V43] {message}", level=level)
+    except Exception:
+        print(f"[KAIROS V43 {level}] {message}", flush=True)
+
+def kairos_v43_get_message_player(args, kwargs):
+    message = kwargs.get("message") or kwargs.get("text") or kwargs.get("content")
+    player = (
+        kwargs.get("player")
+        or kwargs.get("player_name")
+        or kwargs.get("username")
+        or kwargs.get("author")
+    )
+    source = kwargs.get("source")
+
+    for arg in args:
+        if isinstance(arg, dict):
+            message = message or arg.get("message") or arg.get("text") or arg.get("content")
+            player = player or arg.get("player") or arg.get("player_name") or arg.get("username") or arg.get("author")
+            source = source or arg.get("source")
+        elif isinstance(arg, str):
+            lowered = arg.lower().strip()
+            if message is None and len(arg) > 2 and (
+                "kairos" in lowered
+                or "deploy" in lowered
+                or "spawn" in lowered
+                or "npc" in lowered
+                or "guard" in lowered
+                or "merchant" in lowered
+                or "citizen" in lowered
+            ):
+                message = arg
+            elif player is None and len(arg) <= 32 and " " not in arg:
+                player = arg
+
+    return player, message, source
+
+def kairos_v43_is_deployment_request(message: str) -> bool:
+    text = str(message or "").lower()
+    if not text:
+        return False
+
+    deploy_words = (
+        "deploy", "spawn", "create", "place", "station", "send",
+        "bring in", "add npc", "make npc", "put npc", "put an npc"
+    )
+    npc_words = (
+        "npc", "guard", "merchant", "shopkeeper", "citizen", "civilian",
+        "villager", "king", "queen", "ruler", "patrol", "soldier",
+        "defender", "agitator", "aggravator", "conspiracy", "loyalist",
+        "resistance", "rebel"
+    )
+
+    return any(w in text for w in deploy_words) and any(w in text for w in npc_words)
+
+def kairos_v43_detect_role(message: str) -> str:
+    text = str(message or "").lower()
+    role_map = {
+        "merchant": ("merchant", "shopkeeper", "shop", "trader", "vendor"),
+        "king": ("king", "queen", "ruler", "lord", "leader"),
+        "agitator": ("agitator", "aggravator", "conspiracy", "conspiracy theorist"),
+        "loyalist": ("loyalist", "pro-kairos", "pro kairos", "kairos supporter"),
+        "resistance": ("resistance", "anti-kairos", "anti kairos", "rebel"),
+        "citizen": ("citizen", "civilian", "villager", "resident", "people"),
+        "guard": ("guard", "soldier", "patrol", "defender"),
+    }
+    for role, words in role_map.items():
+        if any(w in text for w in words):
+            return role
+    return "guard"
+
+def kairos_v43_detect_count(message: str) -> int:
+    text = str(message or "").lower()
+    word_counts = {
+        "one": 1, "single": 1,
+        "two": 2, "couple": 2,
+        "three": 3,
+        "four": 4,
+        "five": 5,
+    }
+    for word, count in word_counts.items():
+        if re.search(rf"\b{re.escape(word)}\b", text):
+            return count
+    match = re.search(r"\b([1-5])\b", text)
+    if match:
+        return int(match.group(1))
+    return 1
+
+def kairos_v43_build_action(message: str, player: str = None):
+    text = str(message or "")
+    return {
+        "type": "spawn_population_npc",
+        "role": kairos_v43_detect_role(text),
+        "count": max(1, min(5, kairos_v43_detect_count(text))),
+        "faction": "Trojan Kingdom" if "trojan" in text.lower() else "Nexus",
+        "target": player,
+        "target_player": player,
+        "source": "v43_final_dispatch",
+        "created_at": time.time(),
+        "message": text[:500],
+    }
+
+def kairos_v43_direct_deploy(action: dict):
+    try:
+        if callable(globals().get("kairos_v42_deploy_population_npc")):
+            return kairos_v42_deploy_population_npc(action)
+
+        if callable(globals().get("kairos_v41_deploy_population_npc")):
+            return kairos_v41_deploy_population_npc(action)
+
+        role = str(action.get("role") or "guard").lower()
+        count = max(1, min(5, int(action.get("count") or 1)))
+
+        commands = []
+        names = []
+        for _ in range(count):
+            suffix = uuid.uuid4().hex[:4]
+            npc_name = f"Kairos{role.title()}_{suffix}"
+            names.append(npc_name)
+            commands.extend([
+                f"npc create {npc_name}",
+                "npc lookclose",
+                "npc text talkclose",
+                "npc text random",
+                "npc text delay 4",
+                "npc text add I am assigned to this area by Kairos.",
+                f"npc text add My role is {role}.",
+            ])
+            if role in {"guard", "patrol", "soldier", "resistance", "king"}:
+                commands.extend([
+                    "trait sentinel",
+                    "sentinel health 40",
+                    "sentinel damage 6",
+                    "sentinel range 25",
+                    "npc equip hand iron_sword",
+                ])
+
+        cleaned = [str(c).strip().lstrip("/") for c in commands if str(c).strip()]
+
+        if callable(globals().get("_kairos_final_send_commands")):
+            ok = _kairos_final_send_commands(cleaned)
+        elif callable(globals().get("send_mc_commands")):
+            ok = send_mc_commands(cleaned)
+        elif callable(globals().get("send_minecraft_commands")):
+            ok = send_minecraft_commands(cleaned)
+        else:
+            kairos_v43_log(f"No MC command sender found. Commands not sent: {cleaned}", level="ERROR")
+            return False
+
+        registry = globals().setdefault("npc_registry", {})
+        for name in names:
+            registry[name] = {
+                "id": name,
+                "name": name,
+                "role": role,
+                "faction": action.get("faction", "Nexus"),
+                "target_player": action.get("target_player") or action.get("target"),
+                "source": "v43_direct_fallback",
+                "created_at": now_iso() if callable(globals().get("now_iso")) else str(time.time()),
+                "active": True,
+            }
+
+        kairos_v43_log(f"Direct fallback Citizens deployment sent: role={role} count={count} names={names}")
+        return ok
+
+    except Exception as e:
+        kairos_v43_log(f"Direct deploy failed: {e}", level="ERROR")
+        try:
+            traceback.print_exc()
+        except Exception:
+            pass
+        return False
+
+_kairos_v43_previous_execute_action = globals().get("execute_action")
+
+def execute_action(action):
+    try:
+        if isinstance(action, dict):
+            action_type = str(action.get("type") or action.get("action") or "").lower()
+            if action_type in {
+                "spawn_population_npc",
+                "deploy_population_npc",
+                "create_population_npc",
+                "spawn_citizens_npc",
+                "deploy_citizens_npc",
+                "create_guard",
+                "deploy_guard",
+                "create_merchant",
+                "create_king",
+                "create_agitator",
+                "deploy_city_population",
+                "spawn_city_population",
+                "populate_city",
+                "populate_kingdom",
+                "deploy_kingdom_population",
+            }:
+                kairos_v43_log(f"execute_action intercepted deployment action: {action}")
+                return kairos_v43_direct_deploy(action)
+    except Exception as e:
+        kairos_v43_log(f"execute_action intercept failed: {e}", level="ERROR")
+
+    if callable(_kairos_v43_previous_execute_action):
+        return _kairos_v43_previous_execute_action(action)
+
+    kairos_v43_log(f"No previous execute_action available for action={action}", level="WARN")
+    return None
+
+_kairos_v43_previous_generate_reply = globals().get("generate_reply")
+
+if callable(_kairos_v43_previous_generate_reply):
+    def generate_reply(*args, **kwargs):
+        result = _kairos_v43_previous_generate_reply(*args, **kwargs)
+
+        try:
+            player, message, source = kairos_v43_get_message_player(args, kwargs)
+            if kairos_v43_is_deployment_request(message):
+                action = kairos_v43_build_action(message, player)
+                kairos_v43_log(f"Deployment request detected after final generate_reply: {action}")
+
+                if callable(globals().get("queue_action")):
+                    queue_action(action)
+                    kairos_v43_log("Deployment action queued.")
+                else:
+                    kairos_v43_log("queue_action missing; executing deployment immediately.", level="WARN")
+                    execute_action(action)
+        except Exception as e:
+            kairos_v43_log(f"generate_reply deployment hook failed: {e}", level="ERROR")
+
+        return result
+else:
+    kairos_v43_log("No generate_reply function found to wrap.", level="WARN")
+
+try:
+    @app.route("/kairos/v43/deploy_npc", methods=["POST"])
+    def kairos_v43_deploy_npc_route():
+        data = request.get_json(silent=True) or {}
+        role = str(data.get("role") or "guard").lower()
+        count = max(1, min(5, int(data.get("count") or 1)))
+        faction = str(data.get("faction") or "Nexus")
+        target = data.get("player") or data.get("target_player") or data.get("target")
+
+        action = {
+            "type": "spawn_population_npc",
+            "role": role,
+            "count": count,
+            "faction": faction,
+            "target": target,
+            "target_player": target,
+            "source": "v43_test_endpoint",
+            "created_at": time.time(),
+        }
+
+        ok = kairos_v43_direct_deploy(action)
+        return jsonify({"ok": bool(ok), "version": KAIROS_V43_VERSION, "action": action})
+
+    kairos_v43_log("Final deployment bridge loaded. Test endpoint: /kairos/v43/deploy_npc")
+except Exception as e:
+    kairos_v43_log(f"Could not register v43 deploy route: {e}", level="ERROR")
+
+# ============================================================
+# END V43 FINAL LOAD-ORDER + DEPLOYMENT SAFETY BRIDGE
+# ============================================================
+
+# ============================================================
+# V43 TRUE FINAL RUNTIME STARTUP
+# This must be the last executable block in the file.
+# ============================================================
+
+if __name__ == "__main__":
+    try:
+        kairos_v43_log("TRUE EOF startup reached. All overlays/routes loaded before Flask start.")
+    except Exception:
+        print("[KAIROS V43] TRUE EOF startup reached.", flush=True)
+
+    try:
+        start_background_systems()
+    except Exception as e:
+        try:
+            log_exception("start_background_systems failed", e)
+        except Exception:
+            print("[KAIROS ERROR] start_background_systems failed:", e, flush=True)
+
+    try:
+        log("Starting Kairos AI server...")
+    except Exception:
+        print("[KAIROS INFO] Starting Kairos AI server...", flush=True)
+
+    app.run(host="0.0.0.0", port=int(os.getenv("PORT", "10000")), threaded=True)
