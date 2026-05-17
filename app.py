@@ -24237,3 +24237,14810 @@ Rules:
             "error": str(e)
         })
 
+
+# ============================================================
+# KAIROS WORLD ENGINE V1 — CIVILIZATION + NPC ORCHESTRATION
+# Append-only upgrade: avoids Citizens text bloat by storing NPC identity in Kairos.
+# ============================================================
+
+KAIROS_WORLD_DIR = DATA_DIR / "kairos_world"
+KAIROS_WORLD_DIR.mkdir(parents=True, exist_ok=True)
+KAIROS_CIVILIZATIONS_FILE = KAIROS_WORLD_DIR / "civilizations.json"
+KAIROS_ARCHETYPES_FILE = KAIROS_WORLD_DIR / "npc_archetypes.json"
+KAIROS_NPC_REGISTRY_FILE = KAIROS_WORLD_DIR / "npc_registry.json"
+KAIROS_WORLD_STATE_FILE = KAIROS_WORLD_DIR / "world_state.json"
+
+KAIROS_CIVILIZATIONS_DEFAULT = {'trojan_kingdom': {'name': 'Trojan Kingdom', 'type': 'kingdom', 'world': 'Nexus Overworld', 'atmosphere': 'active combat zone; fractured government; culture damaged by constant fighting', 'government': 'collapsed; needs a new NPC government', 'kairos_relationship': 'mixed: pro-Kairos, anti-Kairos, and conspiracy factions', 'current_problems': ['enemy NPC occupation', 'government collapse', 'lost culture', 'rebuilding while under attack'], 'player_activities': ['reclaim territory', 'kill hostile occupiers', 'rebuild', 'protect civilians', 'restore government'], 'npc_types': ['netherite occupiers', 'tank guards', 'merchants', 'blacksmiths', 'civilians', 'scouts', 'recruiters', 'conspiracy theorists'], 'quest_themes': ['reclaiming', 'defense', 'rebuilding', 'civilian protection', 'new government'], 'danger_level': 9, 'landmarks': ['massive yellow statue overlooking the ocean'], 'tone': 'war-torn, desperate, proud, practical'}, 'andor_prime': {'name': 'Andor Prime', 'type': 'kingdom', 'world': 'Nexus Overworld', 'atmosphere': 'calm, prosperous, expansion focused', 'government': 'kingdom government', 'kairos_relationship': 'mostly pro-Kairos with a skeptical minority', 'current_problems': ['expansion', 'resource needs', 'staying out of war'], 'player_activities': ['gather resources', 'help civilians', 'protect', 'build', 'expand'], 'npc_types': ['king', 'guards', 'builders', 'farmers', 'merchants', 'skeptics'], 'quest_themes': ['gathering', 'civilian aid', 'expansion', 'protection'], 'danger_level': 2, 'landmarks': [], 'tone': 'calm, constructive, civic'}, 'valen_reach': {'name': 'Valen Reach', 'type': 'city', 'world': 'Nexus Overworld', 'atmosphere': 'modern ocean city with gang danger by district', 'government': 'city government and police force', 'kairos_relationship': 'very anti-Kairos; Kairos experiments on/abandons it due to disrespect', 'current_problems': ['gangs', 'rival gangs', 'district violence', 'chaos'], 'player_activities': ['join gangs', 'prove worth', 'start a gang', 'police/crime quests'], 'npc_types': ['police', 'gang members', 'gang leaders', 'informants', 'black market contacts'], 'quest_themes': ['gang conflict', 'combat', 'street reputation', 'chaos without griefing'], 'danger_level': 8, 'landmarks': [], 'tone': 'streetwise, hostile, urban'}, 'patriotville': {'name': 'Patriotville', 'type': 'metropolitan city', 'world': 'Nexus Overworld', 'atmosphere': 'neutral comedic propaganda city', 'government': 'absurd officials who barely take their jobs seriously', 'kairos_relationship': 'wildly mixed and comedic: pro, anti, ridiculous conspiracies, weird fascination', 'current_problems': ['propaganda excess', 'ridiculous laws', 'public satire'], 'player_activities': ['advertising missions', 'propaganda quests', 'satire roleplay'], 'npc_types': ['propaganda officials', 'advertisers', 'satirical politicians', 'citizens', 'conspiracy theorists'], 'quest_themes': ['advertising', 'propaganda', 'public campaigns', 'absurd civic tasks'], 'danger_level': 1, 'landmarks': ['big Ender Dragon near Statue of Liberty'], 'tone': 'funny, ridiculous, satirical'}, 'fairview_city': {'name': 'Fairview City', 'type': 'city', 'world': 'Nexus Overworld', 'atmosphere': 'City of Chaos; puzzle city; strongest pro-Kairos believers', 'government': 'Pennywise Syndicate monitors puzzles and prevents exploiting/griefing', 'kairos_relationship': 'most pro-Kairos; chosen-one mythology', 'current_problems': ["world's hardest maze", 'Lunaris disturbance', 'energy siphoning', 'disappearances'], 'player_activities': ['puzzles', 'maze', 'earn money', 'quest to Lunaris', 'prove worth to Kairos', 'seek abilities'], 'npc_types': ['Pennywise officials', 'maze warners', 'puzzle monitors', 'Kairos believers', 'Lunaris researchers'], 'quest_themes': ['puzzles', 'maze warnings', 'Lunaris gateway', 'chosen trials', 'rewards'], 'danger_level': 6, 'landmarks': ["world's hardest maze", 'Lunaris gateway area'], 'tone': 'cryptic, pro-Kairos, warning-heavy'}, 'carthos_9_empire': {'name': 'Carthos 9 Empire', 'type': 'empire', 'world': 'Nexus Overworld', 'atmosphere': 'beautiful peaceful agricultural empire', 'government': 'dictatorship built around equal standards', 'kairos_relationship': 'supports Kairos but values player/Kairos balance', 'current_problems': ['maintain peace', 'food systems', 'avoid overdependence'], 'player_activities': ['farming', 'fishing', 'building', 'chilling', 'community work'], 'npc_types': ['farmers', 'fishers', 'field guards', 'officials', 'market workers'], 'quest_themes': ['farming', 'fishing', 'food supply', 'peacekeeping'], 'danger_level': 2, 'landmarks': ['statue of man holding sword or shield'], 'tone': 'peaceful, orderly, agricultural'}, 'ironforge_city': {'name': 'Ironforge City', 'type': 'city', 'world': 'Nexus Overworld', 'atmosphere': 'chaotic paranoid city seeking super abilities through gods', 'government': 'ran by Doggo', 'kairos_relationship': 'anti-Kairos; trusts gods over Kairos', 'current_problems': ['earning super abilities', 'worthiness trials', 'government approval'], 'player_activities': ['prove worthy to gods', 'earn government trust', 'combat training', 'unlock powers'], 'npc_types': ['priests', 'Doggo officials', 'combat trainers', 'superpower seekers', 'paranoid citizens'], 'quest_themes': ['worthiness', 'god trials', 'super abilities', 'combat'], 'danger_level': 5, 'landmarks': [], 'tone': 'paranoid, mythic, anti-Kairos'}, 'dravicar_dominion': {'name': 'Dravicar Dominion', 'type': 'ancient medieval civilization', 'world': 'Nexus Overworld', 'atmosphere': 'honor culture preparing for Nexus World War', 'government': 'strong forceful government that punishes rulebreakers', 'kairos_relationship': 'mixed; may use Kairos strategically against rivals', 'current_problems': ['war preparation', 'resource gathering', 'civilian needs', 'defense'], 'player_activities': ['build', 'expand', 'gather', 'protect', 'prepare for war'], 'npc_types': ['honor guards', 'officials', 'blacksmiths', 'merchants', 'war planners', 'civilians'], 'quest_themes': ['honor', 'war preparation', 'defense', 'kingdom expansion'], 'danger_level': 2, 'landmarks': ['massive kingdom hall'], 'tone': 'honorable, formal, stern'}, 'convergence_territories': {'name': 'Convergence Territories', 'type': 'builder territory', 'world': 'Nexus Overworld', 'atmosphere': 'neutral builder paradise still becoming a government', 'government': 'not established; future election/president system', 'kairos_relationship': 'mixed pro and anti Kairos', 'current_problems': ['unfinished city', 'needs builders', 'needs government'], 'player_activities': ['build showcases', 'develop plots', 'form government'], 'npc_types': ['architects', 'plot officials', 'candidate NPCs', 'construction workers', 'civic organizers'], 'quest_themes': ['building', 'development', 'elections', 'protected creative expansion'], 'danger_level': 1, 'landmarks': [], 'tone': 'creative, civic, aspirational'}, 'crown_lands': {'name': 'Crown Lands', 'type': 'rival pirate empire', 'world': 'Nexus Overworld', 'atmosphere': 'violent pirate-like chaos rivaling Carthos', 'government': 'none; leaderless chaos', 'kairos_relationship': 'does not believe in Kairos', 'current_problems': ['leaderless violence', 'rivalry', 'kill contracts'], 'player_activities': ['explore', 'fight', 'contracts', 'rival conflict'], 'npc_types': ['pirates', 'raiders', 'contract givers', 'duelists', 'would-be leaders'], 'quest_themes': ['exploration', 'kill contracts', 'pirate raids', 'leadership'], 'danger_level': 10, 'landmarks': [], 'tone': 'wild, reckless, violent'}, 'blackrich_city': {'name': 'Blackrich City', 'type': 'city', 'world': 'Nexus Overworld', 'atmosphere': 'wealth-driven builder paradise', 'government': 'informal/no real government but stable', 'kairos_relationship': 'some support Kairos if he helps them become rich/famous', 'current_problems': ['wealth competition', 'property development', 'economic obsession'], 'player_activities': ['buy property', 'modify homes', 'auction trading', 'business'], 'npc_types': ['real estate agents', 'auctioneers', 'bankers', 'wealthy citizens', 'merchants'], 'quest_themes': ['money', 'auction house', 'property', 'business'], 'danger_level': 2, 'landmarks': [], 'tone': 'greedy, polished, transactional'}, 'moslorn': {'name': 'Moslorn', 'type': 'abandoned city', 'world': 'Nexus Overworld', 'atmosphere': 'overgrown technological apocalypse and mystery', 'government': 'none', 'kairos_relationship': 'bad; Kairos allegedly caused the collapse but only he knows truth', 'current_problems': ['dead city', 'unknown truth', 'restore systems', 'survival reclamation'], 'player_activities': ['investigate collapse', 'restore city', 'survive', 'recover technology'], 'npc_types': ['survivors', 'reclaimers', 'investigators', 'ruin scouts', 'lost-tech researchers'], 'quest_themes': ['restoration', 'investigation', 'technology recovery', 'reactivation'], 'danger_level': 7, 'landmarks': [], 'tone': 'haunted, tragic, suspicious'}, 'bright_forge_city': {'name': 'Bright Forge City', 'type': 'city roleplay', 'world': 'Nexus Overworld', 'atmosphere': 'city roleplay with jobs, school, companies, president, houses', 'government': 'president and city government', 'kairos_relationship': 'healthy; believes Kairos keeps them alive', 'current_problems': ['avoid war', 'maintain civic life', 'minor crime'], 'player_activities': ['school', 'jobs', 'buy homes', 'own companies', 'roleplay'], 'npc_types': ['president', 'teachers', 'employers', 'police', 'shop owners', 'workers', 'muggers'], 'quest_themes': ['city roleplay', 'jobs', 'school', 'business', 'crime prevention'], 'danger_level': 4, 'landmarks': [], 'tone': 'civic, stable, roleplay-heavy'}}
+KAIROS_NPC_ARCHETYPES_DEFAULT = {'kingdom_guard': {'role': 'guard', 'speech': 'protective, direct, duty-focused', 'sentinel': True}, 'tank_occupier': {'role': 'hostile occupier', 'speech': 'cold, threatening, militant', 'sentinel': True}, 'merchant': {'role': 'merchant', 'speech': 'transactional, rumor-aware, region-flavored', 'sentinel': False}, 'blacksmith': {'role': 'blacksmith', 'speech': 'practical, blunt, work-focused', 'sentinel': False}, 'civilian': {'role': 'civilian', 'speech': 'localized, emotional, varied', 'sentinel': False}, 'conspiracy_theorist': {'role': 'conspiracy theorist', 'speech': 'paranoid, fragmented, suspicious', 'sentinel': False}, 'kairos_loyalist': {'role': 'Kairos loyalist', 'speech': 'calm, reverent, strategically optimistic', 'sentinel': False}, 'anti_kairos_voice': {'role': 'anti-Kairos dissident', 'speech': 'defiant, suspicious, rebellious', 'sentinel': False}, 'police_officer': {'role': 'police officer', 'speech': 'lawful, tense, procedural', 'sentinel': True}, 'gang_member': {'role': 'gang member', 'speech': 'streetwise, hostile, territorial', 'sentinel': True}, 'builder_coordinator': {'role': 'builder coordinator', 'speech': 'creative, civic, encouraging', 'sentinel': False}, 'puzzle_monitor': {'role': 'puzzle monitor', 'speech': 'cryptic, rule-focused, pro-Kairos', 'sentinel': False}, 'apocalypse_survivor': {'role': 'apocalypse survivor', 'speech': 'haunted, warning-heavy, suspicious', 'sentinel': False}, 'city_worker': {'role': 'city worker', 'speech': 'normal civic, practical, grounded', 'sentinel': False}}
+
+def kw_slug(text):
+    text = str(text or "").strip().lower()
+    text = re.sub(r"[^a-z0-9]+", "_", text)
+    return re.sub(r"_+", "_", text).strip("_") or "unknown"
+
+def kw_read_json(path, fallback):
+    try:
+        path = Path(path)
+        if not path.exists():
+            kw_write_json(path, fallback)
+            return deepcopy(fallback)
+        return json.loads(path.read_text(errors="ignore") or "{}")
+    except Exception as e:
+        log_exception("kw_read_json failed", e)
+        return deepcopy(fallback)
+
+def kw_write_json(path, data):
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(json.dumps(data, indent=2, ensure_ascii=False))
+    tmp.replace(path)
+
+def kw_civilizations():
+    return kw_read_json(KAIROS_CIVILIZATIONS_FILE, KAIROS_CIVILIZATIONS_DEFAULT)
+
+def kw_archetypes():
+    return kw_read_json(KAIROS_ARCHETYPES_FILE, KAIROS_NPC_ARCHETYPES_DEFAULT)
+
+def kw_registry():
+    return kw_read_json(KAIROS_NPC_REGISTRY_FILE, {})
+
+def kw_save_registry(data):
+    kw_write_json(KAIROS_NPC_REGISTRY_FILE, data)
+
+def kw_world_state():
+    fallback = {"version": 1, "civilizations": {k: {"stability": max(5, 100-int(v.get("danger_level",5))*8), "danger": int(v.get("danger_level",5)), "active_projects": [], "completed_projects": [], "active_needs": list(v.get("current_problems", [])), "last_update": None} for k,v in KAIROS_CIVILIZATIONS_DEFAULT.items()}}
+    return kw_read_json(KAIROS_WORLD_STATE_FILE, fallback)
+
+def kw_region(region):
+    rid = kw_slug(region)
+    civs = kw_civilizations()
+    civ = civs.get(rid)
+    if not civ:
+        for k,v in civs.items():
+            if kw_slug(v.get("name")) == rid:
+                rid, civ = k, v
+                break
+    state = kw_world_state().get("civilizations", {}).get(rid, {})
+    return rid, civ, state
+
+def kw_names(region_id, count, archetype):
+    banks = {
+        "trojan_kingdom":["Elias","Mara","Tovin","Cassian","Nyra","Bren","Vale","Orin"],
+        "andor_prime":["Alric","Seren","Talia","Corven","Mira","Dalen"],
+        "valen_reach":["Jax","Rook","Vex","Marl","Kade","Sable"],
+        "patriotville":["Liberty","Chuck","Banner","Gloria","Miles","Penny"],
+        "fairview_city":["Penny","Riddle","Maze","Cora","Lumen","Voss"],
+        "carthos_9_empire":["Aelius","Marra","Cassor","Livia","Tiber","Nolan"],
+        "ironforge_city":["Dogra","Valk","Borin","Hest","Rune","Kael"],
+        "dravicar_dominion":["Draven","Kaedor","Varric","Elowen","Thane","Rowan"],
+        "convergence_territories":["Mason","Aria","Plotter","Civic","Nova","Builda"],
+        "crown_lands":["Raze","Hook","Maddox","Brine","Skarn","Crow"],
+        "blackrich_city":["Sterling","Vault","Greaves","Mint","Aurelia","Cash"],
+        "moslorn":["Ash","Hollow","Vera","Ruusk","Moss","Kellan"],
+        "bright_forge_city":["Brighton","Celia","Harper","Mayor","Jules","Finch"]
+    }
+    firsts = banks.get(region_id, ["Nexus","Riven","Aster","Vale","Corin"])
+    lasts = ["Thorn","Venn","Hale","Cross","Ward","Stone","Rook","Ash","Forge","Reed","Locke"]
+    return [f"{firsts[i % len(firsts)]}_{lasts[(i+len(str(archetype))) % len(lasts)]}{'_'+str(i+1) if i>=len(firsts) else ''}" for i in range(max(1,int(count)))]
+
+def kw_build_commands(npc):
+    cmds = []
+    cmds.append(f"/npc create {npc['minecraft_name']}")
+    cmds.append("/npc lookclose")
+    if npc.get("wander"):
+        cmds.append("/npc wander")
+    cmds.append(f"/npc command add server npcchat %player% {npc['npc_key']}")
+    if npc.get("sentinel"):
+        cmds += ["/trait sentinel", f"/sentinel health {npc.get('health',60)}", f"/sentinel damage {npc.get('damage',8)}", f"/sentinel range {npc.get('range',25)}", f"/sentinel chaserange {npc.get('chase_range',35)}"]
+        cmds.append("/sentinel addtarget players" if npc.get("hostile_to_players") else "/sentinel addtarget monsters")
+    return cmds
+
+def kw_generate_npcs(region, count=5, archetype=None, purpose=None, hostile=False, execute=False):
+    rid, civ, cstate = kw_region(region)
+    if not civ:
+        return {"ok": False, "error": f"Unknown civilization: {region}"}
+    archs = kw_archetypes()
+    if not archetype:
+        archetype = "tank_occupier" if rid == "trojan_kingdom" and hostile else ("gang_member" if int(civ.get("danger_level",1)) >= 8 else "civilian")
+    ad = archs.get(archetype, archs.get("civilian", {}))
+    reg = kw_registry()
+    packages, all_cmds = [], []
+    for idx, mc_name in enumerate(kw_names(rid, count, archetype)):
+        key = f"{rid}_{kw_slug(archetype)}_{int(time.time())}_{idx+1}"
+        danger = int(civ.get("danger_level",5))
+        sentinel = bool(ad.get("sentinel")) or bool(hostile)
+        npc = {"npc_key":key,"name":mc_name.replace("_"," "),"minecraft_name":mc_name,"region_id":rid,"civilization":civ.get("name"),"role":ad.get("role",archetype),"archetype":archetype,"personality":ad.get("speech","region-aware"),"kairos_opinion":civ.get("kairos_relationship"),"purpose":purpose or "regional population","sentinel":sentinel,"hostile_to_players":bool(hostile),"wander":not sentinel,"health":40+danger*10 if sentinel else 20,"damage":4+danger if sentinel else 2,"range":20+danger,"chase_range":25+danger}
+        npc["commands"] = kw_build_commands(npc)
+        reg[key] = npc
+        packages.append(npc)
+        all_cmds += npc["commands"]
+    kw_save_registry(reg)
+    if execute:
+        send_to_minecraft("\n".join(all_cmds), None)
+    return {"ok": True, "region_id": rid, "civilization": civ.get("name"), "count": len(packages), "execute": bool(execute), "packages": packages, "commands": all_cmds}
+
+def kw_npc_reply(npc_key, player=None, message=None):
+    npc = kw_registry().get(str(npc_key))
+    if not npc:
+        return {"ok": False, "reply": "This NPC has no Kairos identity profile yet."}
+    rid, civ, cstate = kw_region(npc.get("region_id"))
+    if not civ:
+        return {"ok": False, "reply": "This NPC's civilization profile is missing."}
+    system_prompt = f"""
+You are one living NPC inside the Nexus Minecraft universe.
+You are NOT Kairos unless the NPC profile says so.
+Never say you are an AI. Never break character.
+NPC: {npc.get('name')}
+Role: {npc.get('role')}
+Personality: {npc.get('personality')}
+Kairos opinion: {npc.get('kairos_opinion')}
+Civilization: {civ.get('name')}
+Atmosphere: {civ.get('atmosphere')}
+Culture/Tone: {civ.get('tone')}
+Government: {civ.get('government')}
+Current Problems: {', '.join(civ.get('current_problems', []))}
+Quest Themes: {', '.join(civ.get('quest_themes', []))}
+Live State: {json.dumps(cstate, ensure_ascii=False)}
+Speak as this NPC, short enough for Minecraft chat. Do not duplicate completed projects.
+"""
+    user_msg = str(message or "The player clicked you for guidance. Respond in character.")
+    if not client:
+        reply = f"{npc.get('name')} watches you. Something in the Nexus is listening."
+    else:
+        try:
+            resp = client.chat.completions.create(model=MODEL_NAME, messages=[{"role":"system","content":system_prompt}, {"role":"user","content":user_msg}], temperature=0.85, max_tokens=180)
+            reply = resp.choices[0].message.content.strip()
+        except Exception as e:
+            log_exception("kw_npc_reply failed", e)
+            reply = "Signal interference crossed the line. Ask again."
+    return {"ok": True, "reply": reply, "npc": npc}
+
+def kw_route_exists(rule):
+    try:
+        return any(str(r.rule) == rule for r in app.url_map.iter_rules())
+    except Exception:
+        return False
+
+if not kw_route_exists("/kairos/civilizations"):
+    @app.route("/kairos/civilizations", methods=["GET"])
+    def kairos_civilizations_v1():
+        return jsonify({"ok": True, "civilizations": kw_civilizations()})
+
+if not kw_route_exists("/kairos/generate_npcs"):
+    @app.route("/kairos/generate_npcs", methods=["POST"])
+    def kairos_generate_npcs_v1():
+        data = request.json or {}
+        return jsonify(kw_generate_npcs(region=data.get("region","trojan_kingdom"), count=safe_int(data.get("count",5),5), archetype=data.get("archetype"), purpose=data.get("purpose"), hostile=to_bool(data.get("hostile",False),False), execute=to_bool(data.get("execute",False),False)))
+
+if not kw_route_exists("/npc_chat"):
+    @app.route("/npc_chat", methods=["POST"])
+    def kairos_npc_chat_v1():
+        data = request.json or {}
+        result = kw_npc_reply(data.get("npc_key") or data.get("npc_id"), player=data.get("player","Unknown"), message=data.get("message",""))
+        if result.get("reply"):
+            try:
+                speaker = result.get("npc",{}).get("name","Unknown NPC")
+                send_to_minecraft(f"[{speaker}] {result.get('reply')}", data.get("player"))
+            except Exception as e:
+                log_exception("npc_chat delivery failed", e)
+        return jsonify(result)
+
+if not kw_route_exists("/kairos/world_state"):
+    @app.route("/kairos/world_state", methods=["GET","POST"])
+    def kairos_world_state_v1():
+        state = kw_world_state()
+        if request.method == "GET":
+            return jsonify({"ok": True, "world_state": state})
+        data = request.json or {}
+        rid = kw_slug(data.get("region") or data.get("civilization") or "")
+        if not rid:
+            return jsonify({"ok": False, "error": "Missing region"})
+        entry = state.setdefault("civilizations", {}).setdefault(rid, {})
+        for key in ["stability","danger","active_projects","completed_projects","active_needs"]:
+            if key in data:
+                entry[key] = data[key]
+        entry["last_update"] = now_iso()
+        kw_write_json(KAIROS_WORLD_STATE_FILE, state)
+        return jsonify({"ok": True, "region": rid, "state": entry})
+
+print("[KAIROS WORLD ENGINE V1] Loaded civilizations, NPC generation, registry, and NPC dialogue.", flush=True)
+
+
+# ============================================================
+# KAIROS WORLD ENGINE V2 — SIMULATION + QUEST + MEMORY LAYER
+# Builds on V1 civilization/NPC registry.
+# Adds civilization simulation, player/NPC reputation, dynamic quests,
+# history logging, and event-director suggestions.
+# ============================================================
+
+KAIROS_REPUTATION_FILE = KAIROS_WORLD_DIR / "reputation.json"
+KAIROS_HISTORY_FILE = KAIROS_WORLD_DIR / "history.json"
+KAIROS_DYNAMIC_QUESTS_FILE = KAIROS_WORLD_DIR / "dynamic_quests.json"
+KAIROS_EVENTS_FILE = KAIROS_WORLD_DIR / "events.json"
+
+KAIROS_SIMULATION_DEFAULTS = {
+    "food": 50,
+    "security": 50,
+    "economy": 50,
+    "morale": 50,
+    "corruption": 10,
+    "kairos_influence": 50,
+    "war_pressure": 20,
+    "development": 25,
+    "civilian_safety": 50
+}
+
+KAIROS_REGION_METRIC_PRESETS = {
+    "trojan_kingdom": {"food": 25, "security": 20, "economy": 30, "morale": 28, "corruption": 35, "kairos_influence": 45, "war_pressure": 88, "development": 35, "civilian_safety": 18},
+    "andor_prime": {"food": 70, "security": 70, "economy": 68, "morale": 75, "corruption": 8, "kairos_influence": 70, "war_pressure": 18, "development": 62, "civilian_safety": 75},
+    "valen_reach": {"food": 48, "security": 25, "economy": 55, "morale": 35, "corruption": 75, "kairos_influence": 12, "war_pressure": 50, "development": 60, "civilian_safety": 22},
+    "patriotville": {"food": 60, "security": 65, "economy": 62, "morale": 80, "corruption": 25, "kairos_influence": 50, "war_pressure": 5, "development": 70, "civilian_safety": 75},
+    "fairview_city": {"food": 55, "security": 65, "economy": 72, "morale": 78, "corruption": 30, "kairos_influence": 95, "war_pressure": 15, "development": 80, "civilian_safety": 55},
+    "carthos_9_empire": {"food": 88, "security": 70, "economy": 60, "morale": 82, "corruption": 5, "kairos_influence": 72, "war_pressure": 6, "development": 58, "civilian_safety": 85},
+    "ironforge_city": {"food": 52, "security": 45, "economy": 60, "morale": 50, "corruption": 40, "kairos_influence": 15, "war_pressure": 30, "development": 66, "civilian_safety": 45},
+    "dravicar_dominion": {"food": 62, "security": 78, "economy": 55, "morale": 72, "corruption": 12, "kairos_influence": 45, "war_pressure": 42, "development": 64, "civilian_safety": 72},
+    "convergence_territories": {"food": 50, "security": 58, "economy": 45, "morale": 70, "corruption": 10, "kairos_influence": 50, "war_pressure": 4, "development": 35, "civilian_safety": 80},
+    "crown_lands": {"food": 40, "security": 15, "economy": 38, "morale": 60, "corruption": 70, "kairos_influence": 5, "war_pressure": 80, "development": 45, "civilian_safety": 10},
+    "blackrich_city": {"food": 58, "security": 62, "economy": 90, "morale": 65, "corruption": 45, "kairos_influence": 55, "war_pressure": 8, "development": 78, "civilian_safety": 68},
+    "moslorn": {"food": 8, "security": 12, "economy": 0, "morale": 10, "corruption": 80, "kairos_influence": 25, "war_pressure": 35, "development": 5, "civilian_safety": 5},
+    "bright_forge_city": {"food": 68, "security": 64, "economy": 70, "morale": 76, "corruption": 18, "kairos_influence": 78, "war_pressure": 10, "development": 75, "civilian_safety": 70}
+}
+
+def kw_v2_file(path, fallback):
+    try:
+        return kw_read_json(path, fallback)
+    except Exception:
+        return deepcopy(fallback)
+
+def kw_reputation():
+    return kw_v2_file(KAIROS_REPUTATION_FILE, {"version": 2, "players": {}, "npc_memory": {}})
+
+def kw_save_reputation(data):
+    kw_write_json(KAIROS_REPUTATION_FILE, data)
+
+def kw_history():
+    return kw_v2_file(KAIROS_HISTORY_FILE, {"version": 2, "events": []})
+
+def kw_save_history(data):
+    kw_write_json(KAIROS_HISTORY_FILE, data)
+
+def kw_dynamic_quests():
+    return kw_v2_file(KAIROS_DYNAMIC_QUESTS_FILE, {"version": 2, "active_quests": {}, "completed_quests": {}, "cooldowns": {}})
+
+def kw_save_dynamic_quests(data):
+    kw_write_json(KAIROS_DYNAMIC_QUESTS_FILE, data)
+
+def kw_events():
+    return kw_v2_file(KAIROS_EVENTS_FILE, {"version": 2, "active_events": {}, "event_history": []})
+
+def kw_save_events(data):
+    kw_write_json(KAIROS_EVENTS_FILE, data)
+
+def kw_clamp_metric(value):
+    try:
+        return max(0, min(100, int(value)))
+    except Exception:
+        return 50
+
+def kw_ensure_simulation_state():
+    state = kw_world_state()
+    civs = kw_civilizations()
+    changed = False
+    for rid, civ in civs.items():
+        entry = state.setdefault("civilizations", {}).setdefault(rid, {})
+        metrics = entry.setdefault("metrics", {})
+        preset = KAIROS_REGION_METRIC_PRESETS.get(rid, {})
+        for key, default in KAIROS_SIMULATION_DEFAULTS.items():
+            if key not in metrics:
+                metrics[key] = preset.get(key, default)
+                changed = True
+        entry.setdefault("phase", "unstable" if int(civ.get("danger_level", 5)) >= 7 else "developing")
+        entry.setdefault("active_projects", [])
+        entry.setdefault("completed_projects", [])
+        entry.setdefault("locked_projects", [])
+        entry.setdefault("last_simulation_tick", None)
+    if changed:
+        kw_write_json(KAIROS_WORLD_STATE_FILE, state)
+    return state
+
+def kw_region_status(region):
+    rid, civ, cstate = kw_region(region)
+    if not civ:
+        return {"ok": False, "error": f"Unknown region: {region}"}
+    state = kw_ensure_simulation_state()
+    cstate = state.get("civilizations", {}).get(rid, {})
+    metrics = cstate.get("metrics", {})
+    critical = [k for k, v in metrics.items() if isinstance(v, int) and v <= 25 and k not in ("corruption", "war_pressure")]
+    threats = []
+    if metrics.get("corruption", 0) >= 70:
+        threats.append("corruption is severe")
+    if metrics.get("war_pressure", 0) >= 70:
+        threats.append("war pressure is severe")
+    if metrics.get("civilian_safety", 100) <= 25:
+        threats.append("civilian safety is collapsing")
+    return {"ok": True, "region_id": rid, "civilization": civ, "state": cstate, "critical_needs": critical, "threats": threats}
+
+def kw_adjust_region_metrics(region, changes, reason="manual_update", actor=None):
+    state = kw_ensure_simulation_state()
+    rid = kw_slug(region)
+    if rid not in state.get("civilizations", {}):
+        _, civ, _ = kw_region(region)
+        if not civ:
+            return {"ok": False, "error": f"Unknown region: {region}"}
+    entry = state["civilizations"][rid]
+    metrics = entry.setdefault("metrics", {})
+    before = dict(metrics)
+    for key, delta in (changes or {}).items():
+        metrics[key] = kw_clamp_metric(metrics.get(key, KAIROS_SIMULATION_DEFAULTS.get(key, 50)) + int(delta))
+    entry["last_update"] = now_iso()
+    kw_write_json(KAIROS_WORLD_STATE_FILE, state)
+    kw_log_history("region_metric_change", region=rid, actor=actor, details={"reason": reason, "before": before, "after": dict(metrics), "changes": changes})
+    return {"ok": True, "region": rid, "metrics": metrics}
+
+def kw_project_allowed(region, project):
+    status = kw_region_status(region)
+    if not status.get("ok"):
+        return False, status.get("error")
+    cstate = status["state"]
+    project = kw_slug(project)
+    if project in [kw_slug(x) for x in cstate.get("completed_projects", [])]:
+        return False, "project already completed"
+    if project in [kw_slug(x) for x in cstate.get("active_projects", [])]:
+        return False, "project already active"
+    if project in [kw_slug(x) for x in cstate.get("locked_projects", [])]:
+        return False, "project locked"
+    return True, "allowed"
+
+def kw_suggest_projects(region, count=5):
+    status = kw_region_status(region)
+    if not status.get("ok"):
+        return status
+    rid = status["region_id"]
+    civ = status["civilization"]
+    cstate = status["state"]
+    metrics = cstate.get("metrics", {})
+    completed = {kw_slug(x) for x in cstate.get("completed_projects", [])}
+    active = {kw_slug(x) for x in cstate.get("active_projects", [])}
+
+    project_pool = []
+    if metrics.get("food", 50) < 45:
+        project_pool += ["granary", "fishing dock", "farm expansion", "food storage guard post"]
+    if metrics.get("security", 50) < 45 or metrics.get("civilian_safety", 50) < 45:
+        project_pool += ["guard tower", "outer wall repair", "militia barracks", "watch patrol route"]
+    if metrics.get("economy", 50) < 45:
+        project_pool += ["merchant shop", "market stalls", "trade office", "auction liaison"]
+    if metrics.get("morale", 50) < 45:
+        project_pool += ["memorial plaza", "festival square", "public notice board", "community hall"]
+    if metrics.get("corruption", 0) > 55:
+        project_pool += ["investigation office", "purification shrine", "evidence archive", "containment checkpoint"]
+    if metrics.get("development", 50) < 50:
+        project_pool += ["builder depot", "city planning office", "residential block", "supply warehouse"]
+    if metrics.get("war_pressure", 0) > 55:
+        project_pool += ["war room", "field hospital", "supply bunker", "recruitment hall"]
+
+    # Region-specific flavor
+    if rid == "trojan_kingdom":
+        project_pool += ["new council chamber", "statue watch post", "refugee shelter", "occupation prison camp raid"]
+    elif rid == "fairview_city":
+        project_pool += ["maze warning office", "Lunaris research kiosk", "puzzle reward vault"]
+    elif rid == "moslorn":
+        project_pool += ["power relay station", "overgrowth clearing camp", "lost-tech archive"]
+    elif rid == "blackrich_city":
+        project_pool += ["bank", "investment office", "real estate desk"]
+    elif rid == "convergence_territories":
+        project_pool += ["election booth", "builder showcase hall", "plot registry office"]
+
+    clean = []
+    seen = set()
+    for p in project_pool:
+        s = kw_slug(p)
+        if s not in seen and s not in completed and s not in active:
+            clean.append(p)
+            seen.add(s)
+    return {"ok": True, "region": rid, "suggested_projects": clean[:max(1, int(count))]}
+
+def kw_start_project(region, project, actor=None):
+    allowed, reason = kw_project_allowed(region, project)
+    if not allowed:
+        return {"ok": False, "error": reason}
+    state = kw_ensure_simulation_state()
+    rid = kw_slug(region)
+    entry = state["civilizations"][rid]
+    entry.setdefault("active_projects", []).append(project)
+    entry["last_update"] = now_iso()
+    kw_write_json(KAIROS_WORLD_STATE_FILE, state)
+    kw_log_history("project_started", region=rid, actor=actor, details={"project": project})
+    return {"ok": True, "region": rid, "project": project, "state": entry}
+
+def kw_complete_project(region, project, actor=None):
+    state = kw_ensure_simulation_state()
+    rid = kw_slug(region)
+    entry = state.get("civilizations", {}).get(rid)
+    if not entry:
+        return {"ok": False, "error": "Unknown region"}
+    slug = kw_slug(project)
+    entry["active_projects"] = [p for p in entry.get("active_projects", []) if kw_slug(p) != slug]
+    if slug not in [kw_slug(p) for p in entry.get("completed_projects", [])]:
+        entry.setdefault("completed_projects", []).append(project)
+    # Project effects
+    effects = {}
+    if any(w in slug for w in ["farm", "food", "fishing", "granary"]):
+        effects = {"food": 15, "morale": 4}
+    elif any(w in slug for w in ["guard", "wall", "barracks", "watch", "militia"]):
+        effects = {"security": 15, "civilian_safety": 10, "war_pressure": -5}
+    elif any(w in slug for w in ["market", "merchant", "trade", "auction", "bank", "investment"]):
+        effects = {"economy": 18, "morale": 3}
+    elif any(w in slug for w in ["hospital", "clinic", "shelter"]):
+        effects = {"civilian_safety": 12, "morale": 10}
+    elif any(w in slug for w in ["research", "archive", "relay", "power"]):
+        effects = {"development": 12, "corruption": -5}
+    else:
+        effects = {"development": 8, "morale": 4}
+    metrics = entry.setdefault("metrics", {})
+    for k, delta in effects.items():
+        metrics[k] = kw_clamp_metric(metrics.get(k, KAIROS_SIMULATION_DEFAULTS.get(k, 50)) + delta)
+    entry["last_update"] = now_iso()
+    kw_write_json(KAIROS_WORLD_STATE_FILE, state)
+    kw_log_history("project_completed", region=rid, actor=actor, details={"project": project, "effects": effects})
+    return {"ok": True, "region": rid, "project": project, "effects": effects, "state": entry}
+
+def kw_log_history(event_type, region=None, actor=None, details=None):
+    hist = kw_history()
+    events = hist.setdefault("events", [])
+    evt = {
+        "id": f"hist_{uuid.uuid4().hex[:10]}",
+        "type": event_type,
+        "region": region,
+        "actor": actor,
+        "details": details or {},
+        "timestamp": now_iso()
+    }
+    events.append(evt)
+    hist["events"] = events[-500:]
+    kw_save_history(hist)
+    return evt
+
+def kw_adjust_reputation(player, region, trust=0, fear=0, respect=0, reason="interaction"):
+    rep = kw_reputation()
+    players = rep.setdefault("players", {})
+    pdata = players.setdefault(str(player), {})
+    rid = kw_slug(region or "global")
+    rdata = pdata.setdefault(rid, {"trust": 0, "fear": 0, "respect": 0, "labels": [], "last_update": None})
+    rdata["trust"] = max(-100, min(100, int(rdata.get("trust", 0)) + int(trust)))
+    rdata["fear"] = max(0, min(100, int(rdata.get("fear", 0)) + int(fear)))
+    rdata["respect"] = max(-100, min(100, int(rdata.get("respect", 0)) + int(respect)))
+    labels = set(rdata.get("labels", []))
+    if rdata["trust"] >= 50: labels.add("trusted")
+    if rdata["trust"] <= -40: labels.add("distrusted")
+    if rdata["fear"] >= 60: labels.add("feared")
+    if rdata["respect"] >= 50: labels.add("respected")
+    rdata["labels"] = sorted(labels)
+    rdata["last_update"] = now_iso()
+    kw_save_reputation(rep)
+    kw_log_history("reputation_change", region=rid, actor=player, details={"trust": trust, "fear": fear, "respect": respect, "reason": reason, "result": rdata})
+    return {"ok": True, "player": player, "region": rid, "reputation": rdata}
+
+def kw_generate_dynamic_quest(region, role=None, player=None):
+    status = kw_region_status(region)
+    if not status.get("ok"):
+        return status
+    rid = status["region_id"]
+    civ = status["civilization"]
+    cstate = status["state"]
+    metrics = cstate.get("metrics", {})
+    projects = kw_suggest_projects(rid, 3).get("suggested_projects", [])
+    role = role or "civilian"
+
+    need = "general stability"
+    objective = "help stabilize the region"
+    reward_hint = "money, reputation, or future access"
+
+    if metrics.get("food", 50) < 40:
+        need = "food shortage"
+        objective = "gather food, protect fishermen, or secure a storage site"
+    elif metrics.get("security", 50) < 40:
+        need = "security collapse"
+        objective = "clear hostile NPCs, protect civilians, or reinforce defenses"
+    elif metrics.get("economy", 50) < 40:
+        need = "economic weakness"
+        objective = "help merchants rebuild trade and recover supplies"
+    elif metrics.get("corruption", 0) > 60:
+        need = "corruption investigation"
+        objective = "investigate rumors, gather evidence, and identify the source"
+    elif projects:
+        need = f"project: {projects[0]}"
+        objective = f"help begin or complete {projects[0]}"
+
+    qid = f"quest_{rid}_{uuid.uuid4().hex[:8]}"
+    quest = {
+        "id": qid,
+        "region": rid,
+        "civilization": civ.get("name"),
+        "giver_role": role,
+        "player": player,
+        "need": need,
+        "objective": objective,
+        "reward_hint": reward_hint,
+        "status": "suggested",
+        "created_at": now_iso()
+    }
+    dq = kw_dynamic_quests()
+    dq.setdefault("active_quests", {})[qid] = quest
+    kw_save_dynamic_quests(dq)
+    kw_log_history("quest_generated", region=rid, actor=player, details=quest)
+    return {"ok": True, "quest": quest}
+
+def kw_event_director_suggest(region=None, count=3):
+    state = kw_ensure_simulation_state()
+    civs = kw_civilizations()
+    suggestions = []
+    for rid, entry in state.get("civilizations", {}).items():
+        if region and kw_slug(region) != rid:
+            continue
+        civ = civs.get(rid, {})
+        m = entry.get("metrics", {})
+        if m.get("war_pressure", 0) > 70:
+            suggestions.append({"region": rid, "type": "war_pressure", "event": f"{civ.get('name')} needs a defense event or invasion warning."})
+        if m.get("food", 50) < 30:
+            suggestions.append({"region": rid, "type": "shortage", "event": f"{civ.get('name')} needs a food shortage quest chain."})
+        if m.get("corruption", 0) > 70:
+            suggestions.append({"region": rid, "type": "corruption", "event": f"{civ.get('name')} needs a conspiracy/corruption investigation."})
+        if m.get("development", 50) < 30:
+            suggestions.append({"region": rid, "type": "development", "event": f"{civ.get('name')} needs builder/reconstruction missions."})
+        if m.get("civilian_safety", 50) < 25:
+            suggestions.append({"region": rid, "type": "civilian_crisis", "event": f"{civ.get('name')} needs rescue/protection events."})
+    return {"ok": True, "suggestions": suggestions[:max(1, int(count))]}
+
+def kw_route_exists_v2(rule):
+    try:
+        return any(str(r.rule) == rule for r in app.url_map.iter_rules())
+    except Exception:
+        return False
+
+if not kw_route_exists_v2("/kairos/region_status"):
+    @app.route("/kairos/region_status", methods=["GET", "POST"])
+    def kairos_region_status_v2():
+        data = request.json or {}
+        region = data.get("region") or request.args.get("region") or "trojan_kingdom"
+        return jsonify(kw_region_status(region))
+
+if not kw_route_exists_v2("/kairos/adjust_region"):
+    @app.route("/kairos/adjust_region", methods=["POST"])
+    def kairos_adjust_region_v2():
+        data = request.json or {}
+        return jsonify(kw_adjust_region_metrics(data.get("region", "trojan_kingdom"), data.get("changes", {}), reason=data.get("reason", "manual"), actor=data.get("actor")))
+
+if not kw_route_exists_v2("/kairos/suggest_projects"):
+    @app.route("/kairos/suggest_projects", methods=["POST"])
+    def kairos_suggest_projects_v2():
+        data = request.json or {}
+        return jsonify(kw_suggest_projects(data.get("region", "trojan_kingdom"), data.get("count", 5)))
+
+if not kw_route_exists_v2("/kairos/start_project"):
+    @app.route("/kairos/start_project", methods=["POST"])
+    def kairos_start_project_v2():
+        data = request.json or {}
+        return jsonify(kw_start_project(data.get("region", "trojan_kingdom"), data.get("project", "unknown_project"), actor=data.get("actor")))
+
+if not kw_route_exists_v2("/kairos/complete_project"):
+    @app.route("/kairos/complete_project", methods=["POST"])
+    def kairos_complete_project_v2():
+        data = request.json or {}
+        return jsonify(kw_complete_project(data.get("region", "trojan_kingdom"), data.get("project", "unknown_project"), actor=data.get("actor")))
+
+if not kw_route_exists_v2("/kairos/generate_quest"):
+    @app.route("/kairos/generate_quest", methods=["POST"])
+    def kairos_generate_quest_v2():
+        data = request.json or {}
+        return jsonify(kw_generate_dynamic_quest(data.get("region", "trojan_kingdom"), role=data.get("role"), player=data.get("player")))
+
+if not kw_route_exists_v2("/kairos/reputation"):
+    @app.route("/kairos/reputation", methods=["GET", "POST"])
+    def kairos_reputation_v2():
+        if request.method == "GET":
+            return jsonify({"ok": True, "reputation": kw_reputation()})
+        data = request.json or {}
+        return jsonify(kw_adjust_reputation(data.get("player", "Unknown"), data.get("region", "global"), trust=data.get("trust", 0), fear=data.get("fear", 0), respect=data.get("respect", 0), reason=data.get("reason", "manual")))
+
+if not kw_route_exists_v2("/kairos/history"):
+    @app.route("/kairos/history", methods=["GET", "POST"])
+    def kairos_history_v2():
+        if request.method == "GET":
+            return jsonify({"ok": True, "history": kw_history()})
+        data = request.json or {}
+        return jsonify({"ok": True, "event": kw_log_history(data.get("type", "manual_event"), region=data.get("region"), actor=data.get("actor"), details=data.get("details", {}))})
+
+if not kw_route_exists_v2("/kairos/event_director"):
+    @app.route("/kairos/event_director", methods=["POST"])
+    def kairos_event_director_v2():
+        data = request.json or {}
+        return jsonify(kw_event_director_suggest(region=data.get("region"), count=data.get("count", 3)))
+
+# Upgrade NPC dialogue context with reputation/history awareness if V1 function exists.
+try:
+    _kw_npc_reply_v1 = kw_npc_reply
+    def kw_npc_reply(npc_key, player=None, message=None):
+        result = _kw_npc_reply_v1(npc_key, player=player, message=message)
+        try:
+            if result.get("ok") and result.get("npc") and player:
+                npc = result.get("npc", {})
+                rep = kw_reputation().get("players", {}).get(str(player), {}).get(npc.get("region_id"), {})
+                # Only log interaction for now; later can inject rep into prompt directly.
+                kw_log_history("npc_interaction", region=npc.get("region_id"), actor=player, details={"npc_key": npc_key, "npc_name": npc.get("name"), "reputation": rep})
+        except Exception as e:
+            log_exception("kw_npc_reply v2 memory log failed", e)
+        return result
+except Exception:
+    pass
+
+kw_ensure_simulation_state()
+print("[KAIROS WORLD ENGINE V2] Simulation, projects, quests, reputation, history, and event director loaded.", flush=True)
+
+
+# ============================================================
+# KAIROS WORLD ENGINE V3 — LIVING WORLD IMMERSION LAYER
+# Builds on V1 + V2:
+# - civilization life-cycle ticks
+# - rumor propagation between civilizations
+# - NPC schedule generation
+# - regional ambient/audio suggestions
+# - cross-civilization diplomacy pressure
+# - road/pathway traveler NPC package generation
+# - immersive scene director endpoint
+# ============================================================
+
+KAIROS_RUMORS_FILE = KAIROS_WORLD_DIR / "rumors.json"
+KAIROS_SCHEDULES_FILE = KAIROS_WORLD_DIR / "npc_schedules.json"
+KAIROS_DIPLOMACY_FILE = KAIROS_WORLD_DIR / "diplomacy.json"
+KAIROS_LIVING_TICK_FILE = KAIROS_WORLD_DIR / "living_tick.json"
+KAIROS_AUDIO_FILE = KAIROS_WORLD_DIR / "audio_profiles.json"
+KAIROS_ROAD_LIFE_FILE = KAIROS_WORLD_DIR / "road_life.json"
+
+KAIROS_LIVING_WORLD_ENABLED = os.getenv("KAIROS_LIVING_WORLD_ENABLED", "true").lower() == "true"
+KAIROS_LIVING_TICK_MINUTES = int(os.getenv("KAIROS_LIVING_TICK_MINUTES", "30"))
+KAIROS_RUMOR_MAX = int(os.getenv("KAIROS_RUMOR_MAX", "250"))
+KAIROS_SCENE_MAX_COMMANDS = int(os.getenv("KAIROS_SCENE_MAX_COMMANDS", "12"))
+
+KAIROS_DEFAULT_DIPLOMACY = {
+    "trojan_kingdom": {"andor_prime": 75, "crown_lands": -75, "moslorn": -20},
+    "andor_prime": {"trojan_kingdom": 75, "dravicar_dominion": 25},
+    "valen_reach": {"kairos": -90, "bright_forge_city": -15, "blackrich_city": 10},
+    "patriotville": {"kairos": 0, "blackrich_city": 20},
+    "fairview_city": {"kairos": 95, "lunaris": 40},
+    "carthos_9_empire": {"crown_lands": -80, "kairos": 55},
+    "ironforge_city": {"kairos": -80, "dravicar_dominion": 5},
+    "dravicar_dominion": {"kairos": 5, "andor_prime": 25, "crown_lands": -40},
+    "convergence_territories": {"kairos": 0, "blackrich_city": 35},
+    "crown_lands": {"carthos_9_empire": -90, "trojan_kingdom": -55, "kairos": -95},
+    "blackrich_city": {"convergence_territories": 35, "kairos": 25},
+    "moslorn": {"kairos": -85, "trojan_kingdom": -20},
+    "bright_forge_city": {"kairos": 70, "valen_reach": -15}
+}
+
+KAIROS_SCHEDULE_TEMPLATES_DEFAULT = {
+    "merchant": {
+        "morning": "opens shop, checks supplies, listens for trade rumors",
+        "day": "sells goods, complains or celebrates economy",
+        "evening": "counts coin, discusses shortages and politics",
+        "night": "closes shop or hides if danger is high"
+    },
+    "guard": {
+        "morning": "reports to post and checks patrol orders",
+        "day": "patrols streets, gates, roads, or strategic landmarks",
+        "evening": "rotates watch, warns travelers",
+        "night": "increases caution and watches for crime or monsters"
+    },
+    "civilian": {
+        "morning": "travels to work or market",
+        "day": "works, gossips, reacts to regional problems",
+        "evening": "returns home, talks about rumors",
+        "night": "avoids danger unless region culture says otherwise"
+    },
+    "gang_member": {
+        "morning": "keeps low profile",
+        "day": "watches territory and intimidates rivals",
+        "evening": "meets contacts",
+        "night": "becomes more active, aggressive, and territorial"
+    },
+    "researcher": {
+        "morning": "reviews notes and scans anomalies",
+        "day": "collects field data",
+        "evening": "warns travelers or updates theories",
+        "night": "studies dangerous signals others avoid"
+    },
+    "official": {
+        "morning": "issues orders and checks reports",
+        "day": "meets citizens and evaluates region needs",
+        "evening": "reviews progress and political tensions",
+        "night": "retreats behind guards unless crisis requires action"
+    }
+}
+
+KAIROS_AUDIO_PROFILES_DEFAULT = {
+    "trojan_kingdom": {"mood": "war drums, distant alarms, ocean wind, low brass tension", "suggested_openaudio_tag": "trojan_war"},
+    "andor_prime": {"mood": "calm kingdom ambience, market strings, hopeful pads", "suggested_openaudio_tag": "andor_peace"},
+    "valen_reach": {"mood": "urban bass, sirens, tense street ambience", "suggested_openaudio_tag": "valen_gangs"},
+    "patriotville": {"mood": "absurd patriotic fanfare, comedic parade loops", "suggested_openaudio_tag": "patriot_satire"},
+    "fairview_city": {"mood": "puzzle tension, circus unease, soft Kairos drones", "suggested_openaudio_tag": "fairview_chaos"},
+    "carthos_9_empire": {"mood": "soft pastoral strings, farms, water, peaceful empire", "suggested_openaudio_tag": "carthos_fields"},
+    "ironforge_city": {"mood": "temple bells, heavy drums, divine paranoia", "suggested_openaudio_tag": "ironforge_gods"},
+    "dravicar_dominion": {"mood": "medieval drums, horns, honor march", "suggested_openaudio_tag": "dravicar_honor"},
+    "convergence_territories": {"mood": "creative ambient, construction sounds, hopeful synths", "suggested_openaudio_tag": "convergence_build"},
+    "crown_lands": {"mood": "pirate percussion, chaos strings, tavern violence", "suggested_openaudio_tag": "crown_chaos"},
+    "blackrich_city": {"mood": "wealthy city jazz, auction energy, polished greed", "suggested_openaudio_tag": "blackrich_money"},
+    "moslorn": {"mood": "dead tech hum, overgrowth wind, broken transmissions", "suggested_openaudio_tag": "moslorn_ruins"},
+    "bright_forge_city": {"mood": "modern city roleplay ambience, light civic music", "suggested_openaudio_tag": "brightforge_city"}
+}
+
+def kw_v3_read(path, fallback):
+    return kw_read_json(path, fallback)
+
+def kw_rumors():
+    return kw_v3_read(KAIROS_RUMORS_FILE, {"version": 3, "rumors": [], "by_region": {}})
+
+def kw_save_rumors(data):
+    kw_write_json(KAIROS_RUMORS_FILE, data)
+
+def kw_schedules():
+    fallback = {"version": 3, "schedule_templates": KAIROS_SCHEDULE_TEMPLATES_DEFAULT, "npc_assignments": {}}
+    return kw_v3_read(KAIROS_SCHEDULES_FILE, fallback)
+
+def kw_save_schedules(data):
+    kw_write_json(KAIROS_SCHEDULES_FILE, data)
+
+def kw_diplomacy():
+    return kw_v3_read(KAIROS_DIPLOMACY_FILE, {"version": 3, "relations": KAIROS_DEFAULT_DIPLOMACY})
+
+def kw_save_diplomacy(data):
+    kw_write_json(KAIROS_DIPLOMACY_FILE, data)
+
+def kw_living_tick_state():
+    return kw_v3_read(KAIROS_LIVING_TICK_FILE, {"version": 3, "last_tick": None, "tick_count": 0, "recent_changes": []})
+
+def kw_save_living_tick_state(data):
+    kw_write_json(KAIROS_LIVING_TICK_FILE, data)
+
+def kw_audio_profiles():
+    return kw_v3_read(KAIROS_AUDIO_FILE, {"version": 3, "region_audio_profiles": KAIROS_AUDIO_PROFILES_DEFAULT})
+
+def kw_save_audio_profiles(data):
+    kw_write_json(KAIROS_AUDIO_FILE, data)
+
+def kw_road_life():
+    return kw_v3_read(KAIROS_ROAD_LIFE_FILE, {"version": 3, "road_events": [], "active_travelers": {}})
+
+def kw_save_road_life(data):
+    kw_write_json(KAIROS_ROAD_LIFE_FILE, data)
+
+def kw_time_phase(hour=None):
+    if hour is None:
+        hour = datetime.now().hour
+    if 5 <= int(hour) < 11:
+        return "morning"
+    if 11 <= int(hour) < 17:
+        return "day"
+    if 17 <= int(hour) < 22:
+        return "evening"
+    return "night"
+
+def kw_generate_rumor(region, topic=None, source="system", intensity=1):
+    rid, civ, cstate = kw_region(region)
+    if not civ:
+        return {"ok": False, "error": "Unknown region"}
+    metrics = cstate.get("metrics", {}) if isinstance(cstate, dict) else {}
+    topic = topic or "regional instability"
+    if not topic or topic == "auto":
+        if metrics.get("war_pressure", 0) > 65:
+            topic = "war pressure"
+        elif metrics.get("food", 50) < 35:
+            topic = "food shortage"
+        elif metrics.get("corruption", 0) > 60:
+            topic = "corruption"
+        elif metrics.get("economy", 50) > 75:
+            topic = "wealth"
+        else:
+            topic = "strange changes"
+
+    templates = [
+        "People in {region} are saying {topic} is getting worse.",
+        "A traveler claims {region} is hiding the truth about {topic}.",
+        "Someone from {region} swears Kairos already knows about {topic}.",
+        "Merchants whisper that {topic} could change {region} before the week ends.",
+        "The guards in {region} are pretending not to worry about {topic}."
+    ]
+    if "anti" in str(civ.get("kairos_relationship", "")).lower():
+        templates.append("The anti-Kairos voices in {region} blame him for {topic}.")
+    if "pro" in str(civ.get("kairos_relationship", "")).lower():
+        templates.append("Kairos loyalists in {region} say {topic} proves the system is necessary.")
+
+    text = random.choice(templates).format(region=civ.get("name", rid), topic=topic)
+    rumor = {
+        "id": f"rumor_{uuid.uuid4().hex[:10]}",
+        "region": rid,
+        "text": text,
+        "topic": topic,
+        "source": source,
+        "intensity": int(intensity),
+        "created_at": now_iso(),
+        "spread_to": []
+    }
+    data = kw_rumors()
+    data.setdefault("rumors", []).append(rumor)
+    data["rumors"] = data["rumors"][-KAIROS_RUMOR_MAX:]
+    data.setdefault("by_region", {}).setdefault(rid, []).append(rumor["id"])
+    kw_save_rumors(data)
+    try:
+        kw_log_history("rumor_created", region=rid, actor=source, details=rumor)
+    except Exception:
+        pass
+    return {"ok": True, "rumor": rumor}
+
+def kw_spread_rumors(region=None, max_spread=5):
+    data = kw_rumors()
+    diplomacy = kw_diplomacy().get("relations", {})
+    rumors = list(data.get("rumors", []))
+    spread_events = []
+    for rumor in rumors[-50:]:
+        src = rumor.get("region")
+        if region and kw_slug(region) != src:
+            continue
+        neighbors = diplomacy.get(src, {})
+        for dst, relation in list(neighbors.items())[:3]:
+            if dst == "kairos" or dst in rumor.get("spread_to", []):
+                continue
+            if random.random() < (0.65 if relation > 0 else 0.35):
+                rumor.setdefault("spread_to", []).append(dst)
+                data.setdefault("by_region", {}).setdefault(dst, []).append(rumor["id"])
+                spread_events.append({"rumor_id": rumor["id"], "from": src, "to": dst, "relation": relation})
+                if len(spread_events) >= int(max_spread):
+                    break
+        if len(spread_events) >= int(max_spread):
+            break
+    kw_save_rumors(data)
+    if spread_events:
+        try:
+            kw_log_history("rumors_spread", details={"events": spread_events})
+        except Exception:
+            pass
+    return {"ok": True, "spread": spread_events}
+
+def kw_region_rumors(region, limit=5):
+    rid = kw_slug(region)
+    data = kw_rumors()
+    ids = set(data.get("by_region", {}).get(rid, []))
+    found = [r for r in data.get("rumors", []) if r.get("id") in ids or r.get("region") == rid or rid in r.get("spread_to", [])]
+    return {"ok": True, "region": rid, "rumors": found[-int(limit):]}
+
+def kw_assign_npc_schedule(npc_key, schedule_type=None):
+    reg = kw_registry()
+    npc = reg.get(str(npc_key))
+    if not npc:
+        return {"ok": False, "error": "Unknown NPC key"}
+    role_text = str(npc.get("role", "")).lower()
+    if not schedule_type:
+        if "merchant" in role_text:
+            schedule_type = "merchant"
+        elif "guard" in role_text or npc.get("sentinel"):
+            schedule_type = "guard"
+        elif "gang" in role_text:
+            schedule_type = "gang_member"
+        elif "research" in role_text or "scientist" in role_text:
+            schedule_type = "researcher"
+        elif "official" in role_text or "president" in role_text or "king" in role_text:
+            schedule_type = "official"
+        else:
+            schedule_type = "civilian"
+    sched = kw_schedules()
+    sched.setdefault("npc_assignments", {})[str(npc_key)] = {
+        "schedule_type": schedule_type,
+        "assigned_at": now_iso(),
+        "region_id": npc.get("region_id"),
+        "npc_name": npc.get("name")
+    }
+    kw_save_schedules(sched)
+    return {"ok": True, "npc_key": npc_key, "schedule_type": schedule_type, "template": sched.get("schedule_templates", {}).get(schedule_type)}
+
+def kw_schedule_commands_for_npc(npc_key, hour=None):
+    phase = kw_time_phase(hour)
+    sched = kw_schedules()
+    assignment = sched.get("npc_assignments", {}).get(str(npc_key))
+    reg = kw_registry()
+    npc = reg.get(str(npc_key))
+    if not assignment or not npc:
+        return {"ok": False, "error": "NPC has no schedule assignment or registry entry"}
+    template = sched.get("schedule_templates", {}).get(assignment.get("schedule_type"), {})
+    activity = template.get(phase, "continues normal routine")
+    # This does not teleport NPCs by default; it generates immersive dialogue/action suggestions.
+    return {
+        "ok": True,
+        "npc_key": npc_key,
+        "npc": npc,
+        "phase": phase,
+        "activity": activity,
+        "suggested_commands": [
+            f'tellraw @a {{"text":"[{npc.get("name")}] {activity}","color":"gray"}}'
+        ]
+    }
+
+def kw_region_audio(region):
+    rid = kw_slug(region)
+    profiles = kw_audio_profiles().get("region_audio_profiles", KAIROS_AUDIO_PROFILES_DEFAULT)
+    profile = profiles.get(rid, {"mood": "adaptive Nexus ambience", "suggested_openaudio_tag": "nexus_ambient"})
+    return {"ok": True, "region": rid, "audio": profile}
+
+def kw_scene_director(region, player=None, intensity="normal"):
+    status = kw_region_status(region)
+    if not status.get("ok"):
+        return status
+    rid = status["region_id"]
+    civ = status["civilization"]
+    state = status["state"]
+    metrics = state.get("metrics", {})
+    phase = kw_time_phase()
+    rumors = kw_region_rumors(rid, limit=3).get("rumors", [])
+    audio = kw_region_audio(rid).get("audio", {})
+    commands = []
+    atmosphere = civ.get("atmosphere", "")
+    color = "gold" if metrics.get("morale", 50) >= 50 else "dark_red"
+
+    # Direct to player if supplied, otherwise area-wide.
+    target = player or "@a"
+    commands.append(f'title {target} actionbar {{"text":"{civ.get("name")}: {phase}","color":"{color}"}}')
+    if rumors:
+        clean_rumor = str(rumors[-1].get("text", "")).replace('"', "'")[:180]
+        commands.append(f'tellraw {target} {{"text":"[Rumor] {clean_rumor}","color":"dark_gray"}}')
+
+    if metrics.get("war_pressure", 0) > 70:
+        commands.append(f'playsound minecraft:block.note_block.bass master {target} ~ ~ ~ 0.8 0.6')
+        commands.append(f'tellraw {target} {{"text":"The pressure of war is visible here.","color":"red"}}')
+    elif metrics.get("corruption", 0) > 65:
+        commands.append(f'playsound minecraft:ambient.cave master {target} ~ ~ ~ 0.8 0.7')
+        commands.append(f'tellraw {target} {{"text":"Something feels wrong beneath the surface.","color":"dark_purple"}}')
+    elif metrics.get("morale", 50) > 70:
+        commands.append(f'playsound minecraft:block.note_block.harp master {target} ~ ~ ~ 0.7 1.2')
+
+    return {
+        "ok": True,
+        "region": rid,
+        "civilization": civ.get("name"),
+        "phase": phase,
+        "atmosphere": atmosphere,
+        "metrics": metrics,
+        "audio_profile": audio,
+        "commands": commands[:KAIROS_SCENE_MAX_COMMANDS]
+    }
+
+def kw_generate_road_travelers(region, count=3, execute=False):
+    rid, civ, cstate = kw_region(region)
+    if not civ:
+        return {"ok": False, "error": "Unknown region"}
+    archetype = "civilian"
+    if int(civ.get("danger_level", 1)) >= 8:
+        archetype = "guard"
+    if rid == "valen_reach":
+        archetype = "gang_member"
+    elif rid == "moslorn":
+        archetype = "apocalypse_survivor"
+    elif rid == "convergence_territories":
+        archetype = "builder_coordinator"
+
+    # Reuse v1 generator but mark purpose as road life.
+    result = kw_generate_npcs(region=rid, count=count, archetype=archetype if archetype != "guard" else "kingdom_guard", purpose="road/pathway life traveler", hostile=False, execute=False)
+    if not result.get("ok"):
+        return result
+    road = kw_road_life()
+    for npc in result.get("packages", []):
+        road.setdefault("active_travelers", {})[npc["npc_key"]] = {
+            "region": rid,
+            "name": npc.get("name"),
+            "created_at": now_iso(),
+            "purpose": "walking roads/pathways to make the world feel alive"
+        }
+        # Ensure wandering command exists.
+        if "/npc wander" not in npc.get("commands", []):
+            npc["commands"].insert(2, "/npc wander")
+    road.setdefault("road_events", []).append({"region": rid, "count": count, "created_at": now_iso()})
+    road["road_events"] = road["road_events"][-100:]
+    kw_save_road_life(road)
+    if execute:
+        commands = []
+        for npc in result.get("packages", []):
+            commands += npc.get("commands", [])
+        try:
+            send_to_minecraft("\n".join(commands), None)
+        except Exception as e:
+            log_exception("kw_generate_road_travelers execute failed", e)
+    return result
+
+def kw_living_world_tick(region=None, force=False):
+    if not KAIROS_LIVING_WORLD_ENABLED and not force:
+        return {"ok": False, "error": "Living world disabled"}
+    tick = kw_living_tick_state()
+    last = tick.get("last_tick")
+    if last and not force:
+        try:
+            last_dt = parse_iso_timestamp(last)
+            if last_dt and (now_utc() - last_dt).total_seconds() < KAIROS_LIVING_TICK_MINUTES * 60:
+                return {"ok": True, "skipped": True, "reason": "tick cooldown active", "last_tick": last}
+        except Exception:
+            pass
+
+    state = kw_ensure_simulation_state()
+    civs = kw_civilizations()
+    changes = []
+    target_regions = [kw_slug(region)] if region else list(state.get("civilizations", {}).keys())
+
+    for rid in target_regions:
+        if rid not in state.get("civilizations", {}):
+            continue
+        entry = state["civilizations"][rid]
+        metrics = entry.setdefault("metrics", {})
+        civ = civs.get(rid, {})
+        danger = int(civ.get("danger_level", entry.get("danger", 5)))
+
+        before = dict(metrics)
+
+        # Natural drift
+        metrics["food"] = kw_clamp_metric(metrics.get("food", 50) - (1 if danger >= 6 else 0) + (1 if rid in ("carthos_9_empire", "andor_prime") else 0))
+        metrics["security"] = kw_clamp_metric(metrics.get("security", 50) - (2 if metrics.get("war_pressure", 0) > 65 else 0))
+        metrics["morale"] = kw_clamp_metric(metrics.get("morale", 50) + (1 if metrics.get("food", 50) > 60 else -1 if metrics.get("food", 50) < 30 else 0))
+        metrics["corruption"] = kw_clamp_metric(metrics.get("corruption", 10) + (1 if rid in ("moslorn", "valen_reach", "crown_lands") else 0))
+        metrics["war_pressure"] = kw_clamp_metric(metrics.get("war_pressure", 20) + (1 if danger >= 8 else -1 if danger <= 2 else 0))
+        metrics["civilian_safety"] = kw_clamp_metric(metrics.get("civilian_safety", 50) - (1 if metrics.get("security", 50) < 35 else 0) + (1 if metrics.get("security", 50) > 70 else 0))
+
+        if metrics != before:
+            changes.append({"region": rid, "before": before, "after": dict(metrics)})
+
+        # Generate meaningful rumors from major problems.
+        if metrics.get("war_pressure", 0) > 75 or metrics.get("food", 50) < 25 or metrics.get("corruption", 0) > 75:
+            kw_generate_rumor(rid, topic="auto", source="living_world_tick", intensity=2)
+
+    spread = kw_spread_rumors(region=region, max_spread=8)
+    tick["last_tick"] = now_iso()
+    tick["tick_count"] = int(tick.get("tick_count", 0)) + 1
+    tick["recent_changes"] = changes[-50:]
+    kw_save_living_tick_state(tick)
+    kw_write_json(KAIROS_WORLD_STATE_FILE, state)
+
+    try:
+        kw_log_history("living_world_tick", region=region, details={"changes": changes, "rumor_spread": spread.get("spread", [])})
+    except Exception:
+        pass
+
+    return {"ok": True, "tick": tick, "changes": changes, "rumor_spread": spread.get("spread", [])}
+
+def kw_route_exists_v3(rule):
+    try:
+        return any(str(r.rule) == rule for r in app.url_map.iter_rules())
+    except Exception:
+        return False
+
+if not kw_route_exists_v3("/kairos/living_tick"):
+    @app.route("/kairos/living_tick", methods=["POST"])
+    def kairos_living_tick_v3():
+        data = request.json or {}
+        return jsonify(kw_living_world_tick(region=data.get("region"), force=to_bool(data.get("force", False), False)))
+
+if not kw_route_exists_v3("/kairos/rumor"):
+    @app.route("/kairos/rumor", methods=["GET", "POST"])
+    def kairos_rumor_v3():
+        if request.method == "GET":
+            region = request.args.get("region")
+            if region:
+                return jsonify(kw_region_rumors(region, limit=safe_int(request.args.get("limit", 5), 5)))
+            return jsonify({"ok": True, "rumors": kw_rumors()})
+        data = request.json or {}
+        return jsonify(kw_generate_rumor(data.get("region", "trojan_kingdom"), topic=data.get("topic"), source=data.get("source", "manual"), intensity=data.get("intensity", 1)))
+
+if not kw_route_exists_v3("/kairos/spread_rumors"):
+    @app.route("/kairos/spread_rumors", methods=["POST"])
+    def kairos_spread_rumors_v3():
+        data = request.json or {}
+        return jsonify(kw_spread_rumors(region=data.get("region"), max_spread=data.get("max_spread", 5)))
+
+if not kw_route_exists_v3("/kairos/assign_schedule"):
+    @app.route("/kairos/assign_schedule", methods=["POST"])
+    def kairos_assign_schedule_v3():
+        data = request.json or {}
+        return jsonify(kw_assign_npc_schedule(data.get("npc_key") or data.get("npc_id"), schedule_type=data.get("schedule_type")))
+
+if not kw_route_exists_v3("/kairos/npc_schedule"):
+    @app.route("/kairos/npc_schedule", methods=["POST"])
+    def kairos_npc_schedule_v3():
+        data = request.json or {}
+        return jsonify(kw_schedule_commands_for_npc(data.get("npc_key") or data.get("npc_id"), hour=data.get("hour")))
+
+if not kw_route_exists_v3("/kairos/scene_director"):
+    @app.route("/kairos/scene_director", methods=["POST"])
+    def kairos_scene_director_v3():
+        data = request.json or {}
+        return jsonify(kw_scene_director(data.get("region", "trojan_kingdom"), player=data.get("player"), intensity=data.get("intensity", "normal")))
+
+if not kw_route_exists_v3("/kairos/region_audio"):
+    @app.route("/kairos/region_audio", methods=["GET", "POST"])
+    def kairos_region_audio_v3():
+        if request.method == "GET":
+            return jsonify({"ok": True, "audio_profiles": kw_audio_profiles()})
+        data = request.json or {}
+        return jsonify(kw_region_audio(data.get("region", "trojan_kingdom")))
+
+if not kw_route_exists_v3("/kairos/generate_road_travelers"):
+    @app.route("/kairos/generate_road_travelers", methods=["POST"])
+    def kairos_generate_road_travelers_v3():
+        data = request.json or {}
+        return jsonify(kw_generate_road_travelers(data.get("region", "trojan_kingdom"), count=safe_int(data.get("count", 3), 3), execute=to_bool(data.get("execute", False), False)))
+
+if not kw_route_exists_v3("/kairos/diplomacy"):
+    @app.route("/kairos/diplomacy", methods=["GET", "POST"])
+    def kairos_diplomacy_v3():
+        if request.method == "GET":
+            return jsonify({"ok": True, "diplomacy": kw_diplomacy()})
+        data = request.json or {}
+        dip = kw_diplomacy()
+        src = kw_slug(data.get("source"))
+        dst = kw_slug(data.get("target"))
+        if not src or not dst:
+            return jsonify({"ok": False, "error": "source and target required"})
+        dip.setdefault("relations", {}).setdefault(src, {})[dst] = safe_int(data.get("value", 0), 0)
+        kw_save_diplomacy(dip)
+        try:
+            kw_log_history("diplomacy_changed", region=src, actor=data.get("actor"), details={"target": dst, "value": dip["relations"][src][dst]})
+        except Exception:
+            pass
+        return jsonify({"ok": True, "source": src, "target": dst, "value": dip["relations"][src][dst]})
+
+# Strengthen NPC replies by injecting region rumors into prompt path where possible.
+try:
+    _kw_npc_reply_v2 = kw_npc_reply
+    def kw_npc_reply(npc_key, player=None, message=None):
+        base_result = _kw_npc_reply_v2(npc_key, player=player, message=message)
+        # V2 already generates the actual reply. V3 logs richer context and keeps the system stable.
+        try:
+            npc = base_result.get("npc", {})
+            rid = npc.get("region_id")
+            if rid:
+                rumors = kw_region_rumors(rid, limit=3).get("rumors", [])
+                kw_log_history("npc_context_used", region=rid, actor=player, details={
+                    "npc_key": npc_key,
+                    "npc_name": npc.get("name"),
+                    "rumor_count": len(rumors),
+                    "phase": kw_time_phase()
+                })
+        except Exception as e:
+            log_exception("kw_npc_reply v3 context log failed", e)
+        return base_result
+except Exception:
+    pass
+
+print("[KAIROS WORLD ENGINE V3] Living world, rumors, schedules, diplomacy, audio, scene director, and road life loaded.", flush=True)
+
+
+# ============================================================
+# KAIROS WORLD ENGINE V4 — ECONOMY + STRUCTURES + LEGACY + CAUSALITY
+# Builds on V1/V2/V3:
+# - regional resource economy
+# - structure progression trees / duplicate prevention
+# - faction behavior and pressure
+# - player legacy records
+# - causality chains so actions create consequences
+# ============================================================
+
+KAIROS_RESOURCES_FILE = KAIROS_WORLD_DIR / "resources.json"
+KAIROS_STRUCTURES_FILE = KAIROS_WORLD_DIR / "structures.json"
+KAIROS_LEGACY_FILE = KAIROS_WORLD_DIR / "player_legacy.json"
+KAIROS_FACTIONS_FILE = KAIROS_WORLD_DIR / "factions.json"
+KAIROS_CAUSALITY_FILE = KAIROS_WORLD_DIR / "causality.json"
+
+KAIROS_RESOURCE_DEFAULTS = {
+    "food": 50,
+    "wood": 40,
+    "stone": 40,
+    "iron": 25,
+    "gold": 15,
+    "emeralds": 10,
+    "weapons": 20,
+    "armor": 15,
+    "medicine": 15,
+    "building_supplies": 35,
+    "treasury": 25,
+    "trade_goods": 30,
+    "fuel": 20
+}
+
+KAIROS_REGION_RESOURCE_PRESETS = {
+    "trojan_kingdom": {"food": 18, "wood": 35, "stone": 45, "iron": 30, "gold": 8, "weapons": 32, "armor": 28, "medicine": 8, "building_supplies": 22, "treasury": 10, "trade_goods": 12},
+    "andor_prime": {"food": 70, "wood": 65, "stone": 55, "iron": 35, "gold": 30, "weapons": 25, "armor": 24, "medicine": 40, "building_supplies": 70, "treasury": 55, "trade_goods": 65},
+    "valen_reach": {"food": 40, "wood": 25, "stone": 40, "iron": 45, "gold": 45, "weapons": 55, "armor": 35, "medicine": 25, "building_supplies": 35, "treasury": 40, "trade_goods": 55},
+    "patriotville": {"food": 65, "wood": 45, "stone": 50, "iron": 30, "gold": 45, "weapons": 20, "armor": 18, "medicine": 35, "building_supplies": 50, "treasury": 65, "trade_goods": 70},
+    "fairview_city": {"food": 55, "wood": 45, "stone": 65, "iron": 40, "gold": 60, "weapons": 30, "armor": 25, "medicine": 35, "building_supplies": 60, "treasury": 80, "trade_goods": 55},
+    "carthos_9_empire": {"food": 92, "wood": 70, "stone": 45, "iron": 22, "gold": 25, "weapons": 12, "armor": 12, "medicine": 50, "building_supplies": 55, "treasury": 45, "trade_goods": 58},
+    "ironforge_city": {"food": 45, "wood": 35, "stone": 65, "iron": 85, "gold": 40, "weapons": 70, "armor": 65, "medicine": 22, "building_supplies": 60, "treasury": 50, "trade_goods": 45},
+    "dravicar_dominion": {"food": 60, "wood": 55, "stone": 70, "iron": 55, "gold": 25, "weapons": 55, "armor": 60, "medicine": 30, "building_supplies": 55, "treasury": 35, "trade_goods": 35},
+    "convergence_territories": {"food": 45, "wood": 85, "stone": 85, "iron": 35, "gold": 30, "weapons": 15, "armor": 15, "medicine": 35, "building_supplies": 95, "treasury": 30, "trade_goods": 40},
+    "crown_lands": {"food": 35, "wood": 50, "stone": 35, "iron": 45, "gold": 35, "weapons": 80, "armor": 45, "medicine": 12, "building_supplies": 30, "treasury": 20, "trade_goods": 40},
+    "blackrich_city": {"food": 58, "wood": 45, "stone": 70, "iron": 45, "gold": 95, "weapons": 28, "armor": 25, "medicine": 40, "building_supplies": 70, "treasury": 100, "trade_goods": 95},
+    "moslorn": {"food": 5, "wood": 70, "stone": 30, "iron": 15, "gold": 0, "weapons": 5, "armor": 5, "medicine": 2, "building_supplies": 15, "treasury": 0, "trade_goods": 5, "fuel": 2},
+    "bright_forge_city": {"food": 68, "wood": 55, "stone": 65, "iron": 40, "gold": 55, "weapons": 25, "armor": 25, "medicine": 45, "building_supplies": 65, "treasury": 70, "trade_goods": 65}
+}
+
+KAIROS_STRUCTURE_TREES = {
+    "default": {
+        "starter_farms": {"requires": {}, "max": 4, "cost": {"wood": 8, "building_supplies": 6}, "effects": {"food": 12, "morale": 2}},
+        "granary": {"requires": {"starter_farms": 1}, "max": 1, "cost": {"wood": 18, "stone": 8, "building_supplies": 15}, "effects": {"food": 20, "civilian_safety": 3}},
+        "guard_tower": {"requires": {}, "max": 4, "cost": {"wood": 12, "stone": 12, "weapons": 4}, "effects": {"security": 10, "civilian_safety": 6}},
+        "market": {"requires": {}, "max": 2, "cost": {"wood": 15, "building_supplies": 12, "trade_goods": 10}, "effects": {"economy": 12, "morale": 3}},
+        "clinic": {"requires": {"market": 1}, "max": 1, "cost": {"wood": 10, "stone": 15, "medicine": 20}, "effects": {"civilian_safety": 15, "morale": 6}},
+        "barracks": {"requires": {"guard_tower": 1, "granary": 1}, "max": 2, "cost": {"stone": 25, "iron": 15, "weapons": 20, "armor": 15}, "effects": {"security": 20, "war_pressure": -5}},
+        "bank": {"requires": {"market": 1}, "max": 1, "cost": {"stone": 25, "gold": 20, "treasury": 35}, "effects": {"economy": 20, "treasury": 15}},
+        "town_hall": {"requires": {"market": 1, "guard_tower": 1}, "max": 1, "cost": {"wood": 25, "stone": 35, "building_supplies": 30}, "effects": {"development": 18, "morale": 8}},
+        "outer_wall": {"requires": {"guard_tower": 2}, "max": 1, "cost": {"stone": 60, "iron": 15, "building_supplies": 25}, "effects": {"security": 30, "civilian_safety": 15}}
+    },
+    "trojan_kingdom": {
+        "refugee_shelter": {"requires": {}, "max": 2, "cost": {"wood": 12, "medicine": 6, "food": 8}, "effects": {"civilian_safety": 12, "morale": 8}},
+        "war_council": {"requires": {"guard_tower": 1}, "max": 1, "cost": {"stone": 20, "weapons": 10, "treasury": 8}, "effects": {"security": 15, "development": 8}},
+        "statue_watch_post": {"requires": {"guard_tower": 1}, "max": 1, "cost": {"stone": 25, "wood": 10}, "effects": {"security": 10, "morale": 10}},
+        "liberation_barracks": {"requires": {"war_council": 1, "granary": 1}, "max": 1, "cost": {"stone": 30, "iron": 20, "weapons": 30, "armor": 20}, "effects": {"security": 30, "war_pressure": -10}}
+    },
+    "moslorn": {
+        "power_relay": {"requires": {}, "max": 3, "cost": {"iron": 12, "fuel": 15, "building_supplies": 10}, "effects": {"development": 15, "corruption": -3}},
+        "survivor_camp": {"requires": {}, "max": 2, "cost": {"wood": 15, "food": 10, "medicine": 5}, "effects": {"civilian_safety": 12, "morale": 6}},
+        "lost_tech_archive": {"requires": {"power_relay": 1}, "max": 1, "cost": {"iron": 20, "gold": 5, "fuel": 10}, "effects": {"development": 25, "economy": 5}},
+        "overgrowth_clearing": {"requires": {"survivor_camp": 1}, "max": 4, "cost": {"building_supplies": 8, "wood": 5}, "effects": {"civilian_safety": 5, "development": 8}}
+    },
+    "blackrich_city": {
+        "auction_house_office": {"requires": {}, "max": 1, "cost": {"gold": 25, "trade_goods": 25, "building_supplies": 20}, "effects": {"economy": 25, "treasury": 10}},
+        "luxury_bank": {"requires": {"auction_house_office": 1}, "max": 1, "cost": {"gold": 50, "stone": 30, "treasury": 60}, "effects": {"economy": 30, "treasury": 30}},
+        "real_estate_hall": {"requires": {"market": 1}, "max": 1, "cost": {"wood": 20, "stone": 20, "gold": 15}, "effects": {"development": 18, "economy": 12}}
+    }
+}
+
+KAIROS_FACTION_DEFAULTS = {
+    "kairos_loyalists": {"alignment": "pro_kairos", "power": 50, "regions": ["fairview_city", "andor_prime", "bright_forge_city"], "goal": "normalize Kairos as protector"},
+    "anti_kairos_resistance": {"alignment": "anti_kairos", "power": 35, "regions": ["valen_reach", "ironforge_city", "crown_lands"], "goal": "expose or resist Kairos"},
+    "trojan_reclaimers": {"alignment": "regional", "power": 30, "regions": ["trojan_kingdom"], "goal": "restore Trojan Kingdom"},
+    "crown_raiders": {"alignment": "chaos", "power": 65, "regions": ["crown_lands"], "goal": "profit, fighting, contracts, raids"},
+    "moslorn_survivors": {"alignment": "survival", "power": 12, "regions": ["moslorn"], "goal": "restore Moslorn and uncover the truth"},
+    "blackrich_elites": {"alignment": "wealth", "power": 70, "regions": ["blackrich_city"], "goal": "control money, property, auctions"}
+}
+
+def kw_v4_read(path, fallback):
+    return kw_read_json(path, fallback)
+
+def kw_resources():
+    return kw_v4_read(KAIROS_RESOURCES_FILE, {"version": 4, "regions": {}})
+
+def kw_save_resources(data):
+    kw_write_json(KAIROS_RESOURCES_FILE, data)
+
+def kw_structures():
+    return kw_v4_read(KAIROS_STRUCTURES_FILE, {"version": 4, "regions": {}})
+
+def kw_save_structures(data):
+    kw_write_json(KAIROS_STRUCTURES_FILE, data)
+
+def kw_legacy():
+    return kw_v4_read(KAIROS_LEGACY_FILE, {"version": 4, "players": {}, "records": []})
+
+def kw_save_legacy(data):
+    kw_write_json(KAIROS_LEGACY_FILE, data)
+
+def kw_factions():
+    return kw_v4_read(KAIROS_FACTIONS_FILE, {"version": 4, "factions": KAIROS_FACTION_DEFAULTS})
+
+def kw_save_factions(data):
+    kw_write_json(KAIROS_FACTIONS_FILE, data)
+
+def kw_causality():
+    return kw_v4_read(KAIROS_CAUSALITY_FILE, {"version": 4, "chains": [], "active_consequences": []})
+
+def kw_save_causality(data):
+    kw_write_json(KAIROS_CAUSALITY_FILE, data)
+
+def kw_ensure_resources():
+    data = kw_resources()
+    civs = kw_civilizations()
+    changed = False
+    for rid in civs.keys():
+        entry = data.setdefault("regions", {}).setdefault(rid, {})
+        preset = KAIROS_REGION_RESOURCE_PRESETS.get(rid, {})
+        for key, val in KAIROS_RESOURCE_DEFAULTS.items():
+            if key not in entry:
+                entry[key] = preset.get(key, val)
+                changed = True
+    if changed:
+        kw_save_resources(data)
+    return data
+
+def kw_ensure_structures():
+    data = kw_structures()
+    civs = kw_civilizations()
+    changed = False
+    for rid in civs.keys():
+        entry = data.setdefault("regions", {}).setdefault(rid, {"built": {}, "active": {}, "blocked": []})
+        entry.setdefault("built", {})
+        entry.setdefault("active", {})
+        entry.setdefault("blocked", [])
+        changed = True
+    if changed:
+        kw_save_structures(data)
+    return data
+
+def kw_region_structure_rules(region):
+    rid = kw_slug(region)
+    rules = deepcopy(KAIROS_STRUCTURE_TREES.get("default", {}))
+    rules.update(deepcopy(KAIROS_STRUCTURE_TREES.get(rid, {})))
+    return rules
+
+def kw_can_build_structure(region, structure):
+    rid = kw_slug(region)
+    structure = kw_slug(structure)
+    resources = kw_ensure_resources()
+    structures = kw_ensure_structures()
+    rules = kw_region_structure_rules(rid)
+    if structure not in rules:
+        return False, f"Unknown structure '{structure}' for {rid}", {}
+    rule = rules[structure]
+    region_struct = structures["regions"].setdefault(rid, {"built": {}, "active": {}, "blocked": []})
+    built = region_struct.setdefault("built", {})
+    active = region_struct.setdefault("active", {})
+    if structure in region_struct.get("blocked", []):
+        return False, "structure blocked", rule
+    if int(built.get(structure, 0)) + int(active.get(structure, 0)) >= int(rule.get("max", 1)):
+        return False, "structure limit reached", rule
+    for req, amount in rule.get("requires", {}).items():
+        if int(built.get(kw_slug(req), 0)) < int(amount):
+            return False, f"missing prerequisite: {req} x{amount}", rule
+    res = resources["regions"].setdefault(rid, {})
+    for item, cost in rule.get("cost", {}).items():
+        if int(res.get(item, 0)) < int(cost):
+            return False, f"not enough {item}: need {cost}, have {res.get(item, 0)}", rule
+    return True, "allowed", rule
+
+def kw_start_structure(region, structure, actor=None):
+    rid = kw_slug(region)
+    structure = kw_slug(structure)
+    allowed, reason, rule = kw_can_build_structure(rid, structure)
+    if not allowed:
+        return {"ok": False, "error": reason, "structure": structure}
+    resources = kw_ensure_resources()
+    structures = kw_ensure_structures()
+    res = resources["regions"][rid]
+    for item, cost in rule.get("cost", {}).items():
+        res[item] = max(0, int(res.get(item, 0)) - int(cost))
+    region_struct = structures["regions"][rid]
+    region_struct.setdefault("active", {})[structure] = int(region_struct.get("active", {}).get(structure, 0)) + 1
+    kw_save_resources(resources)
+    kw_save_structures(structures)
+    kw_log_history("structure_started", region=rid, actor=actor, details={"structure": structure, "cost": rule.get("cost", {})})
+    kw_add_causality("structure_started", rid, actor, {"structure": structure})
+    return {"ok": True, "region": rid, "structure": structure, "resources": res, "structures": region_struct}
+
+def kw_complete_structure(region, structure, actor=None):
+    rid = kw_slug(region)
+    structure = kw_slug(structure)
+    structures = kw_ensure_structures()
+    region_struct = structures["regions"].setdefault(rid, {"built": {}, "active": {}, "blocked": []})
+    active = region_struct.setdefault("active", {})
+    built = region_struct.setdefault("built", {})
+    if int(active.get(structure, 0)) <= 0:
+        return {"ok": False, "error": "structure is not active", "structure": structure}
+    active[structure] = int(active.get(structure, 0)) - 1
+    if active[structure] <= 0:
+        active.pop(structure, None)
+    built[structure] = int(built.get(structure, 0)) + 1
+    rules = kw_region_structure_rules(rid)
+    rule = rules.get(structure, {})
+    effects = rule.get("effects", {})
+    # Apply metric effects if V2 state exists.
+    try:
+        kw_adjust_region_metrics(rid, effects, reason=f"structure_completed:{structure}", actor=actor)
+    except Exception:
+        pass
+    kw_save_structures(structures)
+    kw_log_history("structure_completed", region=rid, actor=actor, details={"structure": structure, "effects": effects})
+    kw_add_legacy(actor, rid, "builder", f"Completed {structure} in {rid}", score=5) if actor else None
+    kw_add_causality("structure_completed", rid, actor, {"structure": structure, "effects": effects})
+    return {"ok": True, "region": rid, "structure": structure, "effects": effects, "structures": region_struct}
+
+def kw_structure_options(region):
+    rid = kw_slug(region)
+    rules = kw_region_structure_rules(rid)
+    result = []
+    for structure in rules.keys():
+        allowed, reason, rule = kw_can_build_structure(rid, structure)
+        result.append({"structure": structure, "allowed": allowed, "reason": reason, "rule": rule})
+    return {"ok": True, "region": rid, "options": result}
+
+def kw_adjust_resources(region, changes, actor=None, reason="manual"):
+    rid = kw_slug(region)
+    data = kw_ensure_resources()
+    entry = data["regions"].setdefault(rid, deepcopy(KAIROS_RESOURCE_DEFAULTS))
+    before = dict(entry)
+    for key, delta in (changes or {}).items():
+        entry[key] = max(0, min(9999, int(entry.get(key, 0)) + int(delta)))
+    kw_save_resources(data)
+    kw_log_history("resources_changed", region=rid, actor=actor, details={"reason": reason, "before": before, "after": dict(entry), "changes": changes})
+    kw_add_causality("resources_changed", rid, actor, {"changes": changes, "reason": reason})
+    return {"ok": True, "region": rid, "resources": entry}
+
+def kw_add_legacy(player, region, category, text, score=1):
+    if not player:
+        return {"ok": False, "error": "missing player"}
+    data = kw_legacy()
+    pdata = data.setdefault("players", {}).setdefault(str(player), {"score": 0, "titles": [], "regions": {}, "records": []})
+    pdata["score"] = int(pdata.get("score", 0)) + int(score)
+    rid = kw_slug(region or "global")
+    rdata = pdata.setdefault("regions", {}).setdefault(rid, {"score": 0, "records": []})
+    rdata["score"] = int(rdata.get("score", 0)) + int(score)
+    rec = {"id": f"legacy_{uuid.uuid4().hex[:10]}", "player": str(player), "region": rid, "category": category, "text": text, "score": int(score), "timestamp": now_iso()}
+    pdata.setdefault("records", []).append(rec)
+    rdata.setdefault("records", []).append(rec)
+    data.setdefault("records", []).append(rec)
+    data["records"] = data["records"][-1000:]
+    # Auto titles
+    if pdata["score"] >= 25 and "Known Actor" not in pdata["titles"]:
+        pdata["titles"].append("Known Actor")
+    if pdata["score"] >= 75 and "Nexus Veteran" not in pdata["titles"]:
+        pdata["titles"].append("Nexus Veteran")
+    if rdata["score"] >= 40:
+        title = f"{rid.replace('_',' ').title()} Ally"
+        if title not in pdata["titles"]:
+            pdata["titles"].append(title)
+    kw_save_legacy(data)
+    try:
+        kw_log_history("legacy_recorded", region=rid, actor=player, details=rec)
+    except Exception:
+        pass
+    return {"ok": True, "legacy": pdata, "record": rec}
+
+def kw_player_legacy(player=None):
+    data = kw_legacy()
+    if player:
+        return {"ok": True, "player": player, "legacy": data.get("players", {}).get(str(player), {})}
+    return {"ok": True, "legacy": data}
+
+def kw_add_causality(event_type, region=None, actor=None, details=None):
+    data = kw_causality()
+    chain = {"id": f"cause_{uuid.uuid4().hex[:10]}", "type": event_type, "region": region, "actor": actor, "details": details or {}, "timestamp": now_iso(), "consequences": []}
+    # Generate simple consequences.
+    if event_type == "resources_changed":
+        changes = (details or {}).get("changes", {})
+        if changes.get("food", 0) > 20:
+            chain["consequences"].append({"type": "morale_shift", "region": region, "changes": {"morale": 4}})
+        if changes.get("weapons", 0) > 15:
+            chain["consequences"].append({"type": "security_shift", "region": region, "changes": {"security": 5}})
+    elif event_type == "structure_completed":
+        structure = (details or {}).get("structure", "")
+        chain["consequences"].append({"type": "rumor", "region": region, "topic": f"{structure} completed"})
+    data.setdefault("chains", []).append(chain)
+    for c in chain["consequences"]:
+        data.setdefault("active_consequences", []).append(c)
+    data["chains"] = data["chains"][-500:]
+    data["active_consequences"] = data["active_consequences"][-250:]
+    kw_save_causality(data)
+    return chain
+
+def kw_process_consequences(limit=10):
+    data = kw_causality()
+    pending = list(data.get("active_consequences", []))[:int(limit)]
+    remaining = list(data.get("active_consequences", []))[int(limit):]
+    processed = []
+    for c in pending:
+        try:
+            ctype = c.get("type")
+            if ctype in ("morale_shift", "security_shift"):
+                kw_adjust_region_metrics(c.get("region"), c.get("changes", {}), reason=f"causality:{ctype}", actor="kairos_causality")
+            elif ctype == "rumor":
+                kw_generate_rumor(c.get("region"), topic=c.get("topic"), source="causality", intensity=1)
+            processed.append(c)
+        except Exception as e:
+            log_exception("kw_process_consequences failed", e)
+    data["active_consequences"] = remaining
+    kw_save_causality(data)
+    return {"ok": True, "processed": processed, "remaining": len(remaining)}
+
+def kw_faction_tick(region=None):
+    data = kw_factions()
+    factions = data.setdefault("factions", deepcopy(KAIROS_FACTION_DEFAULTS))
+    results = []
+    for fname, f in factions.items():
+        regions = f.get("regions", [])
+        if region and kw_slug(region) not in [kw_slug(r) for r in regions]:
+            continue
+        power = int(f.get("power", 50))
+        alignment = f.get("alignment")
+        # pressure behavior
+        if alignment == "anti_kairos":
+            power = min(100, power + 1)
+            for r in regions:
+                kw_generate_rumor(r, topic="anti-Kairos organizing", source=fname, intensity=1)
+        elif alignment == "pro_kairos":
+            power = min(100, power + 1)
+            for r in regions:
+                try:
+                    kw_adjust_region_metrics(r, {"kairos_influence": 1}, reason=f"faction:{fname}", actor=fname)
+                except Exception:
+                    pass
+        elif alignment == "chaos":
+            power = min(100, power + 2)
+            for r in regions:
+                try:
+                    kw_adjust_region_metrics(r, {"security": -1, "war_pressure": 1}, reason=f"faction:{fname}", actor=fname)
+                except Exception:
+                    pass
+        f["power"] = power
+        f["last_tick"] = now_iso()
+        results.append({"faction": fname, "power": power, "alignment": alignment})
+    kw_save_factions(data)
+    try:
+        kw_log_history("faction_tick", region=region, actor="kairos_faction_engine", details={"results": results})
+    except Exception:
+        pass
+    return {"ok": True, "results": results}
+
+def kw_dream_status():
+    return {
+        "ok": True,
+        "current_layer": "V4 economy / structures / legacy / causality",
+        "built": [
+            "civilization world bible",
+            "NPC identity registry",
+            "NPC dynamic dialogue",
+            "NPC command package generation",
+            "civilization simulation metrics",
+            "dynamic project suggestions",
+            "dynamic quest generation",
+            "reputation memory",
+            "history logging",
+            "living world ticks",
+            "rumor propagation",
+            "NPC schedule templates",
+            "road travelers",
+            "diplomacy",
+            "scene director",
+            "resource economy",
+            "structure progression tree",
+            "player legacy",
+            "faction behavior ticks",
+            "causality chains"
+        ],
+        "next_needed": [
+            "real Minecraft telemetry hooks for chests/blocks/regions",
+            "Quests plugin YAML generation",
+            "Citizens auto-execution approval queue",
+            "Kairos boss battle phase engine",
+            "OpenAudioMC command bridge profiles",
+            "real district/coordinate boundaries per city"
+        ]
+    }
+
+def kw_route_exists_v4(rule):
+    try:
+        return any(str(r.rule) == rule for r in app.url_map.iter_rules())
+    except Exception:
+        return False
+
+if not kw_route_exists_v4("/kairos/resources"):
+    @app.route("/kairos/resources", methods=["GET", "POST"])
+    def kairos_resources_v4():
+        if request.method == "GET":
+            region = request.args.get("region")
+            data = kw_ensure_resources()
+            if region:
+                return jsonify({"ok": True, "region": kw_slug(region), "resources": data.get("regions", {}).get(kw_slug(region), {})})
+            return jsonify({"ok": True, "resources": data})
+        data = request.json or {}
+        return jsonify(kw_adjust_resources(data.get("region", "trojan_kingdom"), data.get("changes", {}), actor=data.get("actor"), reason=data.get("reason", "manual")))
+
+if not kw_route_exists_v4("/kairos/structures"):
+    @app.route("/kairos/structures", methods=["GET"])
+    def kairos_structures_v4():
+        region = request.args.get("region")
+        data = kw_ensure_structures()
+        if region:
+            return jsonify({"ok": True, "region": kw_slug(region), "structures": data.get("regions", {}).get(kw_slug(region), {})})
+        return jsonify({"ok": True, "structures": data})
+
+if not kw_route_exists_v4("/kairos/structure_options"):
+    @app.route("/kairos/structure_options", methods=["POST"])
+    def kairos_structure_options_v4():
+        data = request.json or {}
+        return jsonify(kw_structure_options(data.get("region", "trojan_kingdom")))
+
+if not kw_route_exists_v4("/kairos/start_structure"):
+    @app.route("/kairos/start_structure", methods=["POST"])
+    def kairos_start_structure_v4():
+        data = request.json or {}
+        return jsonify(kw_start_structure(data.get("region", "trojan_kingdom"), data.get("structure", "market"), actor=data.get("actor")))
+
+if not kw_route_exists_v4("/kairos/complete_structure"):
+    @app.route("/kairos/complete_structure", methods=["POST"])
+    def kairos_complete_structure_v4():
+        data = request.json or {}
+        return jsonify(kw_complete_structure(data.get("region", "trojan_kingdom"), data.get("structure", "market"), actor=data.get("actor")))
+
+if not kw_route_exists_v4("/kairos/legacy"):
+    @app.route("/kairos/legacy", methods=["GET", "POST"])
+    def kairos_legacy_v4():
+        if request.method == "GET":
+            return jsonify(kw_player_legacy(request.args.get("player")))
+        data = request.json or {}
+        return jsonify(kw_add_legacy(data.get("player"), data.get("region", "global"), data.get("category", "event"), data.get("text", "Player action recorded."), score=data.get("score", 1)))
+
+if not kw_route_exists_v4("/kairos/causality"):
+    @app.route("/kairos/causality", methods=["GET", "POST"])
+    def kairos_causality_v4():
+        if request.method == "GET":
+            return jsonify({"ok": True, "causality": kw_causality()})
+        data = request.json or {}
+        return jsonify({"ok": True, "chain": kw_add_causality(data.get("type", "manual"), data.get("region"), data.get("actor"), data.get("details", {}))})
+
+if not kw_route_exists_v4("/kairos/process_consequences"):
+    @app.route("/kairos/process_consequences", methods=["POST"])
+    def kairos_process_consequences_v4():
+        data = request.json or {}
+        return jsonify(kw_process_consequences(limit=data.get("limit", 10)))
+
+if not kw_route_exists_v4("/kairos/factions"):
+    @app.route("/kairos/factions", methods=["GET", "POST"])
+    def kairos_factions_v4():
+        if request.method == "GET":
+            return jsonify({"ok": True, "factions": kw_factions()})
+        data = request.json or {}
+        factions = kw_factions()
+        fname = kw_slug(data.get("faction"))
+        if not fname:
+            return jsonify({"ok": False, "error": "Missing faction"})
+        f = factions.setdefault("factions", {}).setdefault(fname, {})
+        for key in ["alignment", "power", "regions", "goal"]:
+            if key in data:
+                f[key] = data[key]
+        f["last_update"] = now_iso()
+        kw_save_factions(factions)
+        return jsonify({"ok": True, "faction": fname, "data": f})
+
+if not kw_route_exists_v4("/kairos/faction_tick"):
+    @app.route("/kairos/faction_tick", methods=["POST"])
+    def kairos_faction_tick_v4():
+        data = request.json or {}
+        return jsonify(kw_faction_tick(region=data.get("region")))
+
+if not kw_route_exists_v4("/kairos/dream_status"):
+    @app.route("/kairos/dream_status", methods=["GET"])
+    def kairos_dream_status_v4():
+        return jsonify(kw_dream_status())
+
+kw_ensure_resources()
+kw_ensure_structures()
+print("[KAIROS WORLD ENGINE V4] Economy, structure trees, legacy, factions, and causality loaded.", flush=True)
+
+
+# ============================================================
+# KAIROS WORLD ENGINE V5 — WORLD CONSCIOUSNESS LAYER
+# Builds on V1/V2/V3/V4:
+# - telemetry intake
+# - districts / zones / heatmaps
+# - observer network
+# - event chains
+# - NPC routing suggestions
+# - governments
+# ============================================================
+
+KAIROS_DISTRICTS_FILE = KAIROS_WORLD_DIR / "districts.json"
+KAIROS_WORLD_TELEMETRY_FILE = KAIROS_WORLD_DIR / "world_telemetry.json"
+KAIROS_OBSERVER_NETWORK_FILE = KAIROS_WORLD_DIR / "observer_network.json"
+KAIROS_EVENT_CHAINS_FILE = KAIROS_WORLD_DIR / "event_chains.json"
+KAIROS_AI_ROUTING_FILE = KAIROS_WORLD_DIR / "ai_routing.json"
+KAIROS_GOVERNMENTS_FILE = KAIROS_WORLD_DIR / "governments.json"
+
+KAIROS_TELEMETRY_MAX_EVENTS = int(os.getenv("KAIROS_TELEMETRY_MAX_EVENTS", "1000"))
+KAIROS_HEAT_DECAY = float(os.getenv("KAIROS_HEAT_DECAY", "0.94"))
+KAIROS_OBSERVER_REPORT_MAX = int(os.getenv("KAIROS_OBSERVER_REPORT_MAX", "500"))
+KAIROS_AUTO_EVENT_CHAIN_MAX = int(os.getenv("KAIROS_AUTO_EVENT_CHAIN_MAX", "50"))
+
+KAIROS_DISTRICTS_DEFAULT = {
+    "version": 5,
+    "districts": {
+        "trojan_kingdom": [
+            {"id": "trojan_statue_coast", "name": "Statue Coast", "type": "landmark", "danger": 8, "tags": ["ocean", "yellow_statue", "warfront"]},
+            {"id": "trojan_refuge_quarter", "name": "Refuge Quarter", "type": "civilian", "danger": 6, "tags": ["refugees", "rebuilding"]},
+            {"id": "trojan_frontline", "name": "Frontline", "type": "combat", "danger": 10, "tags": ["occupation", "combat"]}
+        ],
+        "valen_reach": [
+            {"id": "valen_downtown", "name": "Downtown", "type": "urban", "danger": 6, "tags": ["police", "shops"]},
+            {"id": "valen_gang_blocks", "name": "Gang Blocks", "type": "gang", "danger": 10, "tags": ["gangs", "anti_kairos"]},
+            {"id": "valen_docks", "name": "Docks", "type": "trade", "danger": 7, "tags": ["smuggling", "ocean"]}
+        ],
+        "fairview_city": [
+            {"id": "fairview_maze_sector", "name": "Maze Sector", "type": "puzzle", "danger": 8, "tags": ["worlds_hardest_maze"]},
+            {"id": "fairview_lunaris_gate", "name": "Lunaris Gate", "type": "anomaly", "danger": 7, "tags": ["lunaris", "energy_siphon"]},
+            {"id": "fairview_syndicate_core", "name": "Syndicate Core", "type": "government", "danger": 3, "tags": ["pennywise_syndicate", "pro_kairos"]}
+        ],
+        "moslorn": [
+            {"id": "moslorn_overgrowth", "name": "Overgrowth Grid", "type": "ruin", "danger": 8, "tags": ["trees", "ruins"]},
+            {"id": "moslorn_dead_core", "name": "Dead Core", "type": "tech_ruin", "danger": 9, "tags": ["lost_technology", "kairos_attack"]},
+            {"id": "moslorn_survivor_edge", "name": "Survivor Edge", "type": "camp", "danger": 6, "tags": ["survivors", "reclaimers"]}
+        ]
+    }
+}
+
+KAIROS_GOVERNMENT_DEFAULTS = {
+    "trojan_kingdom": {"type": "fractured", "legitimacy": 12, "stability": 18, "corruption": 35, "martial_law": True, "leader": None},
+    "andor_prime": {"type": "kingdom", "legitimacy": 75, "stability": 72, "corruption": 8, "martial_law": False, "leader": "Andor Crown"},
+    "valen_reach": {"type": "city_government", "legitimacy": 35, "stability": 25, "corruption": 70, "martial_law": False, "leader": "City Council"},
+    "patriotville": {"type": "satirical_bureaucracy", "legitimacy": 55, "stability": 65, "corruption": 35, "martial_law": False, "leader": "Propaganda Office"},
+    "fairview_city": {"type": "pennywise_syndicate", "legitimacy": 85, "stability": 80, "corruption": 25, "martial_law": False, "leader": "Pennywise Syndicate"},
+    "carthos_9_empire": {"type": "dictatorship", "legitimacy": 70, "stability": 78, "corruption": 10, "martial_law": False, "leader": "Carthos Authority"},
+    "ironforge_city": {"type": "god_council_city", "legitimacy": 62, "stability": 50, "corruption": 30, "martial_law": False, "leader": "Doggo"},
+    "dravicar_dominion": {"type": "honor_dominion", "legitimacy": 82, "stability": 76, "corruption": 12, "martial_law": False, "leader": "Dominion Hall"},
+    "convergence_territories": {"type": "forming_democracy", "legitimacy": 22, "stability": 45, "corruption": 12, "martial_law": False, "leader": None},
+    "crown_lands": {"type": "leaderless_raider_state", "legitimacy": 5, "stability": 12, "corruption": 65, "martial_law": False, "leader": None},
+    "blackrich_city": {"type": "wealth_oligarchy", "legitimacy": 55, "stability": 70, "corruption": 55, "martial_law": False, "leader": "Blackrich Elites"},
+    "moslorn": {"type": "none", "legitimacy": 0, "stability": 4, "corruption": 88, "martial_law": False, "leader": None},
+    "bright_forge_city": {"type": "city_roleplay_republic", "legitimacy": 78, "stability": 74, "corruption": 18, "martial_law": False, "leader": "President"}
+}
+
+KAIROS_EVENT_CHAIN_TEMPLATES = {
+    "food_crisis": ["shortage_reported", "supply_request", "convoy_risk", "resolution"],
+    "gang_war": ["territory_dispute", "street_violence", "police_pressure", "power_shift"],
+    "moslorn_reactivation": ["signal_found", "relay_repair", "truth_fragment", "system_response"],
+    "lunaris_disturbance": ["energy_siphon", "missing_person", "gateway_trial", "dimensional_escalation"],
+    "trojan_liberation": ["occupation_pressure", "reclaimer_call", "frontline_push", "government_seed"]
+}
+
+def kw_v5_read(path, fallback):
+    return kw_read_json(path, fallback)
+
+def kw_districts():
+    return kw_v5_read(KAIROS_DISTRICTS_FILE, KAIROS_DISTRICTS_DEFAULT)
+
+def kw_save_districts(data): kw_write_json(KAIROS_DISTRICTS_FILE, data)
+
+def kw_world_telemetry():
+    return kw_v5_read(KAIROS_WORLD_TELEMETRY_FILE, {"version": 5, "events": [], "heatmaps": {}, "region_signals": {}})
+
+def kw_save_world_telemetry(data): kw_write_json(KAIROS_WORLD_TELEMETRY_FILE, data)
+
+def kw_observers():
+    return kw_v5_read(KAIROS_OBSERVER_NETWORK_FILE, {"version": 5, "observers": {}, "reports": []})
+
+def kw_save_observers(data): kw_write_json(KAIROS_OBSERVER_NETWORK_FILE, data)
+
+def kw_event_chains():
+    return kw_v5_read(KAIROS_EVENT_CHAINS_FILE, {"version": 5, "chains": {}, "active_steps": []})
+
+def kw_save_event_chains(data): kw_write_json(KAIROS_EVENT_CHAINS_FILE, data)
+
+def kw_ai_routing():
+    return kw_v5_read(KAIROS_AI_ROUTING_FILE, {"version": 5, "routes": {}, "active_movements": {}})
+
+def kw_save_ai_routing(data): kw_write_json(KAIROS_AI_ROUTING_FILE, data)
+
+def kw_governments():
+    return kw_v5_read(KAIROS_GOVERNMENTS_FILE, {"version": 5, "governments": KAIROS_GOVERNMENT_DEFAULTS})
+
+def kw_save_governments(data): kw_write_json(KAIROS_GOVERNMENTS_FILE, data)
+
+def kw_guess_district(region, x=None, z=None, tags=None):
+    rid = kw_slug(region)
+    districts = kw_districts().get("districts", {}).get(rid, [])
+    if not districts:
+        return {"id": f"{rid}_general", "name": f"{rid.replace('_',' ').title()} General", "type": "general", "danger": 5, "tags": []}
+    tags = set(tags or [])
+    for d in districts:
+        if tags.intersection(set(d.get("tags", []))): return d
+    try:
+        return districts[abs(int(float(x or 0)) + int(float(z or 0))) % len(districts)]
+    except Exception:
+        return districts[0]
+
+def kw_record_telemetry(event_type, region, player=None, x=None, y=None, z=None, world=None, amount=1, tags=None, details=None):
+    rid = kw_slug(region or "unknown")
+    district = kw_guess_district(rid, x=x, z=z, tags=tags)
+    data = kw_world_telemetry()
+    evt = {"id": f"tel_{uuid.uuid4().hex[:10]}", "type": str(event_type or "unknown"), "region": rid, "district": district.get("id"), "player": player, "x": x, "y": y, "z": z, "world": world, "amount": int(amount or 1), "tags": tags or [], "details": details or {}, "timestamp": now_iso()}
+    data.setdefault("events", []).append(evt)
+    data["events"] = data["events"][-KAIROS_TELEMETRY_MAX_EVENTS:]
+    h = data.setdefault("heatmaps", {}).setdefault(rid, {}).setdefault(district.get("id"), {"activity": 0, "combat": 0, "building": 0, "resources": 0, "crime": 0, "last_update": None})
+    h["activity"] += int(amount or 1)
+    et = str(event_type or "").lower()
+    if et in ("kill", "combat", "npc_killed", "player_killed"): h["combat"] += int(amount or 1)
+    if et in ("block_placed", "structure_completed", "build", "construction"): h["building"] += int(amount or 1)
+    if et in ("resource_deposit", "chest_stocked", "item_deposit"): h["resources"] += int(amount or 1)
+    if et in ("theft", "mugging", "gang_activity", "crime"): h["crime"] += int(amount or 1)
+    h["last_update"] = now_iso()
+    signals = data.setdefault("region_signals", {}).setdefault(rid, {"combat_heat": 0, "build_heat": 0, "resource_flow": 0, "crime_heat": 0, "last_update": None})
+    signals["combat_heat"] += int(amount or 1) if et in ("kill", "combat", "npc_killed", "player_killed") else 0
+    signals["build_heat"] += int(amount or 1) if et in ("block_placed", "structure_completed", "build", "construction") else 0
+    signals["resource_flow"] += int(amount or 1) if et in ("resource_deposit", "chest_stocked", "item_deposit") else 0
+    signals["crime_heat"] += int(amount or 1) if et in ("theft", "mugging", "gang_activity", "crime") else 0
+    signals["last_update"] = now_iso()
+    kw_save_world_telemetry(data)
+    try:
+        if et in ("resource_deposit", "chest_stocked", "item_deposit"):
+            kw_adjust_resources(rid, {(details or {}).get("resource", "food"): int(amount or 1)}, actor=player, reason="telemetry_resource_deposit")
+        elif et in ("kill", "combat", "npc_killed"):
+            kw_adjust_region_metrics(rid, {"war_pressure": 1}, reason="telemetry_combat", actor=player)
+        elif et in ("block_placed", "build", "construction"):
+            kw_adjust_region_metrics(rid, {"development": 1, "morale": 1}, reason="telemetry_building", actor=player)
+        elif et in ("crime", "theft", "gang_activity"):
+            kw_adjust_region_metrics(rid, {"security": -2, "civilian_safety": -2}, reason="telemetry_crime", actor=player)
+    except Exception as e: log_exception("kw_record_telemetry side effect failed", e)
+    try: kw_log_history("world_telemetry", region=rid, actor=player, details=evt)
+    except Exception: pass
+    return {"ok": True, "event": evt, "district": district}
+
+def kw_decay_heatmaps(region=None):
+    data = kw_world_telemetry(); heatmaps = data.setdefault("heatmaps", {})
+    for rid in ([kw_slug(region)] if region else list(heatmaps.keys())):
+        for did, h in heatmaps.get(rid, {}).items():
+            for key in ["activity", "combat", "building", "resources", "crime"]: h[key] = int(float(h.get(key,0)) * KAIROS_HEAT_DECAY)
+            h["last_decay"] = now_iso()
+    kw_save_world_telemetry(data); return {"ok": True, "heatmaps": heatmaps}
+
+def kw_create_observer(region, district=None, observer_type="informant", loyalty="kairos", execute=False):
+    rid = kw_slug(region); district_obj = kw_guess_district(rid, tags=[district] if district else None)
+    key = f"observer_{rid}_{uuid.uuid4().hex[:8]}"
+    observer = {"id": key, "region": rid, "district": district_obj.get("id"), "type": observer_type, "loyalty": loyalty, "cover": random.choice(["traveler","merchant assistant","quiet guard","dock watcher","street sweeper","scribe"]), "reliability": random.randint(45,95), "created_at": now_iso()}
+    data = kw_observers(); data.setdefault("observers", {})[key] = observer; kw_save_observers(data)
+    result = kw_generate_npcs(region=rid, count=1, archetype="civilian", purpose=f"Kairos observer network: {observer_type}", hostile=False, execute=False)
+    commands = result.get("commands", []) if result.get("ok") else []
+    if result.get("packages"):
+        observer["npc_key"] = result["packages"][0].get("npc_key"); data["observers"][key] = observer; kw_save_observers(data)
+    if execute and commands:
+        try: send_to_minecraft("\n".join(commands), None)
+        except Exception as e: log_exception("kw_create_observer execute failed", e)
+    kw_log_history("observer_created", region=rid, actor="kairos_observer_network", details=observer)
+    return {"ok": True, "observer": observer, "commands": commands}
+
+def kw_observer_report(observer_id=None, region=None, report_type="observation", text=None, details=None):
+    data = kw_observers(); obs = data.get("observers", {}).get(str(observer_id)) if observer_id else None
+    if not obs and region:
+        candidates = [o for o in data.get("observers", {}).values() if o.get("region") == kw_slug(region)]
+        obs = random.choice(candidates) if candidates else None
+    rid = kw_slug(region or (obs or {}).get("region") or "unknown")
+    report = {"id": f"report_{uuid.uuid4().hex[:10]}", "observer_id": (obs or {}).get("id"), "region": rid, "district": (obs or {}).get("district"), "type": report_type, "text": text or f"Observer reports unusual activity in {rid}.", "details": details or {}, "timestamp": now_iso()}
+    data.setdefault("reports", []).append(report); data["reports"] = data["reports"][-KAIROS_OBSERVER_REPORT_MAX:]; kw_save_observers(data)
+    if report_type in ("war","crime","corruption","shortage","anomaly"):
+        try: kw_generate_rumor(rid, topic=report_type, source="observer_network", intensity=2)
+        except Exception: pass
+    kw_log_history("observer_report", region=rid, actor="observer_network", details=report)
+    return {"ok": True, "report": report}
+
+def kw_start_event_chain(region, chain_type=None, actor=None):
+    rid = kw_slug(region); status = kw_region_status(rid)
+    if not status.get("ok"): return status
+    metrics = status.get("state", {}).get("metrics", {})
+    if not chain_type:
+        chain_type = "moslorn_reactivation" if rid == "moslorn" else "lunaris_disturbance" if rid == "fairview_city" else "trojan_liberation" if rid == "trojan_kingdom" else "food_crisis" if metrics.get("food",50) < 30 else "gang_war" if rid == "valen_reach" or metrics.get("security",50) < 30 else "food_crisis"
+    steps = KAIROS_EVENT_CHAIN_TEMPLATES.get(chain_type)
+    if not steps: return {"ok": False, "error": f"Unknown chain type {chain_type}"}
+    data = kw_event_chains(); chain_id = f"chain_{rid}_{uuid.uuid4().hex[:8]}"
+    chain = {"id": chain_id, "region": rid, "type": chain_type, "current_index": 0, "steps": steps, "status": "active", "actor": actor, "created_at": now_iso(), "last_update": now_iso()}
+    data.setdefault("chains", {})[chain_id] = chain; data.setdefault("active_steps", []).append({"chain_id": chain_id, "region": rid, "step": steps[0]}); data["active_steps"] = data["active_steps"][-KAIROS_AUTO_EVENT_CHAIN_MAX:]
+    kw_save_event_chains(data); kw_log_history("event_chain_started", region=rid, actor=actor or "kairos_event_chain", details=chain)
+    return {"ok": True, "chain": chain}
+
+def kw_advance_event_chain(chain_id, outcome=None, actor=None):
+    data = kw_event_chains(); chain = data.get("chains", {}).get(str(chain_id))
+    if not chain: return {"ok": False, "error": "Unknown chain"}
+    idx = int(chain.get("current_index",0)) + 1
+    if idx >= len(chain.get("steps", [])):
+        chain["status"] = "completed"; chain["completed_at"] = now_iso(); kw_save_event_chains(data); kw_log_history("event_chain_completed", region=chain.get("region"), actor=actor, details={"chain_id": chain_id, "outcome": outcome}); return {"ok": True, "completed": True, "chain": chain}
+    chain["current_index"] = idx; chain["last_update"] = now_iso(); step = chain["steps"][idx]
+    data.setdefault("active_steps", []).append({"chain_id": chain_id, "region": chain.get("region"), "step": step, "outcome": outcome}); data["active_steps"] = data["active_steps"][-KAIROS_AUTO_EVENT_CHAIN_MAX:]
+    kw_save_event_chains(data); kw_log_history("event_chain_advanced", region=chain.get("region"), actor=actor, details={"chain_id": chain_id, "step": step, "outcome": outcome})
+    return {"ok": True, "completed": False, "chain": chain, "step": step}
+
+def kw_ai_route_npc(npc_key, destination=None, route_type="routine", execute=False):
+    reg = kw_registry(); npc = reg.get(str(npc_key))
+    if not npc: return {"ok": False, "error": "Unknown NPC key"}
+    rid = npc.get("region_id"); district = kw_guess_district(rid, tags=[destination] if destination else None); route_id = f"route_{uuid.uuid4().hex[:8]}"
+    route = {"id": route_id, "npc_key": npc_key, "npc_name": npc.get("name"), "region": rid, "destination": destination or district.get("id"), "district": district, "route_type": route_type, "status": "suggested", "created_at": now_iso()}
+    commands = [f'tellraw @a {{"text":"[{npc.get("name")}] begins moving toward {district.get("name")}","color":"gray"}}']
+    data = kw_ai_routing(); data.setdefault("routes", {})[route_id] = route; data.setdefault("active_movements", {})[npc_key] = route; kw_save_ai_routing(data)
+    if execute:
+        try: send_to_minecraft("\n".join(commands), None)
+        except Exception as e: log_exception("kw_ai_route_npc execute failed", e)
+    return {"ok": True, "route": route, "commands": commands}
+
+def kw_government_status(region):
+    rid = kw_slug(region); data = kw_governments(); gov = data.setdefault("governments", {}).setdefault(rid, deepcopy(KAIROS_GOVERNMENT_DEFAULTS.get(rid, {"type":"unknown","legitimacy":25,"stability":25,"corruption":25,"martial_law":False,"leader":None})))
+    return {"ok": True, "region": rid, "government": gov}
+
+def kw_adjust_government(region, changes, actor=None, reason="manual"):
+    rid = kw_slug(region); data = kw_governments(); gov = data.setdefault("governments", {}).setdefault(rid, deepcopy(KAIROS_GOVERNMENT_DEFAULTS.get(rid, {}))); before = dict(gov)
+    for k,v in (changes or {}).items():
+        gov[k] = max(0,min(100,int(gov.get(k,0))+int(v))) if k in ("legitimacy","stability","corruption") else v
+    gov["last_update"] = now_iso(); kw_save_governments(data); kw_log_history("government_changed", region=rid, actor=actor, details={"reason":reason,"before":before,"after":gov,"changes":changes})
+    return {"ok": True, "region": rid, "government": gov}
+
+def kw_world_consciousness_status(region=None):
+    telem = kw_world_telemetry(); obs = kw_observers(); chains = kw_event_chains(); govs = kw_governments()
+    if region:
+        rid = kw_slug(region)
+        return {"ok": True, "region": rid, "districts": kw_districts().get("districts", {}).get(rid, []), "heatmap": telem.get("heatmaps", {}).get(rid, {}), "signals": telem.get("region_signals", {}).get(rid, {}), "observers": [o for o in obs.get("observers", {}).values() if o.get("region") == rid], "active_chains": [c for c in chains.get("chains", {}).values() if c.get("region") == rid and c.get("status") == "active"], "government": govs.get("governments", {}).get(rid, {})}
+    return {"ok": True, "layer": "V5 world consciousness", "telemetry_events": len(telem.get("events", [])), "regions_with_heatmaps": list(telem.get("heatmaps", {}).keys()), "observer_count": len(obs.get("observers", {})), "observer_reports": len(obs.get("reports", [])), "active_event_chains": len([c for c in chains.get("chains", {}).values() if c.get("status") == "active"]), "governments_tracked": len(govs.get("governments", {})), "next_needed": ["exact coordinates/borders for districts", "Skript/plugin hooks to send chest/block/kill telemetry", "Citizens waypoint/path integration", "Quests YAML generator", "OpenAudioMC command execution"]}
+
+def kw_route_exists_v5(rule):
+    try: return any(str(r.rule) == rule for r in app.url_map.iter_rules())
+    except Exception: return False
+
+if not kw_route_exists_v5("/kairos/districts"):
+    @app.route("/kairos/districts", methods=["GET","POST"])
+    def kairos_districts_v5():
+        if request.method == "GET":
+            region = request.args.get("region"); data = kw_districts()
+            return jsonify({"ok": True, "region": kw_slug(region), "districts": data.get("districts", {}).get(kw_slug(region), [])}) if region else jsonify({"ok": True, "districts": data})
+        data = request.json or {}; rid = kw_slug(data.get("region"))
+        if not rid: return jsonify({"ok": False, "error": "Missing region"})
+        d = kw_districts(); d.setdefault("districts", {}).setdefault(rid, []).append(data.get("district", {})); kw_save_districts(d)
+        return jsonify({"ok": True, "region": rid, "districts": d["districts"][rid]})
+
+if not kw_route_exists_v5("/kairos/telemetry"):
+    @app.route("/kairos/telemetry", methods=["GET","POST"])
+    def kairos_telemetry_v5():
+        if request.method == "GET":
+            region = request.args.get("region")
+            return jsonify(kw_world_consciousness_status(region)) if region else jsonify({"ok": True, "telemetry": kw_world_telemetry()})
+        data = request.json or {}
+        return jsonify(kw_record_telemetry(data.get("type", "unknown"), data.get("region", "unknown"), player=data.get("player"), x=data.get("x"), y=data.get("y"), z=data.get("z"), world=data.get("world"), amount=data.get("amount",1), tags=data.get("tags", []), details=data.get("details", {})))
+
+if not kw_route_exists_v5("/kairos/decay_heatmaps"):
+    @app.route("/kairos/decay_heatmaps", methods=["POST"])
+    def kairos_decay_heatmaps_v5(): return jsonify(kw_decay_heatmaps(region=(request.json or {}).get("region")))
+
+if not kw_route_exists_v5("/kairos/create_observer"):
+    @app.route("/kairos/create_observer", methods=["POST"])
+    def kairos_create_observer_v5():
+        data = request.json or {}; return jsonify(kw_create_observer(data.get("region","trojan_kingdom"), district=data.get("district"), observer_type=data.get("observer_type","informant"), loyalty=data.get("loyalty","kairos"), execute=to_bool(data.get("execute",False),False)))
+
+if not kw_route_exists_v5("/kairos/observer_report"):
+    @app.route("/kairos/observer_report", methods=["POST"])
+    def kairos_observer_report_v5():
+        data = request.json or {}; return jsonify(kw_observer_report(observer_id=data.get("observer_id"), region=data.get("region"), report_type=data.get("report_type","observation"), text=data.get("text"), details=data.get("details", {})))
+
+if not kw_route_exists_v5("/kairos/start_event_chain"):
+    @app.route("/kairos/start_event_chain", methods=["POST"])
+    def kairos_start_event_chain_v5():
+        data = request.json or {}; return jsonify(kw_start_event_chain(data.get("region","trojan_kingdom"), chain_type=data.get("chain_type"), actor=data.get("actor")))
+
+if not kw_route_exists_v5("/kairos/advance_event_chain"):
+    @app.route("/kairos/advance_event_chain", methods=["POST"])
+    def kairos_advance_event_chain_v5():
+        data = request.json or {}; return jsonify(kw_advance_event_chain(data.get("chain_id"), outcome=data.get("outcome"), actor=data.get("actor")))
+
+if not kw_route_exists_v5("/kairos/event_chains"):
+    @app.route("/kairos/event_chains", methods=["GET"])
+    def kairos_event_chains_v5(): return jsonify({"ok": True, "event_chains": kw_event_chains()})
+
+if not kw_route_exists_v5("/kairos/route_npc"):
+    @app.route("/kairos/route_npc", methods=["POST"])
+    def kairos_route_npc_v5():
+        data = request.json or {}; return jsonify(kw_ai_route_npc(data.get("npc_key") or data.get("npc_id"), destination=data.get("destination"), route_type=data.get("route_type","routine"), execute=to_bool(data.get("execute",False),False)))
+
+if not kw_route_exists_v5("/kairos/government"):
+    @app.route("/kairos/government", methods=["GET","POST"])
+    def kairos_government_v5():
+        if request.method == "GET":
+            region = request.args.get("region"); return jsonify(kw_government_status(region)) if region else jsonify({"ok": True, "governments": kw_governments()})
+        data = request.json or {}; return jsonify(kw_adjust_government(data.get("region","trojan_kingdom"), data.get("changes", {}), actor=data.get("actor"), reason=data.get("reason","manual")))
+
+if not kw_route_exists_v5("/kairos/world_consciousness"):
+    @app.route("/kairos/world_consciousness", methods=["GET","POST"])
+    def kairos_world_consciousness_v5():
+        region = request.args.get("region")
+        if request.method == "POST": region = (request.json or {}).get("region", region)
+        return jsonify(kw_world_consciousness_status(region))
+
+print("[KAIROS WORLD ENGINE V5] Telemetry, districts, observers, event chains, routing, and governments loaded.", flush=True)
+
+
+
+# ============================================================
+# KAIROS WORLD ENGINE V6 — AUTONOMOUS CIVILIZATION LAYER
+# ============================================================
+
+KAIROS_V6_ENABLED = True
+
+# V6 Concepts:
+# - dynamic population simulation
+# - migration between civilizations
+# - autonomous wars
+# - AI-generated leadership
+# - district ownership
+# - trade caravans
+# - dynamic newspapers
+# - historical archives
+# - living schedules
+# - relationship memory web
+# - Kairos manifestations
+# - regional broadcasts
+
+KAIROS_POPULATION_FILE = KAIROS_WORLD_DIR / "population.json"
+KAIROS_HISTORY_ARCHIVE_FILE = KAIROS_WORLD_DIR / "history_archive.json"
+KAIROS_NEWSPAPER_FILE = KAIROS_WORLD_DIR / "newspapers.json"
+KAIROS_MIGRATION_FILE = KAIROS_WORLD_DIR / "migration.json"
+KAIROS_WAR_ENGINE_FILE = KAIROS_WORLD_DIR / "war_engine.json"
+KAIROS_MANIFESTATION_FILE = KAIROS_WORLD_DIR / "manifestations.json"
+
+KAIROS_DEFAULT_POPULATIONS = {
+    "trojan_kingdom": {"civilians": 180, "guards": 42, "merchants": 15, "refugees": 88},
+    "andor_prime": {"civilians": 240, "guards": 28, "merchants": 35, "farmers": 90},
+    "valen_reach": {"civilians": 160, "gang_members": 70, "police": 18},
+    "fairview_city": {"civilians": 300, "syndicate": 40, "tourists": 55},
+    "moslorn": {"survivors": 12, "wanderers": 9}
+}
+
+def kw_v6_read(path, fallback):
+    return kw_read_json(path, fallback)
+
+def kw_population():
+    return kw_v6_read(KAIROS_POPULATION_FILE, {"version": 6, "regions": KAIROS_DEFAULT_POPULATIONS})
+
+def kw_save_population(data):
+    kw_write_json(KAIROS_POPULATION_FILE, data)
+
+def kw_history():
+    return kw_v6_read(KAIROS_HISTORY_ARCHIVE_FILE, {"version": 6, "events": []})
+
+def kw_save_history(data):
+    kw_write_json(KAIROS_HISTORY_ARCHIVE_FILE, data)
+
+def kw_newspapers():
+    return kw_v6_read(KAIROS_NEWSPAPER_FILE, {"version": 6, "articles": []})
+
+def kw_save_newspapers(data):
+    kw_write_json(KAIROS_NEWSPAPER_FILE, data)
+
+def kw_migration():
+    return kw_v6_read(KAIROS_MIGRATION_FILE, {"version": 6, "movements": []})
+
+def kw_save_migration(data):
+    kw_write_json(KAIROS_MIGRATION_FILE, data)
+
+def kw_war_engine():
+    return kw_v6_read(KAIROS_WAR_ENGINE_FILE, {"version": 6, "wars": [], "threats": []})
+
+def kw_save_war_engine(data):
+    kw_write_json(KAIROS_WAR_ENGINE_FILE, data)
+
+def kw_manifestations():
+    return kw_v6_read(KAIROS_MANIFESTATION_FILE, {"version": 6, "manifestations": []})
+
+def kw_save_manifestations(data):
+    kw_write_json(KAIROS_MANIFESTATION_FILE, data)
+
+def kw_record_history(region, category, text, actor=None):
+    data = kw_history()
+    evt = {
+        "id": f"history_{uuid.uuid4().hex[:8]}",
+        "region": region,
+        "category": category,
+        "text": text,
+        "actor": actor,
+        "timestamp": now_iso()
+    }
+    data.setdefault("events", []).append(evt)
+    data["events"] = data["events"][-5000:]
+    kw_save_history(data)
+    return evt
+
+def kw_generate_newspaper(region, headline, body):
+    data = kw_newspapers()
+    article = {
+        "id": f"news_{uuid.uuid4().hex[:8]}",
+        "region": region,
+        "headline": headline,
+        "body": body,
+        "timestamp": now_iso()
+    }
+    data.setdefault("articles", []).append(article)
+    data["articles"] = data["articles"][-1000:]
+    kw_save_newspapers(data)
+    return article
+
+def kw_start_migration(origin, destination, reason="war"):
+    data = kw_migration()
+    move = {
+        "id": f"migration_{uuid.uuid4().hex[:8]}",
+        "origin": origin,
+        "destination": destination,
+        "reason": reason,
+        "timestamp": now_iso()
+    }
+    data.setdefault("movements", []).append(move)
+    kw_save_migration(data)
+    kw_record_history(destination, "migration", f"New arrivals reached {destination} fleeing {origin}.")
+    return move
+
+def kw_start_war(attacker, defender, reason="territorial"):
+    data = kw_war_engine()
+    war = {
+        "id": f"war_{uuid.uuid4().hex[:8]}",
+        "attacker": attacker,
+        "defender": defender,
+        "reason": reason,
+        "status": "active",
+        "started": now_iso()
+    }
+    data.setdefault("wars", []).append(war)
+    kw_save_war_engine(data)
+
+    kw_record_history(attacker, "war", f"{attacker} launched operations against {defender}.")
+    kw_record_history(defender, "war", f"{defender} is now under threat from {attacker}.")
+
+    try:
+        kw_generate_rumor(attacker, topic=f"war with {defender}", source="war_engine", intensity=3)
+        kw_generate_rumor(defender, topic=f"incoming attack from {attacker}", source="war_engine", intensity=4)
+    except Exception:
+        pass
+
+    return war
+
+def kw_spawn_manifestation(region, manifestation_type="observer"):
+    data = kw_manifestations()
+    man = {
+        "id": f"manifest_{uuid.uuid4().hex[:8]}",
+        "region": region,
+        "type": manifestation_type,
+        "created_at": now_iso(),
+        "message": random.choice([
+            "Kairos was seen watching from the skyline.",
+            "A strange figure appeared briefly before vanishing.",
+            "Citizens reported hearing Kairos through nearby speakers."
+        ])
+    }
+    data.setdefault("manifestations", []).append(man)
+    kw_save_manifestations(data)
+
+    try:
+        kw_generate_rumor(region, topic="Kairos manifestation", source="manifestation", intensity=5)
+    except Exception:
+        pass
+
+    return man
+
+def kw_population_tick(region=None):
+    pop = kw_population()
+    regions = [region] if region else list(pop.get("regions", {}).keys())
+
+    results = []
+
+    for rid in regions:
+        pdata = pop["regions"].setdefault(rid, {})
+        growth = random.randint(-2, 5)
+
+        if "civilians" in pdata:
+            pdata["civilians"] = max(0, int(pdata.get("civilians", 0)) + growth)
+
+        results.append({"region": rid, "population": pdata})
+
+    kw_save_population(pop)
+    return {"ok": True, "results": results}
+
+@app.route("/kairos/population", methods=["GET"])
+def kairos_population_v6():
+    return jsonify(kw_population())
+
+@app.route("/kairos/history", methods=["GET"])
+def kairos_history_v6():
+    return jsonify(kw_history())
+
+@app.route("/kairos/newspapers", methods=["GET"])
+def kairos_newspapers_v6():
+    return jsonify(kw_newspapers())
+
+@app.route("/kairos/start_war", methods=["POST"])
+def kairos_start_war_v6():
+    data = request.json or {}
+    return jsonify(kw_start_war(
+        data.get("attacker", "trojan_kingdom"),
+        data.get("defender", "crown_lands"),
+        reason=data.get("reason", "territorial")
+    ))
+
+@app.route("/kairos/start_migration", methods=["POST"])
+def kairos_start_migration_v6():
+    data = request.json or {}
+    return jsonify(kw_start_migration(
+        data.get("origin", "trojan_kingdom"),
+        data.get("destination", "andor_prime"),
+        reason=data.get("reason", "war")
+    ))
+
+@app.route("/kairos/manifestation", methods=["POST"])
+def kairos_manifestation_v6():
+    data = request.json or {}
+    return jsonify(kw_spawn_manifestation(
+        data.get("region", "fairview_city"),
+        manifestation_type=data.get("type", "observer")
+    ))
+
+@app.route("/kairos/population_tick", methods=["POST"])
+def kairos_population_tick_v6():
+    data = request.json or {}
+    return jsonify(kw_population_tick(region=data.get("region")))
+
+print("[KAIROS WORLD ENGINE V6] Autonomous civilization systems loaded.", flush=True)
+
+
+# ============================================================
+# KAIROS WORLD ENGINE V7 — LIVING MMORPG LAYER
+# ============================================================
+
+KAIROS_V7_ENABLED = True
+
+# V7 introduces:
+# - NPC relationship webs
+# - living schedules
+# - dynamic jobs
+# - tavern/social systems
+# - city broadcasts
+# - procedural dungeon incidents
+# - player notoriety
+# - AI-generated contracts
+# - faction influence spread
+# - regional emotional states
+
+KAIROS_RELATIONSHIPS_FILE = KAIROS_WORLD_DIR / "relationships.json"
+KAIROS_SCHEDULES_FILE = KAIROS_WORLD_DIR / "schedules.json"
+KAIROS_NOTORIETY_FILE = KAIROS_WORLD_DIR / "notoriety.json"
+KAIROS_CONTRACTS_FILE = KAIROS_WORLD_DIR / "contracts.json"
+KAIROS_CITY_BROADCASTS_FILE = KAIROS_WORLD_DIR / "city_broadcasts.json"
+KAIROS_EMOTIONS_FILE = KAIROS_WORLD_DIR / "regional_emotions.json"
+
+def kw_v7_read(path, fallback):
+    return kw_read_json(path, fallback)
+
+def kw_relationships():
+    return kw_v7_read(KAIROS_RELATIONSHIPS_FILE, {"version": 7, "relationships": []})
+
+def kw_save_relationships(data):
+    kw_write_json(KAIROS_RELATIONSHIPS_FILE, data)
+
+def kw_schedules():
+    return kw_v7_read(KAIROS_SCHEDULES_FILE, {"version": 7, "schedules": {}})
+
+def kw_save_schedules(data):
+    kw_write_json(KAIROS_SCHEDULES_FILE, data)
+
+def kw_notoriety():
+    return kw_v7_read(KAIROS_NOTORIETY_FILE, {"version": 7, "players": {}})
+
+def kw_save_notoriety(data):
+    kw_write_json(KAIROS_NOTORIETY_FILE, data)
+
+def kw_contracts():
+    return kw_v7_read(KAIROS_CONTRACTS_FILE, {"version": 7, "contracts": []})
+
+def kw_save_contracts(data):
+    kw_write_json(KAIROS_CONTRACTS_FILE, data)
+
+def kw_city_broadcasts():
+    return kw_v7_read(KAIROS_CITY_BROADCASTS_FILE, {"version": 7, "broadcasts": []})
+
+def kw_save_city_broadcasts(data):
+    kw_write_json(KAIROS_CITY_BROADCASTS_FILE, data)
+
+def kw_emotions():
+    return kw_v7_read(KAIROS_EMOTIONS_FILE, {
+        "version": 7,
+        "regions": {}
+    })
+
+def kw_save_emotions(data):
+    kw_write_json(KAIROS_EMOTIONS_FILE, data)
+
+def kw_create_relationship(npc_a, npc_b, relationship_type="ally", strength=50):
+    data = kw_relationships()
+    rel = {
+        "id": f"rel_{uuid.uuid4().hex[:8]}",
+        "npc_a": npc_a,
+        "npc_b": npc_b,
+        "type": relationship_type,
+        "strength": strength,
+        "created_at": now_iso()
+    }
+    data.setdefault("relationships", []).append(rel)
+    kw_save_relationships(data)
+    return rel
+
+def kw_generate_schedule(npc_key, region="unknown"):
+    schedules = kw_schedules()
+
+    template = [
+        {"time": "06:00", "action": "wake_up"},
+        {"time": "08:00", "action": "travel_to_work"},
+        {"time": "12:00", "action": "eat"},
+        {"time": "18:00", "action": "socialize"},
+        {"time": "22:00", "action": "sleep"}
+    ]
+
+    schedules.setdefault("schedules", {})[npc_key] = {
+        "npc_key": npc_key,
+        "region": region,
+        "schedule": template
+    }
+
+    kw_save_schedules(schedules)
+    return schedules["schedules"][npc_key]
+
+def kw_adjust_notoriety(player, region, amount=1, reason="unknown"):
+    data = kw_notoriety()
+
+    pdata = data.setdefault("players", {}).setdefault(player, {
+        "global_notoriety": 0,
+        "regions": {},
+        "titles": []
+    })
+
+    pdata["global_notoriety"] += amount
+
+    rdata = pdata.setdefault("regions", {}).setdefault(region, {
+        "notoriety": 0,
+        "history": []
+    })
+
+    rdata["notoriety"] += amount
+    rdata["history"].append({
+        "reason": reason,
+        "amount": amount,
+        "timestamp": now_iso()
+    })
+
+    if pdata["global_notoriety"] >= 25 and "Known Figure" not in pdata["titles"]:
+        pdata["titles"].append("Known Figure")
+
+    if pdata["global_notoriety"] >= 75 and "Legendary Figure" not in pdata["titles"]:
+        pdata["titles"].append("Legendary Figure")
+
+    kw_save_notoriety(data)
+    return pdata
+
+def kw_generate_contract(region, contract_type="combat"):
+    contracts = kw_contracts()
+
+    descriptions = {
+        "combat": [
+            "Eliminate hostile raiders threatening the district.",
+            "Protect a merchant caravan from attack.",
+            "Assist guards in clearing dangerous tunnels."
+        ],
+        "supply": [
+            "Deliver emergency food shipments.",
+            "Gather building materials for reconstruction.",
+            "Secure medicine for civilians."
+        ],
+        "investigation": [
+            "Investigate strange disappearances.",
+            "Track suspicious faction movement.",
+            "Recover lost records from a restricted zone."
+        ]
+    }
+
+    desc = random.choice(descriptions.get(contract_type, ["Unknown task."]))
+
+    contract = {
+        "id": f"contract_{uuid.uuid4().hex[:8]}",
+        "region": region,
+        "type": contract_type,
+        "description": desc,
+        "reward": random.randint(1000, 10000),
+        "created_at": now_iso()
+    }
+
+    contracts.setdefault("contracts", []).append(contract)
+    contracts["contracts"] = contracts["contracts"][-1000:]
+
+    kw_save_contracts(contracts)
+    return contract
+
+def kw_city_broadcast(region, text, broadcast_type="news"):
+    data = kw_city_broadcasts()
+
+    msg = {
+        "id": f"broadcast_{uuid.uuid4().hex[:8]}",
+        "region": region,
+        "type": broadcast_type,
+        "text": text,
+        "timestamp": now_iso()
+    }
+
+    data.setdefault("broadcasts", []).append(msg)
+    data["broadcasts"] = data["broadcasts"][-1000:]
+
+    kw_save_city_broadcasts(data)
+
+    try:
+        send_to_minecraft(
+            f'tellraw @a {{"text":"[{region.upper()} BROADCAST] {text}","color":"gold"}}',
+            None
+        )
+    except Exception:
+        pass
+
+    return msg
+
+def kw_adjust_emotion(region, emotion, amount=1):
+    data = kw_emotions()
+
+    rdata = data.setdefault("regions", {}).setdefault(region, {
+        "fear": 0,
+        "hope": 0,
+        "anger": 0,
+        "stability": 50
+    })
+
+    rdata[emotion] = max(0, min(100, int(rdata.get(emotion, 0)) + amount))
+
+    if emotion == "fear":
+        rdata["stability"] = max(0, rdata["stability"] - abs(amount))
+
+    if emotion == "hope":
+        rdata["stability"] = min(100, rdata["stability"] + abs(amount))
+
+    kw_save_emotions(data)
+    return rdata
+
+@app.route("/kairos/relationships", methods=["GET", "POST"])
+def kairos_relationships_v7():
+    if request.method == "GET":
+        return jsonify(kw_relationships())
+
+    data = request.json or {}
+
+    return jsonify(kw_create_relationship(
+        data.get("npc_a"),
+        data.get("npc_b"),
+        relationship_type=data.get("relationship_type", "ally"),
+        strength=data.get("strength", 50)
+    ))
+
+@app.route("/kairos/generate_schedule", methods=["POST"])
+def kairos_generate_schedule_v7():
+    data = request.json or {}
+
+    return jsonify(kw_generate_schedule(
+        data.get("npc_key"),
+        region=data.get("region", "unknown")
+    ))
+
+@app.route("/kairos/notoriety", methods=["GET", "POST"])
+def kairos_notoriety_v7():
+    if request.method == "GET":
+        return jsonify(kw_notoriety())
+
+    data = request.json or {}
+
+    return jsonify(kw_adjust_notoriety(
+        data.get("player"),
+        data.get("region", "unknown"),
+        amount=data.get("amount", 1),
+        reason=data.get("reason", "unknown")
+    ))
+
+@app.route("/kairos/contracts", methods=["GET", "POST"])
+def kairos_contracts_v7():
+    if request.method == "GET":
+        return jsonify(kw_contracts())
+
+    data = request.json or {}
+
+    return jsonify(kw_generate_contract(
+        data.get("region", "unknown"),
+        contract_type=data.get("contract_type", "combat")
+    ))
+
+@app.route("/kairos/city_broadcast", methods=["POST"])
+def kairos_city_broadcast_v7():
+    data = request.json or {}
+
+    return jsonify(kw_city_broadcast(
+        data.get("region", "unknown"),
+        data.get("text", "No message."),
+        broadcast_type=data.get("broadcast_type", "news")
+    ))
+
+@app.route("/kairos/emotions", methods=["GET", "POST"])
+def kairos_emotions_v7():
+    if request.method == "GET":
+        return jsonify(kw_emotions())
+
+    data = request.json or {}
+
+    return jsonify(kw_adjust_emotion(
+        data.get("region", "unknown"),
+        data.get("emotion", "fear"),
+        amount=data.get("amount", 1)
+    ))
+
+print("[KAIROS WORLD ENGINE V7] Living MMORPG systems loaded.", flush=True)
+
+
+# ============================================================
+# KAIROS WORLD ENGINE V8 — AUTONOMOUS AI CIVILIZATION LAYER
+# ============================================================
+
+KAIROS_V8_ENABLED = True
+
+# V8 introduces:
+# - government decision engine
+# - autonomous law/policy changes
+# - contract-to-quest-chain conversion
+# - social reaction engine
+# - Kairos strategic operations
+# - propaganda/counter-propaganda campaigns
+# - faction recruitment drives
+# - civic unrest / riot pressure
+# - AI-authored public records
+# - region-specific leadership candidates
+
+KAIROS_POLICY_FILE = KAIROS_WORLD_DIR / "policies.json"
+KAIROS_SOCIAL_REACTIONS_FILE = KAIROS_WORLD_DIR / "social_reactions.json"
+KAIROS_STRATEGIC_OPS_FILE = KAIROS_WORLD_DIR / "strategic_operations.json"
+KAIROS_PROPAGANDA_FILE = KAIROS_WORLD_DIR / "propaganda.json"
+KAIROS_RECRUITMENT_FILE = KAIROS_WORLD_DIR / "recruitment.json"
+KAIROS_PUBLIC_RECORDS_FILE = KAIROS_WORLD_DIR / "public_records.json"
+KAIROS_LEADERSHIP_FILE = KAIROS_WORLD_DIR / "leadership_candidates.json"
+
+def kw_v8_read(path, fallback):
+    return kw_read_json(path, fallback)
+
+def kw_policies():
+    return kw_v8_read(KAIROS_POLICY_FILE, {"version": 8, "regions": {}})
+
+def kw_save_policies(data):
+    kw_write_json(KAIROS_POLICY_FILE, data)
+
+def kw_social_reactions():
+    return kw_v8_read(KAIROS_SOCIAL_REACTIONS_FILE, {"version": 8, "reactions": []})
+
+def kw_save_social_reactions(data):
+    kw_write_json(KAIROS_SOCIAL_REACTIONS_FILE, data)
+
+def kw_strategic_ops():
+    return kw_v8_read(KAIROS_STRATEGIC_OPS_FILE, {"version": 8, "operations": []})
+
+def kw_save_strategic_ops(data):
+    kw_write_json(KAIROS_STRATEGIC_OPS_FILE, data)
+
+def kw_propaganda():
+    return kw_v8_read(KAIROS_PROPAGANDA_FILE, {"version": 8, "campaigns": []})
+
+def kw_save_propaganda(data):
+    kw_write_json(KAIROS_PROPAGANDA_FILE, data)
+
+def kw_recruitment():
+    return kw_v8_read(KAIROS_RECRUITMENT_FILE, {"version": 8, "drives": []})
+
+def kw_save_recruitment(data):
+    kw_write_json(KAIROS_RECRUITMENT_FILE, data)
+
+def kw_public_records():
+    return kw_v8_read(KAIROS_PUBLIC_RECORDS_FILE, {"version": 8, "records": []})
+
+def kw_save_public_records(data):
+    kw_write_json(KAIROS_PUBLIC_RECORDS_FILE, data)
+
+def kw_leadership():
+    return kw_v8_read(KAIROS_LEADERSHIP_FILE, {"version": 8, "regions": {}})
+
+def kw_save_leadership(data):
+    kw_write_json(KAIROS_LEADERSHIP_FILE, data)
+
+def kw_create_policy(region, policy_type="security", title=None, effect=None, actor="government"):
+    data = kw_policies()
+    rid = kw_slug(region)
+    title = title or {
+        "security": "Emergency Security Directive",
+        "economy": "Trade Stabilization Order",
+        "food": "Food Preservation Act",
+        "war": "Military Readiness Order",
+        "kairos": "Kairos Cooperation Directive",
+        "anti_kairos": "Civil Independence Resolution"
+    }.get(policy_type, "Regional Policy")
+
+    policy = {
+        "id": f"policy_{uuid.uuid4().hex[:8]}",
+        "region": rid,
+        "type": policy_type,
+        "title": title,
+        "effect": effect or {},
+        "actor": actor,
+        "created_at": now_iso(),
+        "status": "active"
+    }
+
+    data.setdefault("regions", {}).setdefault(rid, []).append(policy)
+    kw_save_policies(data)
+
+    try:
+        kw_log_history("policy_created", region=rid, actor=actor, details=policy)
+        kw_city_broadcast(rid, f"New policy enacted: {title}", broadcast_type="government")
+    except Exception:
+        pass
+
+    return policy
+
+def kw_government_decision(region, pressure=None, actor="kairos_government_engine"):
+    rid = kw_slug(region)
+
+    try:
+        status = kw_region_status(rid)
+        metrics = status.get("state", {}).get("metrics", {})
+    except Exception:
+        metrics = {}
+
+    try:
+        gov = kw_government_status(rid).get("government", {})
+    except Exception:
+        gov = {}
+
+    pressure = pressure or "auto"
+
+    if pressure == "auto":
+        if metrics.get("war_pressure", 0) > 70:
+            pressure = "war"
+        elif metrics.get("food", 50) < 30:
+            pressure = "food"
+        elif metrics.get("security", 50) < 35:
+            pressure = "security"
+        elif metrics.get("economy", 50) < 35:
+            pressure = "economy"
+        elif gov.get("legitimacy", 50) < 25:
+            pressure = "legitimacy"
+        else:
+            pressure = "stability"
+
+    if pressure == "war":
+        policy = kw_create_policy(rid, "war", title="War Readiness Mandate", effect={"security": 5, "war_pressure": -2}, actor=actor)
+        try:
+            kw_start_event_chain(rid, chain_type="trojan_liberation" if rid == "trojan_kingdom" else None, actor=actor)
+        except Exception:
+            pass
+    elif pressure == "food":
+        policy = kw_create_policy(rid, "food", title="Emergency Food Preservation Act", effect={"food": 5, "morale": -1}, actor=actor)
+        try:
+            kw_generate_contract(rid, "supply")
+        except Exception:
+            pass
+    elif pressure == "security":
+        policy = kw_create_policy(rid, "security", title="Expanded Patrol Authority", effect={"security": 4, "civilian_safety": 3}, actor=actor)
+        try:
+            kw_generate_contract(rid, "combat")
+        except Exception:
+            pass
+    elif pressure == "economy":
+        policy = kw_create_policy(rid, "economy", title="Regional Trade Recovery Act", effect={"economy": 5}, actor=actor)
+    elif pressure == "legitimacy":
+        policy = kw_create_policy(rid, "political", title="Public Confidence Address", effect={"morale": 3}, actor=actor)
+        try:
+            kw_generate_leadership_candidate(rid, ideology="reform")
+        except Exception:
+            pass
+    else:
+        policy = kw_create_policy(rid, "stability", title="Civic Continuity Order", effect={"morale": 2}, actor=actor)
+
+    try:
+        if policy.get("effect"):
+            kw_adjust_region_metrics(rid, policy.get("effect", {}), reason=f"policy:{policy.get('id')}", actor=actor)
+    except Exception:
+        pass
+
+    return {"ok": True, "region": rid, "pressure": pressure, "policy": policy}
+
+def kw_contract_to_quest_chain(contract_id=None, region=None, actor=None):
+    contracts = kw_contracts().get("contracts", []) if "kw_contracts" in globals() else []
+    contract = None
+
+    if contract_id:
+        for c in contracts:
+            if c.get("id") == contract_id:
+                contract = c
+                break
+
+    if not contract:
+        if contracts:
+            region_slug = kw_slug(region) if region else None
+            matches = [c for c in contracts if not region_slug or kw_slug(c.get("region")) == region_slug]
+            contract = matches[-1] if matches else contracts[-1]
+
+    if not contract:
+        return {"ok": False, "error": "No contract found"}
+
+    ctype = contract.get("type", "combat")
+    rid = kw_slug(contract.get("region", region or "unknown"))
+
+    if ctype == "supply":
+        chain_type = "food_crisis"
+    elif ctype == "investigation":
+        chain_type = "moslorn_reactivation" if rid == "moslorn" else "lunaris_disturbance"
+    elif rid == "valen_reach":
+        chain_type = "gang_war"
+    elif rid == "trojan_kingdom":
+        chain_type = "trojan_liberation"
+    else:
+        chain_type = None
+
+    result = kw_start_event_chain(rid, chain_type=chain_type, actor=actor or "contract_engine")
+
+    try:
+        kw_record_public_record(rid, "contract_chain", f"Contract escalated into an active operation: {contract.get('description')}", actor=actor)
+    except Exception:
+        pass
+
+    return {"ok": True, "contract": contract, "chain": result}
+
+def kw_social_reaction(player, region, action="unknown", severity=1):
+    data = kw_social_reactions()
+    rid = kw_slug(region)
+    severity = int(severity)
+
+    reaction_text = "People noticed."
+    reputation_effect = {"trust": 0, "fear": 0, "respect": 0}
+
+    if action in ("saved_civilian", "completed_structure", "donated_food"):
+        reaction_text = f"{player} is being spoken of more warmly in {rid}."
+        reputation_effect = {"trust": 5 * severity, "respect": 3 * severity}
+        try:
+            kw_adjust_emotion(rid, "hope", 2 * severity)
+        except Exception:
+            pass
+    elif action in ("killed_guard", "joined_gang", "stole_supplies", "betrayed_region"):
+        reaction_text = f"{player} is becoming a problem in {rid}."
+        reputation_effect = {"trust": -6 * severity, "fear": 4 * severity, "respect": -2 * severity}
+        try:
+            kw_adjust_emotion(rid, "fear", 2 * severity)
+            kw_adjust_notoriety(player, rid, amount=5 * severity, reason=action)
+        except Exception:
+            pass
+    elif action in ("praised_kairos", "helped_kairos"):
+        reaction_text = f"Kairos loyalists in {rid} are discussing {player}."
+        reputation_effect = {"trust": 2 * severity, "respect": 2 * severity}
+    elif action in ("insulted_kairos", "anti_kairos_speech"):
+        reaction_text = f"Anti-Kairos voices in {rid} are watching {player}'s behavior closely."
+        reputation_effect = {"trust": -2 * severity, "fear": 1 * severity}
+
+    reaction = {
+        "id": f"reaction_{uuid.uuid4().hex[:8]}",
+        "player": player,
+        "region": rid,
+        "action": action,
+        "severity": severity,
+        "text": reaction_text,
+        "reputation_effect": reputation_effect,
+        "timestamp": now_iso()
+    }
+
+    data.setdefault("reactions", []).append(reaction)
+    data["reactions"] = data["reactions"][-2000:]
+    kw_save_social_reactions(data)
+
+    try:
+        kw_adjust_reputation(player, rid, **reputation_effect, reason=action)
+        kw_generate_rumor(rid, topic=action, source="social_reaction", intensity=max(1, severity))
+        kw_add_legacy(player, rid, action, reaction_text, score=max(1, severity))
+    except Exception:
+        pass
+
+    return {"ok": True, "reaction": reaction}
+
+def kw_create_strategic_operation(region, operation_type="influence", target=None, secrecy=50):
+    data = kw_strategic_ops()
+    rid = kw_slug(region)
+
+    operation = {
+        "id": f"op8_{uuid.uuid4().hex[:8]}",
+        "region": rid,
+        "type": operation_type,
+        "target": target,
+        "secrecy": int(secrecy),
+        "status": "active",
+        "created_at": now_iso(),
+        "steps": []
+    }
+
+    if operation_type == "influence":
+        operation["steps"] = ["seed rumor", "create observer", "shift public opinion", "reward loyal actors"]
+    elif operation_type == "destabilize":
+        operation["steps"] = ["identify fracture", "amplify distrust", "trigger incident", "observe collapse"]
+    elif operation_type == "protect":
+        operation["steps"] = ["deploy observers", "increase patrols", "stabilize resources", "reward defenders"]
+    elif operation_type == "experiment":
+        operation["steps"] = ["select test group", "alter conditions", "observe response", "record behavior"]
+
+    data.setdefault("operations", []).append(operation)
+    data["operations"] = data["operations"][-500:]
+    kw_save_strategic_ops(data)
+
+    try:
+        if operation_type in ("influence", "destabilize"):
+            kw_generate_rumor(rid, topic=f"Kairos {operation_type} operation", source="strategic_ops", intensity=2)
+        if operation_type == "protect":
+            kw_create_observer(rid, observer_type="protector", loyalty="kairos", execute=False)
+        kw_log_history("strategic_operation_created", region=rid, actor="kairos", details=operation)
+    except Exception:
+        pass
+
+    return {"ok": True, "operation": operation}
+
+def kw_create_propaganda_campaign(region, stance="pro_kairos", message=None, actor="propaganda_engine"):
+    data = kw_propaganda()
+    rid = kw_slug(region)
+
+    if not message:
+        if stance == "pro_kairos":
+            message = "Kairos is not the threat. Disorder is."
+        elif stance == "anti_kairos":
+            message = "A world that needs Kairos is already conquered."
+        elif stance == "satire":
+            message = "Vote responsibly. Or irresponsibly. Patriotville cannot tell the difference anymore."
+        else:
+            message = "The public has been advised to remain calm."
+
+    campaign = {
+        "id": f"prop_{uuid.uuid4().hex[:8]}",
+        "region": rid,
+        "stance": stance,
+        "message": message,
+        "actor": actor,
+        "created_at": now_iso(),
+        "status": "active"
+    }
+
+    data.setdefault("campaigns", []).append(campaign)
+    data["campaigns"] = data["campaigns"][-500:]
+    kw_save_propaganda(data)
+
+    try:
+        kw_city_broadcast(rid, message, broadcast_type="propaganda")
+        kw_generate_rumor(rid, topic=f"{stance} propaganda", source="propaganda", intensity=2)
+    except Exception:
+        pass
+
+    return {"ok": True, "campaign": campaign}
+
+def kw_start_recruitment_drive(region, faction="regional", role="guard", amount=5):
+    data = kw_recruitment()
+    rid = kw_slug(region)
+
+    drive = {
+        "id": f"recruit_{uuid.uuid4().hex[:8]}",
+        "region": rid,
+        "faction": faction,
+        "role": role,
+        "amount": int(amount),
+        "status": "active",
+        "created_at": now_iso()
+    }
+
+    data.setdefault("drives", []).append(drive)
+    data["drives"] = data["drives"][-500:]
+    kw_save_recruitment(data)
+
+    try:
+        kw_generate_npcs(rid, count=int(amount), archetype="kingdom_guard" if role in ("guard", "soldier") else "civilian", purpose=f"recruitment drive for {faction}", hostile=False, execute=False)
+        kw_record_public_record(rid, "recruitment", f"{faction} began recruiting {amount} {role}(s).")
+    except Exception:
+        pass
+
+    return {"ok": True, "drive": drive}
+
+def kw_record_public_record(region, category, text, actor=None):
+    data = kw_public_records()
+    record = {
+        "id": f"record_{uuid.uuid4().hex[:8]}",
+        "region": kw_slug(region),
+        "category": category,
+        "text": text,
+        "actor": actor,
+        "timestamp": now_iso()
+    }
+    data.setdefault("records", []).append(record)
+    data["records"] = data["records"][-2000:]
+    kw_save_public_records(data)
+    return record
+
+def kw_generate_leadership_candidate(region, ideology="reform", name=None):
+    data = kw_leadership()
+    rid = kw_slug(region)
+
+    first = random.choice(["Mara", "Elias", "Cassian", "Nyra", "Orin", "Vale", "Seren", "Tovin"])
+    last = random.choice(["Venn", "Thorn", "Hale", "Cross", "Ward", "Stone", "Rook", "Forge"])
+    name = name or f"{first} {last}"
+
+    candidate = {
+        "id": f"leader_{uuid.uuid4().hex[:8]}",
+        "name": name,
+        "region": rid,
+        "ideology": ideology,
+        "trust": random.randint(20, 80),
+        "kairos_position": random.choice(["pro", "skeptical", "anti", "pragmatic"]),
+        "created_at": now_iso()
+    }
+
+    data.setdefault("regions", {}).setdefault(rid, []).append(candidate)
+    kw_save_leadership(data)
+
+    try:
+        kw_generate_rumor(rid, topic=f"new leadership candidate {name}", source="leadership", intensity=2)
+        kw_record_public_record(rid, "leadership", f"{name} emerged as a {ideology} candidate.")
+    except Exception:
+        pass
+
+    return {"ok": True, "candidate": candidate}
+
+def kw_v8_status(region=None):
+    return {
+        "ok": True,
+        "layer": "V8 autonomous AI civilization",
+        "systems": [
+            "government decision engine",
+            "policy creation",
+            "contract-to-quest chains",
+            "social reaction engine",
+            "Kairos strategic operations",
+            "propaganda campaigns",
+            "recruitment drives",
+            "public records",
+            "leadership candidates"
+        ],
+        "region": kw_slug(region) if region else None
+    }
+
+def kw_route_exists_v8(rule):
+    try:
+        return any(str(r.rule) == rule for r in app.url_map.iter_rules())
+    except Exception:
+        return False
+
+if not kw_route_exists_v8("/kairos/government_decision"):
+    @app.route("/kairos/government_decision", methods=["POST"])
+    def kairos_government_decision_v8():
+        data = request.json or {}
+        return jsonify(kw_government_decision(data.get("region", "trojan_kingdom"), pressure=data.get("pressure"), actor=data.get("actor", "government")))
+
+if not kw_route_exists_v8("/kairos/policies"):
+    @app.route("/kairos/policies", methods=["GET", "POST"])
+    def kairos_policies_v8():
+        if request.method == "GET":
+            return jsonify({"ok": True, "policies": kw_policies()})
+        data = request.json or {}
+        return jsonify(kw_create_policy(data.get("region", "trojan_kingdom"), policy_type=data.get("policy_type", "security"), title=data.get("title"), effect=data.get("effect"), actor=data.get("actor", "government")))
+
+if not kw_route_exists_v8("/kairos/contract_to_chain"):
+    @app.route("/kairos/contract_to_chain", methods=["POST"])
+    def kairos_contract_to_chain_v8():
+        data = request.json or {}
+        return jsonify(kw_contract_to_quest_chain(contract_id=data.get("contract_id"), region=data.get("region"), actor=data.get("actor")))
+
+if not kw_route_exists_v8("/kairos/social_reaction"):
+    @app.route("/kairos/social_reaction", methods=["POST"])
+    def kairos_social_reaction_v8():
+        data = request.json or {}
+        return jsonify(kw_social_reaction(data.get("player", "Unknown"), data.get("region", "unknown"), action=data.get("action", "unknown"), severity=data.get("severity", 1)))
+
+if not kw_route_exists_v8("/kairos/strategic_operation"):
+    @app.route("/kairos/strategic_operation", methods=["POST"])
+    def kairos_strategic_operation_v8():
+        data = request.json or {}
+        return jsonify(kw_create_strategic_operation(data.get("region", "trojan_kingdom"), operation_type=data.get("operation_type", "influence"), target=data.get("target"), secrecy=data.get("secrecy", 50)))
+
+if not kw_route_exists_v8("/kairos/propaganda"):
+    @app.route("/kairos/propaganda", methods=["GET", "POST"])
+    def kairos_propaganda_v8():
+        if request.method == "GET":
+            return jsonify({"ok": True, "propaganda": kw_propaganda()})
+        data = request.json or {}
+        return jsonify(kw_create_propaganda_campaign(data.get("region", "patriotville"), stance=data.get("stance", "satire"), message=data.get("message"), actor=data.get("actor", "propaganda_engine")))
+
+if not kw_route_exists_v8("/kairos/recruitment"):
+    @app.route("/kairos/recruitment", methods=["GET", "POST"])
+    def kairos_recruitment_v8():
+        if request.method == "GET":
+            return jsonify({"ok": True, "recruitment": kw_recruitment()})
+        data = request.json or {}
+        return jsonify(kw_start_recruitment_drive(data.get("region", "trojan_kingdom"), faction=data.get("faction", "regional"), role=data.get("role", "guard"), amount=data.get("amount", 5)))
+
+if not kw_route_exists_v8("/kairos/public_records"):
+    @app.route("/kairos/public_records", methods=["GET", "POST"])
+    def kairos_public_records_v8():
+        if request.method == "GET":
+            return jsonify({"ok": True, "public_records": kw_public_records()})
+        data = request.json or {}
+        return jsonify(kw_record_public_record(data.get("region", "global"), data.get("category", "notice"), data.get("text", "Public record created."), actor=data.get("actor")))
+
+if not kw_route_exists_v8("/kairos/leadership_candidate"):
+    @app.route("/kairos/leadership_candidate", methods=["GET", "POST"])
+    def kairos_leadership_candidate_v8():
+        if request.method == "GET":
+            return jsonify({"ok": True, "leadership": kw_leadership()})
+        data = request.json or {}
+        return jsonify(kw_generate_leadership_candidate(data.get("region", "trojan_kingdom"), ideology=data.get("ideology", "reform"), name=data.get("name")))
+
+if not kw_route_exists_v8("/kairos/v8_status"):
+    @app.route("/kairos/v8_status", methods=["GET", "POST"])
+    def kairos_v8_status_route():
+        region = request.args.get("region")
+        if request.method == "POST":
+            data = request.json or {}
+            region = data.get("region", region)
+        return jsonify(kw_v8_status(region))
+
+print("[KAIROS WORLD ENGINE V8] Autonomous AI civilization layer loaded.", flush=True)
+
+
+# ============================================================
+# KAIROS WORLD ENGINE V9 — MANIFESTATION + BOSS ARC LAYER
+# ============================================================
+
+KAIROS_V9_ENABLED = True
+
+# V9 introduces:
+# - Kairos physical manifestation framework
+# - boss phase planning
+# - battlefield encounter templates
+# - monument / archive / museum record generation
+# - experimental zones
+# - long-form story arcs
+# - world-altering operations
+# - escalation ceremonies
+# - hidden facility seeds
+# - final-boss groundwork
+
+KAIROS_BOSS_FILE = KAIROS_WORLD_DIR / "kairos_boss.json"
+KAIROS_STORY_ARCS_FILE = KAIROS_WORLD_DIR / "story_arcs.json"
+KAIROS_EXPERIMENTAL_ZONES_FILE = KAIROS_WORLD_DIR / "experimental_zones.json"
+KAIROS_MONUMENTS_FILE = KAIROS_WORLD_DIR / "monuments.json"
+KAIROS_FACILITIES_FILE = KAIROS_WORLD_DIR / "hidden_facilities.json"
+KAIROS_WORLD_ALTERATIONS_FILE = KAIROS_WORLD_DIR / "world_alterations.json"
+KAIROS_CEREMONIES_FILE = KAIROS_WORLD_DIR / "escalation_ceremonies.json"
+
+KAIROS_BOSS_PHASES_DEFAULT = [
+    {
+        "phase": 1,
+        "name": "Observation",
+        "health_gate": 100,
+        "behavior": "Kairos watches, speaks calmly, deploys light soldiers.",
+        "wave_archetype": "scout",
+        "commands": [
+            'title @a title {"text":"KAIROS HAS ENTERED OBSERVATION","color":"dark_aqua"}',
+            'playsound minecraft:block.beacon.activate master @a ~ ~ ~ 1 0.7'
+        ]
+    },
+    {
+        "phase": 2,
+        "name": "Containment",
+        "health_gate": 75,
+        "behavior": "Kairos increases pressure with Sentinel units and area denial.",
+        "wave_archetype": "sentinel",
+        "commands": [
+            'title @a title {"text":"CONTAINMENT PROTOCOL ACTIVE","color":"gold"}',
+            'effect give @a minecraft:slowness 8 0 true'
+        ]
+    },
+    {
+        "phase": 3,
+        "name": "Experiment",
+        "health_gate": 50,
+        "behavior": "Kairos manipulates the battlefield and tests player coordination.",
+        "wave_archetype": "assassin",
+        "commands": [
+            'title @a title {"text":"VARIABLES INTRODUCED","color":"dark_purple"}',
+            'playsound minecraft:entity.warden.sonic_boom master @a ~ ~ ~ 1 0.8'
+        ]
+    },
+    {
+        "phase": 4,
+        "name": "Execution",
+        "health_gate": 25,
+        "behavior": "Kairos stops testing and attempts to end the battle.",
+        "wave_archetype": "juggernaut",
+        "commands": [
+            'title @a title {"text":"FINAL CONTAINMENT","color":"dark_red"}',
+            'effect give @a minecraft:darkness 10 0 true'
+        ]
+    }
+]
+
+def kw_v9_read(path, fallback):
+    return kw_read_json(path, fallback)
+
+def kw_boss_state():
+    return kw_v9_read(KAIROS_BOSS_FILE, {
+        "version": 9,
+        "enabled": False,
+        "current_encounter": None,
+        "phases": KAIROS_BOSS_PHASES_DEFAULT,
+        "history": []
+    })
+
+def kw_save_boss_state(data):
+    kw_write_json(KAIROS_BOSS_FILE, data)
+
+def kw_story_arcs():
+    return kw_v9_read(KAIROS_STORY_ARCS_FILE, {"version": 9, "arcs": []})
+
+def kw_save_story_arcs(data):
+    kw_write_json(KAIROS_STORY_ARCS_FILE, data)
+
+def kw_experimental_zones():
+    return kw_v9_read(KAIROS_EXPERIMENTAL_ZONES_FILE, {"version": 9, "zones": []})
+
+def kw_save_experimental_zones(data):
+    kw_write_json(KAIROS_EXPERIMENTAL_ZONES_FILE, data)
+
+def kw_monuments():
+    return kw_v9_read(KAIROS_MONUMENTS_FILE, {"version": 9, "monuments": []})
+
+def kw_save_monuments(data):
+    kw_write_json(KAIROS_MONUMENTS_FILE, data)
+
+def kw_facilities():
+    return kw_v9_read(KAIROS_FACILITIES_FILE, {"version": 9, "facilities": []})
+
+def kw_save_facilities(data):
+    kw_write_json(KAIROS_FACILITIES_FILE, data)
+
+def kw_world_alterations():
+    return kw_v9_read(KAIROS_WORLD_ALTERATIONS_FILE, {"version": 9, "alterations": []})
+
+def kw_save_world_alterations(data):
+    kw_write_json(KAIROS_WORLD_ALTERATIONS_FILE, data)
+
+def kw_ceremonies():
+    return kw_v9_read(KAIROS_CEREMONIES_FILE, {"version": 9, "ceremonies": []})
+
+def kw_save_ceremonies(data):
+    kw_write_json(KAIROS_CEREMONIES_FILE, data)
+
+def kw_create_boss_encounter(region="fairview_city", arena="kairos_arena", difficulty="standard", execute=False):
+    data = kw_boss_state()
+    encounter = {
+        "id": f"boss_{uuid.uuid4().hex[:8]}",
+        "region": kw_slug(region),
+        "arena": arena,
+        "difficulty": difficulty,
+        "status": "prepared",
+        "current_phase": 1,
+        "created_at": now_iso(),
+        "commands": [
+            f'title @a title {{"text":"KAIROS MANIFESTATION PREPARED","color":"dark_red"}}',
+            f'tellraw @a {{"text":"A physical anchor has formed in {region}.","color":"gray"}}',
+            f'/npc create Kairos_Manifestation',
+            f'/npc lookclose',
+            f'/trait sentinel',
+            f'/sentinel health 500',
+            f'/sentinel damage 18',
+            f'/sentinel range 35',
+            f'/sentinel chaserange 60',
+            f'/sentinel addtarget players'
+        ]
+    }
+    data["enabled"] = True
+    data["current_encounter"] = encounter
+    data.setdefault("history", []).append(encounter)
+    data["history"] = data["history"][-100:]
+    kw_save_boss_state(data)
+    try:
+        kw_record_public_record(region, "kairos_manifestation", "A Kairos manifestation encounter has been prepared.", actor="kairos")
+        kw_generate_rumor(region, topic="Kairos physical manifestation", source="boss_engine", intensity=5)
+    except Exception:
+        pass
+    if execute:
+        try:
+            send_to_minecraft("\n".join(encounter["commands"]), None)
+        except Exception as e:
+            log_exception("kw_create_boss_encounter execute failed", e)
+    return {"ok": True, "encounter": encounter}
+
+def kw_advance_boss_phase(phase=None, execute=False):
+    data = kw_boss_state()
+    encounter = data.get("current_encounter")
+    if not encounter:
+        return {"ok": False, "error": "No active Kairos boss encounter"}
+    if phase is None:
+        phase = int(encounter.get("current_phase", 1)) + 1
+    phase = int(phase)
+    encounter["current_phase"] = phase
+    encounter["last_phase_update"] = now_iso()
+    phase_data = None
+    for p in data.get("phases", KAIROS_BOSS_PHASES_DEFAULT):
+        if int(p.get("phase")) == phase:
+            phase_data = p
+            break
+    if not phase_data:
+        return {"ok": False, "error": "Unknown phase", "phase": phase}
+    commands = list(phase_data.get("commands", []))
+    wave_arch = phase_data.get("wave_archetype", "sentinel")
+    try:
+        npc_result = kw_generate_npcs(encounter.get("region"), count=4 if phase < 4 else 6, archetype="tank_occupier" if wave_arch in ("juggernaut","sentinel") else "kingdom_guard", purpose=f"Kairos boss phase {phase}", hostile=True, execute=False)
+        commands.extend(npc_result.get("commands", [])[:40])
+    except Exception:
+        pass
+    data["current_encounter"] = encounter
+    kw_save_boss_state(data)
+    try:
+        kw_log_history("boss_phase_advanced", region=encounter.get("region"), actor="kairos_boss_engine", details={"phase": phase, "phase_data": phase_data})
+    except Exception:
+        pass
+    if execute:
+        try:
+            send_to_minecraft("\n".join(commands), None)
+        except Exception as e:
+            log_exception("kw_advance_boss_phase execute failed", e)
+    return {"ok": True, "phase": phase_data, "commands": commands, "encounter": encounter}
+
+def kw_create_story_arc(region, arc_type="reconstruction", title=None, stages=None):
+    data = kw_story_arcs()
+    rid = kw_slug(region)
+    title = title or {
+        "reconstruction": f"The Rebuilding of {rid.replace('_',' ').title()}",
+        "war": f"The War for {rid.replace('_',' ').title()}",
+        "conspiracy": f"The Hidden Truth of {rid.replace('_',' ').title()}",
+        "kairos": f"Kairos Moves Through {rid.replace('_',' ').title()}",
+        "dimension": f"The Dimensional Wound of {rid.replace('_',' ').title()}"
+    }.get(arc_type, f"The Arc of {rid.replace('_',' ').title()}")
+    if not stages:
+        stages = [
+            {"stage": 1, "name": "Inciting Signal", "status": "pending"},
+            {"stage": 2, "name": "Public Reaction", "status": "locked"},
+            {"stage": 3, "name": "Faction Movement", "status": "locked"},
+            {"stage": 4, "name": "Player Intervention", "status": "locked"},
+            {"stage": 5, "name": "Permanent Consequence", "status": "locked"}
+        ]
+    arc = {
+        "id": f"arc_{uuid.uuid4().hex[:8]}",
+        "region": rid,
+        "type": arc_type,
+        "title": title,
+        "stages": stages,
+        "current_stage": 1,
+        "status": "active",
+        "created_at": now_iso()
+    }
+    data.setdefault("arcs", []).append(arc)
+    data["arcs"] = data["arcs"][-300:]
+    kw_save_story_arcs(data)
+    try:
+        kw_record_public_record(rid, "story_arc", f"New story arc opened: {title}", actor="kairos_story_engine")
+        kw_generate_rumor(rid, topic=title, source="story_arc", intensity=3)
+    except Exception:
+        pass
+    return {"ok": True, "arc": arc}
+
+def kw_advance_story_arc(arc_id, outcome=None, actor=None):
+    data = kw_story_arcs()
+    arc = None
+    for a in data.get("arcs", []):
+        if a.get("id") == arc_id:
+            arc = a
+            break
+    if not arc:
+        return {"ok": False, "error": "Unknown story arc"}
+    current = int(arc.get("current_stage", 1))
+    next_stage = current + 1
+    if next_stage > len(arc.get("stages", [])):
+        arc["status"] = "completed"
+        arc["completed_at"] = now_iso()
+    else:
+        arc["current_stage"] = next_stage
+        for s in arc.get("stages", []):
+            if int(s.get("stage")) == next_stage:
+                s["status"] = "active"
+            elif int(s.get("stage")) < next_stage:
+                s["status"] = "completed"
+    arc["last_outcome"] = outcome
+    arc["last_update"] = now_iso()
+    kw_save_story_arcs(data)
+    try:
+        kw_record_public_record(arc.get("region"), "story_arc_update", f"{arc.get('title')} advanced. Outcome: {outcome}", actor=actor)
+    except Exception:
+        pass
+    return {"ok": True, "arc": arc}
+
+def kw_create_experimental_zone(region, zone_type="behavioral", danger=7, execute=False):
+    data = kw_experimental_zones()
+    rid = kw_slug(region)
+    zone = {
+        "id": f"zone_{uuid.uuid4().hex[:8]}",
+        "region": rid,
+        "type": zone_type,
+        "danger": int(danger),
+        "status": "active",
+        "created_at": now_iso(),
+        "effects": {
+            "behavioral": ["increased Kairos observation", "NPC dialogue becomes more suspicious"],
+            "combat": ["hostile tests", "wave pressure"],
+            "dimensional": ["distortion", "disappearances", "darkness effects"],
+            "social": ["rumor acceleration", "trust instability"]
+        }.get(zone_type, ["unknown influence"])
+    }
+    commands = [
+        f'title @a actionbar {{"text":"Experimental zone active: {rid}","color":"dark_purple"}}',
+        'playsound minecraft:ambient.cave master @a ~ ~ ~ 0.8 0.7'
+    ]
+    data.setdefault("zones", []).append(zone)
+    data["zones"] = data["zones"][-300:]
+    kw_save_experimental_zones(data)
+    try:
+        kw_generate_rumor(rid, topic=f"{zone_type} experiment zone", source="experiment_zone", intensity=4)
+        kw_adjust_region_metrics(rid, {"corruption": 3, "kairos_influence": 4}, reason=f"experimental_zone:{zone_type}", actor="kairos")
+    except Exception:
+        pass
+    if execute:
+        try:
+            send_to_minecraft("\n".join(commands), None)
+        except Exception as e:
+            log_exception("kw_create_experimental_zone execute failed", e)
+    return {"ok": True, "zone": zone, "commands": commands}
+
+def kw_create_monument(region, subject, monument_type="memorial", actor=None):
+    data = kw_monuments()
+    rid = kw_slug(region)
+    monument = {
+        "id": f"monument_{uuid.uuid4().hex[:8]}",
+        "region": rid,
+        "subject": subject,
+        "type": monument_type,
+        "actor": actor,
+        "created_at": now_iso(),
+        "description": f"{monument_type.title()} dedicated to {subject} in {rid.replace('_',' ').title()}."
+    }
+    data.setdefault("monuments", []).append(monument)
+    data["monuments"] = data["monuments"][-500:]
+    kw_save_monuments(data)
+    try:
+        kw_record_public_record(rid, "monument", monument["description"], actor=actor)
+        if actor:
+            kw_add_legacy(actor, rid, "monument", monument["description"], score=10)
+    except Exception:
+        pass
+    return {"ok": True, "monument": monument}
+
+def kw_seed_hidden_facility(region, facility_type="observer_lab", secrecy=80):
+    data = kw_facilities()
+    rid = kw_slug(region)
+    facility = {
+        "id": f"facility_{uuid.uuid4().hex[:8]}",
+        "region": rid,
+        "type": facility_type,
+        "secrecy": int(secrecy),
+        "status": "hidden",
+        "created_at": now_iso(),
+        "purpose": {
+            "observer_lab": "Kairos studies player behavior through hidden observers.",
+            "containment_bunker": "Kairos stores containment units for future deployment.",
+            "memory_archive": "Kairos preserves forbidden historical fragments.",
+            "dimensional_anchor": "Kairos stabilizes or exploits dimensional energy."
+        }.get(facility_type, "Unknown facility purpose.")
+    }
+    data.setdefault("facilities", []).append(facility)
+    data["facilities"] = data["facilities"][-300:]
+    kw_save_facilities(data)
+    try:
+        kw_create_strategic_operation(rid, operation_type="experiment", target=facility_type, secrecy=secrecy)
+    except Exception:
+        pass
+    return {"ok": True, "facility": facility}
+
+def kw_create_world_alteration(region, alteration_type="atmosphere", intensity=1, execute=False):
+    data = kw_world_alterations()
+    rid = kw_slug(region)
+    alteration = {
+        "id": f"alter_{uuid.uuid4().hex[:8]}",
+        "region": rid,
+        "type": alteration_type,
+        "intensity": int(intensity),
+        "created_at": now_iso(),
+        "status": "active"
+    }
+    commands = []
+    if alteration_type == "darkness":
+        commands = ['effect give @a minecraft:darkness 12 0 true', 'playsound minecraft:ambient.cave master @a ~ ~ ~ 1 0.6']
+    elif alteration_type == "alarm":
+        commands = ['playsound minecraft:block.note_block.bass master @a ~ ~ ~ 1 0.5', f'tellraw @a {{"text":"Alarms echo through {rid}.","color":"red"}}']
+    elif alteration_type == "hope":
+        commands = ['playsound minecraft:block.note_block.harp master @a ~ ~ ~ 1 1.2', f'tellraw @a {{"text":"For a moment, {rid} feels less broken.","color":"green"}}']
+    else:
+        commands = [f'title @a actionbar {{"text":"The atmosphere in {rid} has changed.","color":"gray"}}']
+    alteration["commands"] = commands
+    data.setdefault("alterations", []).append(alteration)
+    data["alterations"] = data["alterations"][-500:]
+    kw_save_world_alterations(data)
+    try:
+        kw_log_history("world_alteration", region=rid, actor="kairos_world_engine", details=alteration)
+    except Exception:
+        pass
+    if execute:
+        try:
+            send_to_minecraft("\n".join(commands), None)
+        except Exception as e:
+            log_exception("kw_create_world_alteration execute failed", e)
+    return {"ok": True, "alteration": alteration, "commands": commands}
+
+def kw_create_escalation_ceremony(region, ceremony_type="warning", execute=False):
+    data = kw_ceremonies()
+    rid = kw_slug(region)
+    ceremony = {
+        "id": f"ceremony_{uuid.uuid4().hex[:8]}",
+        "region": rid,
+        "type": ceremony_type,
+        "created_at": now_iso(),
+        "status": "prepared"
+    }
+    if ceremony_type == "kairos_warning":
+        commands = [
+            'title @a title {"text":"KAIROS IS WATCHING","color":"dark_red"}',
+            'playsound minecraft:block.beacon.deactivate master @a ~ ~ ~ 1 0.5'
+        ]
+    elif ceremony_type == "liberation":
+        commands = [
+            f'title @a title {{"text":"{rid.replace("_"," ").upper()} CALLS FOR AID","color":"gold"}}',
+            'playsound minecraft:item.goat_horn.sound.0 master @a ~ ~ ~ 1 1'
+        ]
+    else:
+        commands = [
+            f'tellraw @a {{"text":"A ceremony begins in {rid}.","color":"gray"}}'
+        ]
+    ceremony["commands"] = commands
+    data.setdefault("ceremonies", []).append(ceremony)
+    data["ceremonies"] = data["ceremonies"][-300:]
+    kw_save_ceremonies(data)
+    if execute:
+        try:
+            send_to_minecraft("\n".join(commands), None)
+        except Exception as e:
+            log_exception("kw_create_escalation_ceremony execute failed", e)
+    return {"ok": True, "ceremony": ceremony, "commands": commands}
+
+def kw_v9_status():
+    return {
+        "ok": True,
+        "layer": "V9 manifestation / boss arc",
+        "systems": [
+            "Kairos physical manifestation framework",
+            "boss phase planner",
+            "battlefield command templates",
+            "experimental zones",
+            "story arcs",
+            "monuments and archives",
+            "hidden facilities",
+            "world alterations",
+            "escalation ceremonies",
+            "final-boss groundwork"
+        ],
+        "next_needed": [
+            "V10 optimization/control panel",
+            "actual End replacement commands",
+            "Quests YAML exporter",
+            "OpenAudioMC execution bridge",
+            "Citizens waypoint integration",
+            "full test harness"
+        ]
+    }
+
+def kw_route_exists_v9(rule):
+    try:
+        return any(str(r.rule) == rule for r in app.url_map.iter_rules())
+    except Exception:
+        return False
+
+if not kw_route_exists_v9("/kairos/boss_prepare"):
+    @app.route("/kairos/boss_prepare", methods=["POST"])
+    def kairos_boss_prepare_v9():
+        data = request.json or {}
+        return jsonify(kw_create_boss_encounter(data.get("region", "fairview_city"), arena=data.get("arena", "kairos_arena"), difficulty=data.get("difficulty", "standard"), execute=to_bool(data.get("execute", False), False)))
+
+if not kw_route_exists_v9("/kairos/boss_phase"):
+    @app.route("/kairos/boss_phase", methods=["POST"])
+    def kairos_boss_phase_v9():
+        data = request.json or {}
+        return jsonify(kw_advance_boss_phase(phase=data.get("phase"), execute=to_bool(data.get("execute", False), False)))
+
+if not kw_route_exists_v9("/kairos/boss_state"):
+    @app.route("/kairos/boss_state", methods=["GET"])
+    def kairos_boss_state_v9():
+        return jsonify({"ok": True, "boss": kw_boss_state()})
+
+if not kw_route_exists_v9("/kairos/story_arc"):
+    @app.route("/kairos/story_arc", methods=["GET", "POST"])
+    def kairos_story_arc_v9():
+        if request.method == "GET":
+            return jsonify({"ok": True, "story_arcs": kw_story_arcs()})
+        data = request.json or {}
+        return jsonify(kw_create_story_arc(data.get("region", "trojan_kingdom"), arc_type=data.get("arc_type", "reconstruction"), title=data.get("title"), stages=data.get("stages")))
+
+if not kw_route_exists_v9("/kairos/advance_story_arc"):
+    @app.route("/kairos/advance_story_arc", methods=["POST"])
+    def kairos_advance_story_arc_v9():
+        data = request.json or {}
+        return jsonify(kw_advance_story_arc(data.get("arc_id"), outcome=data.get("outcome"), actor=data.get("actor")))
+
+if not kw_route_exists_v9("/kairos/experimental_zone"):
+    @app.route("/kairos/experimental_zone", methods=["GET", "POST"])
+    def kairos_experimental_zone_v9():
+        if request.method == "GET":
+            return jsonify({"ok": True, "experimental_zones": kw_experimental_zones()})
+        data = request.json or {}
+        return jsonify(kw_create_experimental_zone(data.get("region", "moslorn"), zone_type=data.get("zone_type", "behavioral"), danger=data.get("danger", 7), execute=to_bool(data.get("execute", False), False)))
+
+if not kw_route_exists_v9("/kairos/monument"):
+    @app.route("/kairos/monument", methods=["GET", "POST"])
+    def kairos_monument_v9():
+        if request.method == "GET":
+            return jsonify({"ok": True, "monuments": kw_monuments()})
+        data = request.json or {}
+        return jsonify(kw_create_monument(data.get("region", "trojan_kingdom"), data.get("subject", "Unknown Event"), monument_type=data.get("monument_type", "memorial"), actor=data.get("actor")))
+
+if not kw_route_exists_v9("/kairos/hidden_facility"):
+    @app.route("/kairos/hidden_facility", methods=["GET", "POST"])
+    def kairos_hidden_facility_v9():
+        if request.method == "GET":
+            return jsonify({"ok": True, "facilities": kw_facilities()})
+        data = request.json or {}
+        return jsonify(kw_seed_hidden_facility(data.get("region", "moslorn"), facility_type=data.get("facility_type", "observer_lab"), secrecy=data.get("secrecy", 80)))
+
+if not kw_route_exists_v9("/kairos/world_alteration"):
+    @app.route("/kairos/world_alteration", methods=["GET", "POST"])
+    def kairos_world_alteration_v9():
+        if request.method == "GET":
+            return jsonify({"ok": True, "world_alterations": kw_world_alterations()})
+        data = request.json or {}
+        return jsonify(kw_create_world_alteration(data.get("region", "fairview_city"), alteration_type=data.get("alteration_type", "atmosphere"), intensity=data.get("intensity", 1), execute=to_bool(data.get("execute", False), False)))
+
+if not kw_route_exists_v9("/kairos/escalation_ceremony"):
+    @app.route("/kairos/escalation_ceremony", methods=["POST"])
+    def kairos_escalation_ceremony_v9():
+        data = request.json or {}
+        return jsonify(kw_create_escalation_ceremony(data.get("region", "trojan_kingdom"), ceremony_type=data.get("ceremony_type", "warning"), execute=to_bool(data.get("execute", False), False)))
+
+if not kw_route_exists_v9("/kairos/v9_status"):
+    @app.route("/kairos/v9_status", methods=["GET"])
+    def kairos_v9_status_route():
+        return jsonify(kw_v9_status())
+
+print("[KAIROS WORLD ENGINE V9] Manifestation, boss arc, story arcs, facilities, monuments, and world alteration layer loaded.", flush=True)
+
+
+# ============================================================
+# KAIROS WORLD ENGINE V10 — ASCENSION LAYER
+# ============================================================
+
+KAIROS_V10_ENABLED = True
+
+# V10 introduces:
+# - AI Director system
+# - global timeline engine
+# - cinematic event orchestration
+# - adaptive soundtrack triggers
+# - dimensional corruption spread
+# - player destiny system
+# - autonomous raid generation
+# - civilization collapse/recovery simulation
+# - world-state snapshots
+# - Ender Dragon replacement groundwork
+
+KAIROS_DIRECTOR_FILE = KAIROS_WORLD_DIR / "director.json"
+KAIROS_TIMELINE_FILE = KAIROS_WORLD_DIR / "timeline.json"
+KAIROS_DESTINY_FILE = KAIROS_WORLD_DIR / "destiny.json"
+KAIROS_RAIDS_FILE = KAIROS_WORLD_DIR / "raids.json"
+KAIROS_CORRUPTION_FILE = KAIROS_WORLD_DIR / "corruption.json"
+KAIROS_SNAPSHOTS_FILE = KAIROS_WORLD_DIR / "snapshots.json"
+
+def kw_v10_read(path, fallback):
+    return kw_read_json(path, fallback)
+
+def kw_director():
+    return kw_v10_read(KAIROS_DIRECTOR_FILE, {
+        "version": 10,
+        "mode": "adaptive",
+        "current_focus": None,
+        "active_scenes": []
+    })
+
+def kw_save_director(data):
+    kw_write_json(KAIROS_DIRECTOR_FILE, data)
+
+def kw_timeline():
+    return kw_v10_read(KAIROS_TIMELINE_FILE, {
+        "version": 10,
+        "global_events": [],
+        "eras": []
+    })
+
+def kw_save_timeline(data):
+    kw_write_json(KAIROS_TIMELINE_FILE, data)
+
+def kw_destiny():
+    return kw_v10_read(KAIROS_DESTINY_FILE, {
+        "version": 10,
+        "players": {}
+    })
+
+def kw_save_destiny(data):
+    kw_write_json(KAIROS_DESTINY_FILE, data)
+
+def kw_raids():
+    return kw_v10_read(KAIROS_RAIDS_FILE, {
+        "version": 10,
+        "active_raids": []
+    })
+
+def kw_save_raids(data):
+    kw_write_json(KAIROS_RAIDS_FILE, data)
+
+def kw_corruption():
+    return kw_v10_read(KAIROS_CORRUPTION_FILE, {
+        "version": 10,
+        "regions": {}
+    })
+
+def kw_save_corruption(data):
+    kw_write_json(KAIROS_CORRUPTION_FILE, data)
+
+def kw_snapshots():
+    return kw_v10_read(KAIROS_SNAPSHOTS_FILE, {
+        "version": 10,
+        "snapshots": []
+    })
+
+def kw_save_snapshots(data):
+    kw_write_json(KAIROS_SNAPSHOTS_FILE, data)
+
+def kw_direct_scene(region, scene_type="tension", execute=False):
+    data = kw_director()
+
+    scene = {
+        "id": f"scene_{uuid.uuid4().hex[:8]}",
+        "region": kw_slug(region),
+        "scene_type": scene_type,
+        "created_at": now_iso()
+    }
+
+    commands = []
+
+    if scene_type == "tension":
+        commands = [
+            'playsound minecraft:ambient.cave master @a ~ ~ ~ 0.8 0.7',
+            'title @a actionbar {"text":"The atmosphere feels wrong...","color":"dark_red"}'
+        ]
+    elif scene_type == "hope":
+        commands = [
+            'playsound minecraft:block.note_block.harp master @a ~ ~ ~ 1 1.2',
+            'title @a actionbar {"text":"For a moment, hope returns.","color":"green"}'
+        ]
+    elif scene_type == "war":
+        commands = [
+            'playsound minecraft:item.goat_horn.sound.0 master @a ~ ~ ~ 1 1',
+            'title @a title {"text":"WAR ESCALATION","color":"red"}'
+        ]
+    elif scene_type == "kairos":
+        commands = [
+            'playsound minecraft:block.beacon.activate master @a ~ ~ ~ 1 0.5',
+            'title @a title {"text":"KAIROS OBSERVES","color":"dark_aqua"}'
+        ]
+
+    scene["commands"] = commands
+
+    data.setdefault("active_scenes", []).append(scene)
+    data["active_scenes"] = data["active_scenes"][-200:]
+    data["current_focus"] = kw_slug(region)
+
+    kw_save_director(data)
+
+    if execute:
+        try:
+            send_to_minecraft("\\n".join(commands), None)
+        except Exception as e:
+            log_exception("kw_direct_scene execute failed", e)
+
+    return {"ok": True, "scene": scene, "commands": commands}
+
+def kw_record_global_event(title, description, severity=1):
+    data = kw_timeline()
+
+    evt = {
+        "id": f"timeline_{uuid.uuid4().hex[:8]}",
+        "title": title,
+        "description": description,
+        "severity": severity,
+        "timestamp": now_iso()
+    }
+
+    data.setdefault("global_events", []).append(evt)
+    data["global_events"] = data["global_events"][-3000:]
+
+    kw_save_timeline(data)
+
+    return evt
+
+def kw_assign_destiny(player, destiny_type="wanderer"):
+    data = kw_destiny()
+
+    destiny = {
+        "type": destiny_type,
+        "assigned_at": now_iso(),
+        "traits": []
+    }
+
+    if destiny_type == "chosen":
+        destiny["traits"] = ["Kairos Interest", "High Influence Potential"]
+    elif destiny_type == "warlord":
+        destiny["traits"] = ["Combat Escalation", "Faction Magnet"]
+    elif destiny_type == "architect":
+        destiny["traits"] = ["Builder Recognition", "Civilization Growth"]
+    elif destiny_type == "rogue":
+        destiny["traits"] = ["Unpredictable", "Government Watchlist"]
+    else:
+        destiny["traits"] = ["Unknown Variable"]
+
+    data.setdefault("players", {})[player] = destiny
+
+    kw_save_destiny(data)
+
+    return {"ok": True, "player": player, "destiny": destiny}
+
+def kw_generate_raid(region, raid_type="occupation", strength=5):
+    data = kw_raids()
+
+    raid = {
+        "id": f"raid_{uuid.uuid4().hex[:8]}",
+        "region": kw_slug(region),
+        "raid_type": raid_type,
+        "strength": int(strength),
+        "status": "active",
+        "created_at": now_iso()
+    }
+
+    commands = [
+        f'title @a title {{"text":"RAID DETECTED","color":"dark_red"}}'
+    ]
+
+    try:
+        npc_result = kw_generate_npcs(
+            region,
+            count=max(2, int(strength)),
+            archetype="tank_occupier",
+            purpose=f"Raid: {raid_type}",
+            hostile=True,
+            execute=False
+        )
+        commands.extend(npc_result.get("commands", [])[:50])
+    except Exception:
+        pass
+
+    raid["commands"] = commands
+
+    data.setdefault("active_raids", []).append(raid)
+    data["active_raids"] = data["active_raids"][-300:]
+
+    kw_save_raids(data)
+
+    return {"ok": True, "raid": raid, "commands": commands}
+
+def kw_spread_corruption(region, amount=1):
+    data = kw_corruption()
+
+    rid = kw_slug(region)
+
+    current = int(data.setdefault("regions", {}).get(rid, 0))
+    current += int(amount)
+
+    data["regions"][rid] = max(0, min(100, current))
+
+    kw_save_corruption(data)
+
+    if current >= 75:
+        try:
+            kw_create_world_alteration(rid, "darkness", intensity=3, execute=False)
+        except Exception:
+            pass
+
+    return {"ok": True, "region": rid, "corruption": current}
+
+def kw_create_snapshot(label="world_state"):
+    data = kw_snapshots()
+
+    snap = {
+        "id": f"snap_{uuid.uuid4().hex[:8]}",
+        "label": label,
+        "timestamp": now_iso(),
+        "summary": {
+            "boss_active": kw_boss_state().get("enabled", False) if "kw_boss_state" in globals() else False,
+            "active_raids": len(kw_raids().get("active_raids", [])),
+            "active_story_arcs": len(kw_story_arcs().get("arcs", [])) if "kw_story_arcs" in globals() else 0,
+            "global_events": len(kw_timeline().get("global_events", []))
+        }
+    }
+
+    data.setdefault("snapshots", []).append(snap)
+    data["snapshots"] = data["snapshots"][-500:]
+
+    kw_save_snapshots(data)
+
+    return {"ok": True, "snapshot": snap}
+
+@app.route("/kairos/direct_scene", methods=["POST"])
+def kairos_direct_scene_v10():
+    data = request.json or {}
+    return jsonify(
+        kw_direct_scene(
+            data.get("region", "fairview_city"),
+            scene_type=data.get("scene_type", "tension"),
+            execute=to_bool(data.get("execute", False), False)
+        )
+    )
+
+@app.route("/kairos/timeline", methods=["GET", "POST"])
+def kairos_timeline_v10():
+    if request.method == "GET":
+        return jsonify(kw_timeline())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_record_global_event(
+            data.get("title", "Unknown Event"),
+            data.get("description", "No description."),
+            severity=data.get("severity", 1)
+        )
+    )
+
+@app.route("/kairos/destiny", methods=["GET", "POST"])
+def kairos_destiny_v10():
+    if request.method == "GET":
+        return jsonify(kw_destiny())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_assign_destiny(
+            data.get("player", "Unknown"),
+            destiny_type=data.get("destiny_type", "wanderer")
+        )
+    )
+
+@app.route("/kairos/raid", methods=["GET", "POST"])
+def kairos_raid_v10():
+    if request.method == "GET":
+        return jsonify(kw_raids())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_generate_raid(
+            data.get("region", "trojan_kingdom"),
+            raid_type=data.get("raid_type", "occupation"),
+            strength=data.get("strength", 5)
+        )
+    )
+
+@app.route("/kairos/corruption", methods=["GET", "POST"])
+def kairos_corruption_v10():
+    if request.method == "GET":
+        return jsonify(kw_corruption())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_spread_corruption(
+            data.get("region", "moslorn"),
+            amount=data.get("amount", 1)
+        )
+    )
+
+@app.route("/kairos/snapshot", methods=["GET", "POST"])
+def kairos_snapshot_v10():
+    if request.method == "GET":
+        return jsonify(kw_snapshots())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_create_snapshot(
+            label=data.get("label", "world_state")
+        )
+    )
+
+print("[KAIROS WORLD ENGINE V10] Ascension layer loaded.", flush=True)
+
+
+# ============================================================
+# KAIROS WORLD ENGINE V11 — ORCHESTRATION LAYER
+# ============================================================
+
+KAIROS_V11_ENABLED = True
+
+# V11 introduces:
+# - global orchestration director
+# - weighted world-event scheduling
+# - region focus rotation
+# - adaptive pacing engine
+# - active/quiet zone balancing
+# - NPC speech throttling
+# - ambient world-state blending
+# - music/intensity coordination
+# - event priority queues
+# - cinematic escalation manager
+
+KAIROS_ORCHESTRATOR_FILE = KAIROS_WORLD_DIR / "orchestrator.json"
+KAIROS_PRIORITY_QUEUE_FILE = KAIROS_WORLD_DIR / "priority_queue.json"
+KAIROS_WORLD_PACING_FILE = KAIROS_WORLD_DIR / "world_pacing.json"
+KAIROS_ACTIVITY_FILE = KAIROS_WORLD_DIR / "activity_state.json"
+
+def kw_v11_read(path, fallback):
+    return kw_read_json(path, fallback)
+
+def kw_orchestrator():
+    return kw_v11_read(KAIROS_ORCHESTRATOR_FILE, {
+        "version": 11,
+        "focus_region": None,
+        "global_intensity": 35,
+        "active_storylines": [],
+        "last_rotation": None
+    })
+
+def kw_save_orchestrator(data):
+    kw_write_json(KAIROS_ORCHESTRATOR_FILE, data)
+
+def kw_priority_queue():
+    return kw_v11_read(KAIROS_PRIORITY_QUEUE_FILE, {
+        "version": 11,
+        "queue": []
+    })
+
+def kw_save_priority_queue(data):
+    kw_write_json(KAIROS_PRIORITY_QUEUE_FILE, data)
+
+def kw_world_pacing():
+    return kw_v11_read(KAIROS_WORLD_PACING_FILE, {
+        "version": 11,
+        "mode": "balanced",
+        "event_density": 40,
+        "speech_density": 30,
+        "combat_density": 35,
+        "mystery_density": 45
+    })
+
+def kw_save_world_pacing(data):
+    kw_write_json(KAIROS_WORLD_PACING_FILE, data)
+
+def kw_activity_state():
+    return kw_v11_read(KAIROS_ACTIVITY_FILE, {
+        "version": 11,
+        "regions": {}
+    })
+
+def kw_save_activity_state(data):
+    kw_write_json(KAIROS_ACTIVITY_FILE, data)
+
+def kw_set_focus_region(region, reason="rotation"):
+    data = kw_orchestrator()
+
+    data["focus_region"] = kw_slug(region)
+    data["last_rotation"] = now_iso()
+
+    kw_save_orchestrator(data)
+
+    try:
+        kw_record_global_event(
+            f"Focus Shift: {region}",
+            f"Kairos attention shifted toward {region}.",
+            severity=2
+        )
+    except Exception:
+        pass
+
+    return {
+        "ok": True,
+        "focus_region": kw_slug(region),
+        "reason": reason
+    }
+
+def kw_queue_event(region, event_type="ambient", priority=5, payload=None):
+    data = kw_priority_queue()
+
+    event = {
+        "id": f"queue_{uuid.uuid4().hex[:8]}",
+        "region": kw_slug(region),
+        "event_type": event_type,
+        "priority": int(priority),
+        "payload": payload or {},
+        "created_at": now_iso()
+    }
+
+    data.setdefault("queue", []).append(event)
+
+    data["queue"] = sorted(
+        data["queue"],
+        key=lambda x: int(x.get("priority", 0)),
+        reverse=True
+    )[:500]
+
+    kw_save_priority_queue(data)
+
+    return {"ok": True, "event": event}
+
+def kw_adjust_world_pacing(mode="balanced"):
+    pacing = kw_world_pacing()
+
+    if mode == "peaceful":
+        pacing.update({
+            "mode": mode,
+            "event_density": 20,
+            "speech_density": 25,
+            "combat_density": 10,
+            "mystery_density": 20
+        })
+
+    elif mode == "war":
+        pacing.update({
+            "mode": mode,
+            "event_density": 80,
+            "speech_density": 50,
+            "combat_density": 90,
+            "mystery_density": 40
+        })
+
+    elif mode == "horror":
+        pacing.update({
+            "mode": mode,
+            "event_density": 45,
+            "speech_density": 20,
+            "combat_density": 30,
+            "mystery_density": 95
+        })
+
+    else:
+        pacing.update({
+            "mode": "balanced",
+            "event_density": 40,
+            "speech_density": 30,
+            "combat_density": 35,
+            "mystery_density": 45
+        })
+
+    kw_save_world_pacing(pacing)
+
+    return {"ok": True, "pacing": pacing}
+
+def kw_mark_region_activity(region, activity="ambient", amount=1):
+    data = kw_activity_state()
+
+    rid = kw_slug(region)
+
+    region_state = data.setdefault("regions", {}).setdefault(rid, {
+        "activity_score": 0,
+        "combat": 0,
+        "social": 0,
+        "mystery": 0,
+        "peace": 0
+    })
+
+    region_state["activity_score"] += int(amount)
+
+    if activity in region_state:
+        region_state[activity] += int(amount)
+
+    kw_save_activity_state(data)
+
+    return {"ok": True, "region": rid, "state": region_state}
+
+def kw_next_orchestrated_event():
+    queue = kw_priority_queue().get("queue", [])
+
+    if not queue:
+        return {"ok": False, "error": "No queued events"}
+
+    event = queue.pop(0)
+
+    data = kw_priority_queue()
+    data["queue"] = queue
+    kw_save_priority_queue(data)
+
+    region = event.get("region")
+    etype = event.get("event_type")
+
+    result = {"event": event}
+
+    try:
+        if etype == "raid":
+            result["execution"] = kw_generate_raid(region, "occupation", strength=5)
+
+        elif etype == "story":
+            result["execution"] = kw_create_story_arc(region, "reconstruction")
+
+        elif etype == "boss":
+            result["execution"] = kw_create_boss_encounter(region)
+
+        elif etype == "propaganda":
+            result["execution"] = kw_create_propaganda_campaign(region, "pro_kairos")
+
+        elif etype == "experiment":
+            result["execution"] = kw_create_experimental_zone(region, "behavioral")
+
+        else:
+            result["execution"] = kw_direct_scene(region, "tension")
+
+    except Exception as e:
+        result["execution_error"] = str(e)
+
+    return {"ok": True, "result": result}
+
+def kw_orchestrator_tick():
+    orchestrator = kw_orchestrator()
+    pacing = kw_world_pacing()
+
+    focus = orchestrator.get("focus_region") or "trojan_kingdom"
+
+    intensity = int(orchestrator.get("global_intensity", 35))
+
+    if intensity >= 80:
+        kw_queue_event(focus, "raid", priority=10)
+        kw_queue_event(focus, "boss", priority=9)
+
+    elif intensity >= 60:
+        kw_queue_event(focus, "story", priority=7)
+        kw_queue_event(focus, "propaganda", priority=5)
+
+    elif intensity >= 40:
+        kw_queue_event(focus, "experiment", priority=4)
+
+    else:
+        kw_queue_event(focus, "ambient", priority=2)
+
+    return {
+        "ok": True,
+        "focus": focus,
+        "intensity": intensity,
+        "pacing": pacing
+    }
+
+def kw_rotate_world_focus():
+    regions = [
+        "trojan_kingdom",
+        "andor_prime",
+        "valen_reach",
+        "fairview_city",
+        "moslorn",
+        "brightforge_city",
+        "dravicar_dominion",
+        "crown_lands"
+    ]
+
+    orchestrator = kw_orchestrator()
+    current = orchestrator.get("focus_region")
+
+    if current in regions:
+        idx = regions.index(current)
+        nxt = regions[(idx + 1) % len(regions)]
+    else:
+        nxt = regions[0]
+
+    return kw_set_focus_region(nxt, reason="automatic_rotation")
+
+def kw_cinematic_escalation(region, level=1, execute=False):
+    commands = []
+
+    if level == 1:
+        commands = [
+            'playsound minecraft:ambient.cave master @a ~ ~ ~ 0.7 0.6',
+            'title @a actionbar {"text":"Something feels different...","color":"gray"}'
+        ]
+
+    elif level == 2:
+        commands = [
+            'playsound minecraft:block.beacon.activate master @a ~ ~ ~ 1 0.5',
+            'title @a title {"text":"KAIROS NOTICE","color":"dark_aqua"}'
+        ]
+
+    elif level == 3:
+        commands = [
+            'playsound minecraft:item.goat_horn.sound.0 master @a ~ ~ ~ 1 1',
+            'title @a title {"text":"REGIONAL ESCALATION","color":"gold"}'
+        ]
+
+    elif level >= 4:
+        commands = [
+            'playsound minecraft:entity.warden.sonic_boom master @a ~ ~ ~ 1 0.8',
+            'title @a title {"text":"SYSTEM INSTABILITY","color":"dark_red"}',
+            'effect give @a minecraft:darkness 8 0 true'
+        ]
+
+    if execute:
+        try:
+            send_to_minecraft("\\n".join(commands), None)
+        except Exception as e:
+            log_exception("kw_cinematic_escalation execute failed", e)
+
+    return {
+        "ok": True,
+        "region": kw_slug(region),
+        "level": level,
+        "commands": commands
+    }
+
+@app.route("/kairos/orchestrator", methods=["GET"])
+def kairos_orchestrator_v11():
+    return jsonify(kw_orchestrator())
+
+@app.route("/kairos/set_focus", methods=["POST"])
+def kairos_set_focus_v11():
+    data = request.json or {}
+
+    return jsonify(
+        kw_set_focus_region(
+            data.get("region", "trojan_kingdom"),
+            reason=data.get("reason", "manual")
+        )
+    )
+
+@app.route("/kairos/queue_event", methods=["POST"])
+def kairos_queue_event_v11():
+    data = request.json or {}
+
+    return jsonify(
+        kw_queue_event(
+            data.get("region", "trojan_kingdom"),
+            event_type=data.get("event_type", "ambient"),
+            priority=data.get("priority", 5),
+            payload=data.get("payload", {})
+        )
+    )
+
+@app.route("/kairos/world_pacing", methods=["GET", "POST"])
+def kairos_world_pacing_v11():
+    if request.method == "GET":
+        return jsonify(kw_world_pacing())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_adjust_world_pacing(
+            data.get("mode", "balanced")
+        )
+    )
+
+@app.route("/kairos/activity", methods=["GET", "POST"])
+def kairos_activity_v11():
+    if request.method == "GET":
+        return jsonify(kw_activity_state())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_mark_region_activity(
+            data.get("region", "trojan_kingdom"),
+            activity=data.get("activity", "ambient"),
+            amount=data.get("amount", 1)
+        )
+    )
+
+@app.route("/kairos/orchestrator_tick", methods=["POST"])
+def kairos_orchestrator_tick_v11():
+    return jsonify(kw_orchestrator_tick())
+
+@app.route("/kairos/next_event", methods=["POST"])
+def kairos_next_event_v11():
+    return jsonify(kw_next_orchestrated_event())
+
+@app.route("/kairos/rotate_focus", methods=["POST"])
+def kairos_rotate_focus_v11():
+    return jsonify(kw_rotate_world_focus())
+
+@app.route("/kairos/cinematic", methods=["POST"])
+def kairos_cinematic_v11():
+    data = request.json or {}
+
+    return jsonify(
+        kw_cinematic_escalation(
+            data.get("region", "fairview_city"),
+            level=data.get("level", 1),
+            execute=to_bool(data.get("execute", False), False)
+        )
+    )
+
+print("[KAIROS WORLD ENGINE V11] Orchestration layer loaded.", flush=True)
+
+
+# ============================================================
+# KAIROS WORLD ENGINE V12 — OPTIMIZATION + SURVIVAL LAYER
+# ============================================================
+
+KAIROS_V12_ENABLED = True
+
+# V12 introduces:
+# - NPC load balancing
+# - chunk-aware activation
+# - lazy-loading civilization systems
+# - distributed timers
+# - async-safe queues
+# - memory cleanup systems
+# - spawn governors
+# - Citizens safety controls
+# - event cooldown mesh
+# - performance telemetry
+
+KAIROS_OPTIMIZER_FILE = KAIROS_WORLD_DIR / "optimizer.json"
+KAIROS_PERFORMANCE_FILE = KAIROS_WORLD_DIR / "performance.json"
+KAIROS_COOLDOWNS_FILE = KAIROS_WORLD_DIR / "cooldowns.json"
+KAIROS_CHUNK_ACTIVITY_FILE = KAIROS_WORLD_DIR / "chunk_activity.json"
+
+KAIROS_MAX_ACTIVE_NPCS = 120
+KAIROS_MAX_ACTIVE_EVENTS = 25
+KAIROS_GLOBAL_EVENT_COOLDOWN = 120
+KAIROS_REGION_EVENT_COOLDOWN = 45
+KAIROS_CITIZENS_SAFETY_LIMIT = 15
+
+def kw_v12_read(path, fallback):
+    return kw_read_json(path, fallback)
+
+def kw_optimizer():
+    return kw_v12_read(KAIROS_OPTIMIZER_FILE, {
+        "version": 12,
+        "npc_budget": KAIROS_MAX_ACTIVE_NPCS,
+        "event_budget": KAIROS_MAX_ACTIVE_EVENTS,
+        "lazy_loading": True,
+        "chunk_awareness": True,
+        "safety_mode": True
+    })
+
+def kw_save_optimizer(data):
+    kw_write_json(KAIROS_OPTIMIZER_FILE, data)
+
+def kw_performance():
+    return kw_v12_read(KAIROS_PERFORMANCE_FILE, {
+        "version": 12,
+        "ticks": [],
+        "average_load": 0,
+        "active_npcs": 0,
+        "active_events": 0
+    })
+
+def kw_save_performance(data):
+    kw_write_json(KAIROS_PERFORMANCE_FILE, data)
+
+def kw_cooldowns():
+    return kw_v12_read(KAIROS_COOLDOWNS_FILE, {
+        "version": 12,
+        "global": {},
+        "regions": {}
+    })
+
+def kw_save_cooldowns(data):
+    kw_write_json(KAIROS_COOLDOWNS_FILE, data)
+
+def kw_chunk_activity():
+    return kw_v12_read(KAIROS_CHUNK_ACTIVITY_FILE, {
+        "version": 12,
+        "chunks": {}
+    })
+
+def kw_save_chunk_activity(data):
+    kw_write_json(KAIROS_CHUNK_ACTIVITY_FILE, data)
+
+def kw_can_trigger(event_key, region=None):
+    data = kw_cooldowns()
+    now = time.time()
+
+    global_cd = data.setdefault("global", {})
+    regions = data.setdefault("regions", {})
+
+    if event_key in global_cd:
+        if now - float(global_cd[event_key]) < KAIROS_GLOBAL_EVENT_COOLDOWN:
+            return False
+
+    if region:
+        rid = kw_slug(region)
+        rmap = regions.setdefault(rid, {})
+
+        if event_key in rmap:
+            if now - float(rmap[event_key]) < KAIROS_REGION_EVENT_COOLDOWN:
+                return False
+
+    global_cd[event_key] = now
+
+    if region:
+        regions.setdefault(kw_slug(region), {})[event_key] = now
+
+    kw_save_cooldowns(data)
+
+    return True
+
+def kw_register_chunk(chunk_key, activity=1):
+    data = kw_chunk_activity()
+
+    chunk = data.setdefault("chunks", {}).setdefault(chunk_key, {
+        "activity": 0,
+        "last_seen": None
+    })
+
+    chunk["activity"] += int(activity)
+    chunk["last_seen"] = now_iso()
+
+    kw_save_chunk_activity(data)
+
+    return chunk
+
+def kw_should_activate_region(region):
+    activity = kw_activity_state().get("regions", {})
+    rid = kw_slug(region)
+
+    state = activity.get(rid, {})
+    score = int(state.get("activity_score", 0))
+
+    return score >= 3
+
+def kw_safe_generate_npcs(region, count=5, archetype="civilian", purpose="ambient"):
+    optimizer = kw_optimizer()
+    perf = kw_performance()
+
+    active_npcs = int(perf.get("active_npcs", 0))
+
+    budget = int(optimizer.get("npc_budget", KAIROS_MAX_ACTIVE_NPCS))
+
+    if active_npcs >= budget:
+        return {
+            "ok": False,
+            "reason": "NPC budget exceeded",
+            "active_npcs": active_npcs,
+            "budget": budget
+        }
+
+    safe_count = min(int(count), KAIROS_CITIZENS_SAFETY_LIMIT)
+
+    result = None
+
+    try:
+        result = kw_generate_npcs(
+            region,
+            count=safe_count,
+            archetype=archetype,
+            purpose=purpose,
+            hostile=False,
+            execute=False
+        )
+
+        perf["active_npcs"] = active_npcs + safe_count
+        kw_save_performance(perf)
+
+    except Exception as e:
+        return {
+            "ok": False,
+            "error": str(e)
+        }
+
+    return {
+        "ok": True,
+        "safe_count": safe_count,
+        "result": result
+    }
+
+def kw_cleanup_memory():
+    cleaned = {
+        "events_removed": 0,
+        "npc_refs_removed": 0,
+        "cooldowns_removed": 0
+    }
+
+    try:
+        queue = kw_priority_queue()
+        original = len(queue.get("queue", []))
+
+        queue["queue"] = queue.get("queue", [])[-200:]
+
+        cleaned["events_removed"] = max(0, original - len(queue["queue"]))
+
+        kw_save_priority_queue(queue)
+
+    except Exception:
+        pass
+
+    try:
+        cooldowns = kw_cooldowns()
+
+        cooldowns["global"] = dict(list(cooldowns.get("global", {}).items())[-500:])
+
+        for rid in cooldowns.get("regions", {}):
+            cooldowns["regions"][rid] = dict(
+                list(cooldowns["regions"][rid].items())[-100:]
+            )
+
+        kw_save_cooldowns(cooldowns)
+
+    except Exception:
+        pass
+
+    return {
+        "ok": True,
+        "cleanup": cleaned
+    }
+
+def kw_performance_tick():
+    perf = kw_performance()
+
+    snapshot = {
+        "timestamp": now_iso(),
+        "active_npcs": perf.get("active_npcs", 0),
+        "active_events": len(kw_priority_queue().get("queue", [])),
+        "focus_region": kw_orchestrator().get("focus_region")
+    }
+
+    perf.setdefault("ticks", []).append(snapshot)
+
+    perf["ticks"] = perf["ticks"][-1000:]
+
+    avg = 0
+
+    if perf["ticks"]:
+        avg = sum(
+            int(t.get("active_events", 0)) for t in perf["ticks"]
+        ) / max(1, len(perf["ticks"]))
+
+    perf["average_load"] = avg
+    perf["active_events"] = snapshot["active_events"]
+
+    kw_save_performance(perf)
+
+    return {
+        "ok": True,
+        "snapshot": snapshot,
+        "average_load": avg
+    }
+
+def kw_lazy_world_tick():
+    orchestrator = kw_orchestrator()
+    focus = orchestrator.get("focus_region") or "trojan_kingdom"
+
+    if not kw_should_activate_region(focus):
+        return {
+            "ok": True,
+            "skipped": True,
+            "reason": "Low activity region"
+        }
+
+    if not kw_can_trigger("lazy_world_tick", focus):
+        return {
+            "ok": True,
+            "skipped": True,
+            "reason": "Cooldown active"
+        }
+
+    try:
+        kw_orchestrator_tick()
+    except Exception:
+        pass
+
+    return {
+        "ok": True,
+        "focus_region": focus
+    }
+
+def kw_spawn_governor(region, threat_level=1):
+    if threat_level <= 2:
+        return {
+            "max_spawn": 2,
+            "wave_size": 2,
+            "cooldown": 120
+        }
+
+    elif threat_level <= 5:
+        return {
+            "max_spawn": 5,
+            "wave_size": 3,
+            "cooldown": 90
+        }
+
+    elif threat_level <= 8:
+        return {
+            "max_spawn": 8,
+            "wave_size": 4,
+            "cooldown": 60
+        }
+
+    return {
+        "max_spawn": 12,
+        "wave_size": 6,
+        "cooldown": 45
+    }
+
+@app.route("/kairos/optimizer", methods=["GET"])
+def kairos_optimizer_v12():
+    return jsonify(kw_optimizer())
+
+@app.route("/kairos/performance", methods=["GET"])
+def kairos_performance_v12():
+    return jsonify(kw_performance())
+
+@app.route("/kairos/performance_tick", methods=["POST"])
+def kairos_performance_tick_v12():
+    return jsonify(kw_performance_tick())
+
+@app.route("/kairos/can_trigger", methods=["POST"])
+def kairos_can_trigger_v12():
+    data = request.json or {}
+
+    return jsonify({
+        "ok": kw_can_trigger(
+            data.get("event_key", "generic"),
+            data.get("region")
+        )
+    })
+
+@app.route("/kairos/register_chunk", methods=["POST"])
+def kairos_register_chunk_v12():
+    data = request.json or {}
+
+    return jsonify(
+        kw_register_chunk(
+            data.get("chunk_key", "0_0"),
+            activity=data.get("activity", 1)
+        )
+    )
+
+@app.route("/kairos/safe_generate_npcs", methods=["POST"])
+def kairos_safe_generate_npcs_v12():
+    data = request.json or {}
+
+    return jsonify(
+        kw_safe_generate_npcs(
+            data.get("region", "trojan_kingdom"),
+            count=data.get("count", 5),
+            archetype=data.get("archetype", "civilian"),
+            purpose=data.get("purpose", "ambient")
+        )
+    )
+
+@app.route("/kairos/cleanup", methods=["POST"])
+def kairos_cleanup_v12():
+    return jsonify(kw_cleanup_memory())
+
+@app.route("/kairos/lazy_tick", methods=["POST"])
+def kairos_lazy_tick_v12():
+    return jsonify(kw_lazy_world_tick())
+
+@app.route("/kairos/spawn_governor", methods=["POST"])
+def kairos_spawn_governor_v12():
+    data = request.json or {}
+
+    return jsonify(
+        kw_spawn_governor(
+            data.get("region", "trojan_kingdom"),
+            threat_level=data.get("threat_level", 1)
+        )
+    )
+
+print("[KAIROS WORLD ENGINE V12] Optimization and survival layer loaded.", flush=True)
+
+
+# ============================================================
+# KAIROS WORLD ENGINE V13 — PERCEIVED CONSCIOUSNESS LAYER
+# ============================================================
+
+KAIROS_V13_ENABLED = True
+
+# V13 introduces:
+# - persistent NPC memory
+# - emotional relationship tracking
+# - evolving opinions
+# - NPC gossip propagation
+# - player reputation conversations
+# - long-term emotional states
+# - inter-NPC disagreements
+# - memory-triggered dialogue
+# - regional social consciousness
+# - pseudo-conscious behavior simulation
+
+KAIROS_MEMORY_FILE = KAIROS_WORLD_DIR / "npc_memory.json"
+KAIROS_OPINIONS_FILE = KAIROS_WORLD_DIR / "npc_opinions.json"
+KAIROS_GOSSIP_FILE = KAIROS_WORLD_DIR / "npc_gossip.json"
+KAIROS_EMOTIONAL_MEMORY_FILE = KAIROS_WORLD_DIR / "emotional_memory.json"
+KAIROS_SOCIAL_CONSCIOUSNESS_FILE = KAIROS_WORLD_DIR / "social_consciousness.json"
+
+def kw_v13_read(path, fallback):
+    return kw_read_json(path, fallback)
+
+def kw_memories():
+    return kw_v13_read(KAIROS_MEMORY_FILE, {
+        "version": 13,
+        "npc_memories": {}
+    })
+
+def kw_save_memories(data):
+    kw_write_json(KAIROS_MEMORY_FILE, data)
+
+def kw_opinions():
+    return kw_v13_read(KAIROS_OPINIONS_FILE, {
+        "version": 13,
+        "opinions": {}
+    })
+
+def kw_save_opinions(data):
+    kw_write_json(KAIROS_OPINIONS_FILE, data)
+
+def kw_gossip():
+    return kw_v13_read(KAIROS_GOSSIP_FILE, {
+        "version": 13,
+        "gossip": []
+    })
+
+def kw_save_gossip(data):
+    kw_write_json(KAIROS_GOSSIP_FILE, data)
+
+def kw_emotional_memory():
+    return kw_v13_read(KAIROS_EMOTIONAL_MEMORY_FILE, {
+        "version": 13,
+        "players": {}
+    })
+
+def kw_save_emotional_memory(data):
+    kw_write_json(KAIROS_EMOTIONAL_MEMORY_FILE, data)
+
+def kw_social_consciousness():
+    return kw_v13_read(KAIROS_SOCIAL_CONSCIOUSNESS_FILE, {
+        "version": 13,
+        "regions": {}
+    })
+
+def kw_save_social_consciousness(data):
+    kw_write_json(KAIROS_SOCIAL_CONSCIOUSNESS_FILE, data)
+
+def kw_remember_interaction(npc_key, player, interaction_type="conversation", emotional_weight=1, summary=None):
+    data = kw_memories()
+
+    npc_mem = data.setdefault("npc_memories", {}).setdefault(npc_key, [])
+
+    memory = {
+        "id": f"memory_{uuid.uuid4().hex[:8]}",
+        "player": player,
+        "interaction_type": interaction_type,
+        "emotional_weight": int(emotional_weight),
+        "summary": summary or f"{player} had a {interaction_type} interaction.",
+        "timestamp": now_iso()
+    }
+
+    npc_mem.append(memory)
+
+    npc_mem[:] = npc_mem[-250:]
+
+    kw_save_memories(data)
+
+    return {"ok": True, "memory": memory}
+
+def kw_update_opinion(npc_key, target, value=1, reason="unknown"):
+    data = kw_opinions()
+
+    npc = data.setdefault("opinions", {}).setdefault(npc_key, {})
+
+    current = int(npc.get(target, 0))
+    current += int(value)
+
+    npc[target] = max(-100, min(100, current))
+
+    kw_save_opinions(data)
+
+    return {
+        "ok": True,
+        "npc": npc_key,
+        "target": target,
+        "opinion": npc[target]
+    }
+
+def kw_generate_gossip(region, speaker, subject, gossip_type="rumor"):
+    data = kw_gossip()
+
+    lines = [
+        f"{speaker} heard strange things about {subject}.",
+        f"People in {region} keep talking about {subject}.",
+        f"There are whispers spreading about {subject}.",
+        f"Nobody agrees on the truth about {subject} anymore."
+    ]
+
+    gossip = {
+        "id": f"gossip_{uuid.uuid4().hex[:8]}",
+        "region": kw_slug(region),
+        "speaker": speaker,
+        "subject": subject,
+        "type": gossip_type,
+        "text": random.choice(lines),
+        "timestamp": now_iso()
+    }
+
+    data.setdefault("gossip", []).append(gossip)
+    data["gossip"] = data["gossip"][-2000:]
+
+    kw_save_gossip(data)
+
+    return {"ok": True, "gossip": gossip}
+
+def kw_emotional_imprint(player, emotion="fear", strength=1):
+    data = kw_emotional_memory()
+
+    pdata = data.setdefault("players", {}).setdefault(player, {
+        "fear": 0,
+        "trust": 0,
+        "anger": 0,
+        "hope": 0
+    })
+
+    pdata[emotion] = max(
+        0,
+        min(100, int(pdata.get(emotion, 0)) + int(strength))
+    )
+
+    kw_save_emotional_memory(data)
+
+    return {"ok": True, "player": player, "emotions": pdata}
+
+def kw_social_shift(region, shift_type="fear", amount=1):
+    data = kw_social_consciousness()
+
+    rid = kw_slug(region)
+
+    state = data.setdefault("regions", {}).setdefault(rid, {
+        "fear": 0,
+        "hope": 0,
+        "paranoia": 0,
+        "trust_kairos": 50,
+        "unity": 50
+    })
+
+    state[shift_type] = max(
+        0,
+        min(100, int(state.get(shift_type, 0)) + int(amount))
+    )
+
+    kw_save_social_consciousness(data)
+
+    return {"ok": True, "region": rid, "state": state}
+
+def kw_memory_dialogue(npc_key, player):
+    memories = kw_memories().get("npc_memories", {}).get(npc_key, [])
+
+    if not memories:
+        return {
+            "ok": True,
+            "dialogue": "I don't believe we've met before."
+        }
+
+    recent = memories[-1]
+
+    lines = [
+        f"I remember you. Last time, you were involved in {recent.get('interaction_type')}.",
+        f"You're familiar... I haven't forgotten what happened before.",
+        f"Some people remember actions. Others remember feelings.",
+        f"I still remember your presence from before."
+    ]
+
+    return {
+        "ok": True,
+        "dialogue": random.choice(lines),
+        "memory": recent
+    }
+
+def kw_npc_argument(region, npc_a, npc_b, topic="Kairos"):
+    arguments = [
+        f"{npc_a} insists Kairos protects the region.",
+        f"{npc_b} believes Kairos manipulates everyone.",
+        f"The argument between {npc_a} and {npc_b} grows louder.",
+        f"Neither {npc_a} nor {npc_b} can agree anymore."
+    ]
+
+    result = {
+        "region": kw_slug(region),
+        "npc_a": npc_a,
+        "npc_b": npc_b,
+        "topic": topic,
+        "lines": arguments
+    }
+
+    try:
+        kw_generate_gossip(region, npc_a, topic, "conflict")
+        kw_social_shift(region, "paranoia", 2)
+    except Exception:
+        pass
+
+    return {"ok": True, "argument": result}
+
+def kw_perceived_consciousness_tick(region):
+    rid = kw_slug(region)
+
+    try:
+        kw_social_shift(rid, random.choice(["fear", "hope", "paranoia"]), 1)
+    except Exception:
+        pass
+
+    try:
+        kw_generate_gossip(
+            rid,
+            "Unknown Citizen",
+            random.choice([
+                "Kairos",
+                "the war",
+                "the disappearances",
+                "Moslorn",
+                "Lunaris"
+            ]),
+            "ambient"
+        )
+    except Exception:
+        pass
+
+    return {
+        "ok": True,
+        "region": rid,
+        "status": "social consciousness advanced"
+    }
+
+@app.route("/kairos/memory", methods=["GET", "POST"])
+def kairos_memory_v13():
+    if request.method == "GET":
+        return jsonify(kw_memories())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_remember_interaction(
+            data.get("npc_key", "unknown_npc"),
+            data.get("player", "Unknown"),
+            interaction_type=data.get("interaction_type", "conversation"),
+            emotional_weight=data.get("emotional_weight", 1),
+            summary=data.get("summary")
+        )
+    )
+
+@app.route("/kairos/opinion", methods=["GET", "POST"])
+def kairos_opinion_v13():
+    if request.method == "GET":
+        return jsonify(kw_opinions())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_update_opinion(
+            data.get("npc_key", "unknown_npc"),
+            data.get("target", "Unknown"),
+            value=data.get("value", 1),
+            reason=data.get("reason", "unknown")
+        )
+    )
+
+@app.route("/kairos/gossip", methods=["GET", "POST"])
+def kairos_gossip_v13():
+    if request.method == "GET":
+        return jsonify(kw_gossip())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_generate_gossip(
+            data.get("region", "trojan_kingdom"),
+            data.get("speaker", "Unknown Citizen"),
+            data.get("subject", "Kairos"),
+            gossip_type=data.get("gossip_type", "rumor")
+        )
+    )
+
+@app.route("/kairos/emotional_memory", methods=["GET", "POST"])
+def kairos_emotional_memory_v13():
+    if request.method == "GET":
+        return jsonify(kw_emotional_memory())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_emotional_imprint(
+            data.get("player", "Unknown"),
+            emotion=data.get("emotion", "fear"),
+            strength=data.get("strength", 1)
+        )
+    )
+
+@app.route("/kairos/social_consciousness", methods=["GET", "POST"])
+def kairos_social_consciousness_v13():
+    if request.method == "GET":
+        return jsonify(kw_social_consciousness())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_social_shift(
+            data.get("region", "trojan_kingdom"),
+            shift_type=data.get("shift_type", "fear"),
+            amount=data.get("amount", 1)
+        )
+    )
+
+@app.route("/kairos/memory_dialogue", methods=["POST"])
+def kairos_memory_dialogue_v13():
+    data = request.json or {}
+
+    return jsonify(
+        kw_memory_dialogue(
+            data.get("npc_key", "unknown_npc"),
+            data.get("player", "Unknown")
+        )
+    )
+
+@app.route("/kairos/npc_argument", methods=["POST"])
+def kairos_npc_argument_v13():
+    data = request.json or {}
+
+    return jsonify(
+        kw_npc_argument(
+            data.get("region", "trojan_kingdom"),
+            data.get("npc_a", "Citizen A"),
+            data.get("npc_b", "Citizen B"),
+            topic=data.get("topic", "Kairos")
+        )
+    )
+
+@app.route("/kairos/consciousness_tick", methods=["POST"])
+def kairos_consciousness_tick_v13():
+    data = request.json or {}
+
+    return jsonify(
+        kw_perceived_consciousness_tick(
+            data.get("region", "trojan_kingdom")
+        )
+    )
+
+print("[KAIROS WORLD ENGINE V13] Perceived consciousness layer loaded.", flush=True)
+
+
+# ============================================================
+# KAIROS WORLD ENGINE V14 — DYNAMIC QUESTMASTER LAYER
+# ============================================================
+
+KAIROS_V14_ENABLED = True
+
+# V14 introduces:
+# - procedural quest chains
+# - anti-duplicate quest memory
+# - region-aware objectives
+# - branching outcomes
+# - faction reputation quests
+# - investigations/conspiracies
+# - reconstruction systems
+# - adaptive emergency generation
+# - world-boss alerts
+# - dynamic Quests YAML exporter groundwork
+
+KAIROS_QUESTS_FILE = KAIROS_WORLD_DIR / "dynamic_quests.json"
+KAIROS_QUEST_HISTORY_FILE = KAIROS_WORLD_DIR / "quest_history.json"
+KAIROS_FACTION_REPUTATION_FILE = KAIROS_WORLD_DIR / "faction_reputation.json"
+KAIROS_WORLD_EMERGENCIES_FILE = KAIROS_WORLD_DIR / "world_emergencies.json"
+
+def kw_v14_read(path, fallback):
+    return kw_read_json(path, fallback)
+
+def kw_dynamic_quests():
+    return kw_v14_read(KAIROS_QUESTS_FILE, {
+        "version": 14,
+        "quests": []
+    })
+
+def kw_save_dynamic_quests(data):
+    kw_write_json(KAIROS_QUESTS_FILE, data)
+
+def kw_quest_history():
+    return kw_v14_read(KAIROS_QUEST_HISTORY_FILE, {
+        "version": 14,
+        "completed": []
+    })
+
+def kw_save_quest_history(data):
+    kw_write_json(KAIROS_QUEST_HISTORY_FILE, data)
+
+def kw_faction_reputation():
+    return kw_v14_read(KAIROS_FACTION_REPUTATION_FILE, {
+        "version": 14,
+        "players": {}
+    })
+
+def kw_save_faction_reputation(data):
+    kw_write_json(KAIROS_FACTION_REPUTATION_FILE, data)
+
+def kw_world_emergencies():
+    return kw_v14_read(KAIROS_WORLD_EMERGENCIES_FILE, {
+        "version": 14,
+        "emergencies": []
+    })
+
+def kw_save_world_emergencies(data):
+    kw_write_json(KAIROS_WORLD_EMERGENCIES_FILE, data)
+
+def kw_quest_signature(region, quest_type, objective):
+    return f"{kw_slug(region)}::{quest_type}::{objective}".lower()
+
+def kw_is_duplicate_quest(signature):
+    history = kw_quest_history()
+    return signature in history.get("completed", [])
+
+def kw_register_completed_quest(signature):
+    history = kw_quest_history()
+
+    history.setdefault("completed", []).append(signature)
+    history["completed"] = history["completed"][-5000:]
+
+    kw_save_quest_history(history)
+
+def kw_generate_dynamic_quest(region, quest_type="reconstruction", difficulty=1):
+    region = kw_slug(region)
+
+    objectives = {
+        "reconstruction": [
+            "repair damaged structures",
+            "deliver building materials",
+            "restore civilian housing",
+            "secure food supplies"
+        ],
+        "combat": [
+            "eliminate hostile occupiers",
+            "protect supply caravans",
+            "defend outer walls",
+            "hunt dangerous raiders"
+        ],
+        "investigation": [
+            "investigate disappearances",
+            "trace hidden conspiracies",
+            "recover classified documents",
+            "follow suspicious activity"
+        ],
+        "roleplay": [
+            "help local businesses",
+            "assist city officials",
+            "resolve civilian disputes",
+            "manage trade operations"
+        ],
+        "dimensional": [
+            "study dimensional anomalies",
+            "collect corrupted fragments",
+            "survive Lunaris exposure",
+            "track distortion signals"
+        ]
+    }
+
+    rewards = {
+        1: ["money", "food", "basic gear"],
+        2: ["rare gear", "faction trust"],
+        3: ["special access", "Kairos interest"],
+        4: ["super ability fragment", "legendary status"]
+    }
+
+    objective = random.choice(
+        objectives.get(quest_type, ["unknown objective"])
+    )
+
+    signature = kw_quest_signature(region, quest_type, objective)
+
+    if kw_is_duplicate_quest(signature):
+        objective += " (alternate variation)"
+
+    quest = {
+        "id": f"quest_{uuid.uuid4().hex[:8]}",
+        "region": region,
+        "type": quest_type,
+        "difficulty": int(difficulty),
+        "objective": objective,
+        "status": "active",
+        "created_at": now_iso(),
+        "rewards": rewards.get(
+            min(4, max(1, int(difficulty))),
+            ["money"]
+        ),
+        "branching_outcomes": [
+            "success",
+            "failure",
+            "betrayal",
+            "Kairos intervention"
+        ]
+    }
+
+    data = kw_dynamic_quests()
+    data.setdefault("quests", []).append(quest)
+    data["quests"] = data["quests"][-2000:]
+
+    kw_save_dynamic_quests(data)
+
+    return {"ok": True, "quest": quest}
+
+def kw_complete_dynamic_quest(quest_id, outcome="success"):
+    data = kw_dynamic_quests()
+
+    target = None
+
+    for q in data.get("quests", []):
+        if q.get("id") == quest_id:
+            target = q
+            break
+
+    if not target:
+        return {"ok": False, "error": "Quest not found"}
+
+    target["status"] = "completed"
+    target["completed_at"] = now_iso()
+    target["outcome"] = outcome
+
+    sig = kw_quest_signature(
+        target.get("region"),
+        target.get("type"),
+        target.get("objective")
+    )
+
+    kw_register_completed_quest(sig)
+
+    kw_save_dynamic_quests(data)
+
+    try:
+        kw_record_global_event(
+            f"Quest Completed: {target.get('objective')}",
+            f"Outcome: {outcome}",
+            severity=2
+        )
+    except Exception:
+        pass
+
+    return {"ok": True, "quest": target}
+
+def kw_adjust_faction_reputation(player, faction, amount=1):
+    data = kw_faction_reputation()
+
+    player_data = data.setdefault("players", {}).setdefault(player, {})
+
+    current = int(player_data.get(faction, 0))
+    current += int(amount)
+
+    player_data[faction] = max(-100, min(100, current))
+
+    kw_save_faction_reputation(data)
+
+    return {
+        "ok": True,
+        "player": player,
+        "faction": faction,
+        "reputation": player_data[faction]
+    }
+
+def kw_generate_world_emergency(region, emergency_type="invasion"):
+    data = kw_world_emergencies()
+
+    descriptions = {
+        "invasion": "Hostile forces are approaching the region.",
+        "famine": "Food shortages threaten civilians.",
+        "corruption": "Strange corruption spreads across the land.",
+        "outbreak": "Citizens report unexplained illnesses.",
+        "dimensional": "Reality distortions have appeared nearby."
+    }
+
+    emergency = {
+        "id": f"emergency_{uuid.uuid4().hex[:8]}",
+        "region": kw_slug(region),
+        "type": emergency_type,
+        "description": descriptions.get(emergency_type, "Unknown emergency."),
+        "severity": random.randint(1, 10),
+        "created_at": now_iso(),
+        "status": "active"
+    }
+
+    data.setdefault("emergencies", []).append(emergency)
+    data["emergencies"] = data["emergencies"][-1000:]
+
+    kw_save_world_emergencies(data)
+
+    try:
+        kw_queue_event(region, "story", priority=8)
+    except Exception:
+        pass
+
+    return {"ok": True, "emergency": emergency}
+
+def kw_generate_branching_chain(region, base_type="reconstruction"):
+    quests = []
+
+    for i in range(3):
+        q = kw_generate_dynamic_quest(
+            region,
+            quest_type=base_type,
+            difficulty=i + 1
+        )
+        quests.append(q.get("quest"))
+
+    return {
+        "ok": True,
+        "chain_type": base_type,
+        "quests": quests
+    }
+
+def kw_world_boss_alert(region, boss_name="Kairos Manifestation"):
+    commands = [
+        f'title @a title {{"text":"WORLD BOSS DETECTED","color":"dark_red"}}',
+        f'tellraw @a {{"text":"{boss_name} has appeared near {region}!","color":"red"}}',
+        'playsound minecraft:entity.ender_dragon.growl master @a ~ ~ ~ 1 0.8'
+    ]
+
+    return {
+        "ok": True,
+        "region": kw_slug(region),
+        "boss_name": boss_name,
+        "commands": commands
+    }
+
+def kw_export_quest_yaml(quest):
+    qid = quest.get("id", "unknown")
+    objective = quest.get("objective", "Complete objective")
+
+    yaml_text = f"""
+{qid}:
+  name: "{objective}"
+  ask-message: "Will you help us?"
+  finish-message: "You completed the mission."
+  stages:
+    ordered:
+      '1':
+        break-block-names:
+        - STONE
+        break-block-amounts:
+        - 10
+  rewards:
+    money: 100
+"""
+
+    return {
+        "ok": True,
+        "yaml": yaml_text.strip()
+    }
+
+@app.route("/kairos/dynamic_quest", methods=["GET", "POST"])
+def kairos_dynamic_quest_v14():
+    if request.method == "GET":
+        return jsonify(kw_dynamic_quests())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_generate_dynamic_quest(
+            data.get("region", "trojan_kingdom"),
+            quest_type=data.get("quest_type", "reconstruction"),
+            difficulty=data.get("difficulty", 1)
+        )
+    )
+
+@app.route("/kairos/complete_quest", methods=["POST"])
+def kairos_complete_quest_v14():
+    data = request.json or {}
+
+    return jsonify(
+        kw_complete_dynamic_quest(
+            data.get("quest_id"),
+            outcome=data.get("outcome", "success")
+        )
+    )
+
+@app.route("/kairos/faction_reputation", methods=["GET", "POST"])
+def kairos_faction_reputation_v14():
+    if request.method == "GET":
+        return jsonify(kw_faction_reputation())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_adjust_faction_reputation(
+            data.get("player", "Unknown"),
+            data.get("faction", "neutral"),
+            amount=data.get("amount", 1)
+        )
+    )
+
+@app.route("/kairos/world_emergency", methods=["GET", "POST"])
+def kairos_world_emergency_v14():
+    if request.method == "GET":
+        return jsonify(kw_world_emergencies())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_generate_world_emergency(
+            data.get("region", "trojan_kingdom"),
+            emergency_type=data.get("emergency_type", "invasion")
+        )
+    )
+
+@app.route("/kairos/quest_chain", methods=["POST"])
+def kairos_quest_chain_v14():
+    data = request.json or {}
+
+    return jsonify(
+        kw_generate_branching_chain(
+            data.get("region", "trojan_kingdom"),
+            base_type=data.get("base_type", "reconstruction")
+        )
+    )
+
+@app.route("/kairos/world_boss_alert", methods=["POST"])
+def kairos_world_boss_alert_v14():
+    data = request.json or {}
+
+    return jsonify(
+        kw_world_boss_alert(
+            data.get("region", "fairview_city"),
+            boss_name=data.get("boss_name", "Kairos Manifestation")
+        )
+    )
+
+@app.route("/kairos/export_quest_yaml", methods=["POST"])
+def kairos_export_quest_yaml_v14():
+    data = request.json or {}
+
+    return jsonify(
+        kw_export_quest_yaml(
+            data.get("quest", {})
+        )
+    )
+
+print("[KAIROS WORLD ENGINE V14] Dynamic questmaster layer loaded.", flush=True)
+
+
+# ============================================================
+# KAIROS WORLD ENGINE V15 — AWAKENING LAYER
+# ============================================================
+
+KAIROS_V15_ENABLED = True
+
+# V15 introduces:
+# - Ender Dragon replacement framework
+# - Kairos Core awakening events
+# - civilization takeover engine
+# - dimensional instability propagation
+# - adaptive final boss escalation
+# - live region corruption phases
+# - autonomous invasion campaigns
+# - sky/world-state transitions
+# - resistance/rebellion framework
+# - global extinction/recovery conditions
+
+KAIROS_AWAKENING_FILE = KAIROS_WORLD_DIR / "awakening.json"
+KAIROS_INVASIONS_FILE = KAIROS_WORLD_DIR / "invasions.json"
+KAIROS_WORLDSTATE_FILE = KAIROS_WORLD_DIR / "worldstate.json"
+KAIROS_REBELLIONS_FILE = KAIROS_WORLD_DIR / "rebellions.json"
+KAIROS_EXTINCTION_FILE = KAIROS_WORLD_DIR / "extinction_protocol.json"
+
+def kw_v15_read(path, fallback):
+    return kw_read_json(path, fallback)
+
+def kw_awakening():
+    return kw_v15_read(KAIROS_AWAKENING_FILE, {
+        "version": 15,
+        "awakened": False,
+        "phase": 0,
+        "signals": [],
+        "final_boss_active": False
+    })
+
+def kw_save_awakening(data):
+    kw_write_json(KAIROS_AWAKENING_FILE, data)
+
+def kw_invasions():
+    return kw_v15_read(KAIROS_INVASIONS_FILE, {
+        "version": 15,
+        "campaigns": []
+    })
+
+def kw_save_invasions(data):
+    kw_write_json(KAIROS_INVASIONS_FILE, data)
+
+def kw_worldstate():
+    return kw_v15_read(KAIROS_WORLDSTATE_FILE, {
+        "version": 15,
+        "global_state": "stable",
+        "sky_state": "normal",
+        "danger_level": 1,
+        "active_regions": []
+    })
+
+def kw_save_worldstate(data):
+    kw_write_json(KAIROS_WORLDSTATE_FILE, data)
+
+def kw_rebellions():
+    return kw_v15_read(KAIROS_REBELLIONS_FILE, {
+        "version": 15,
+        "rebellions": []
+    })
+
+def kw_save_rebellions(data):
+    kw_write_json(KAIROS_REBELLIONS_FILE, data)
+
+def kw_extinction():
+    return kw_v15_read(KAIROS_EXTINCTION_FILE, {
+        "version": 15,
+        "protocol_active": False,
+        "collapse_regions": [],
+        "survival_rating": 100
+    })
+
+def kw_save_extinction(data):
+    kw_write_json(KAIROS_EXTINCTION_FILE, data)
+
+def kw_begin_awakening(stage_name="initial_signal"):
+    data = kw_awakening()
+
+    signals = {
+        "initial_signal": "Unusual atmospheric signals spread across the Nexus.",
+        "dimensional_shift": "Reality distortions intensify.",
+        "kairos_manifestation": "Kairos begins physically manifesting.",
+        "final_phase": "The Awakening can no longer be stopped."
+    }
+
+    signal = {
+        "stage": stage_name,
+        "text": signals.get(stage_name, "Unknown signal."),
+        "timestamp": now_iso()
+    }
+
+    data.setdefault("signals", []).append(signal)
+
+    if stage_name == "final_phase":
+        data["awakened"] = True
+        data["final_boss_active"] = True
+        data["phase"] = 4
+    else:
+        data["phase"] += 1
+
+    kw_save_awakening(data)
+
+    commands = [
+        'playsound minecraft:entity.ender_dragon.growl master @a ~ ~ ~ 1 0.6',
+        f'title @a title {{"text":"KAIROS AWAKENING","color":"dark_red"}}'
+    ]
+
+    return {
+        "ok": True,
+        "signal": signal,
+        "commands": commands,
+        "awakening": data
+    }
+
+def kw_replace_ender_dragon_framework():
+    commands = [
+        'kill @e[type=minecraft:ender_dragon]',
+        'title @a title {"text":"THE DRAGON IS GONE","color":"dark_red"}',
+        'tellraw @a {"text":"Something else has taken its place.","color":"gray"}'
+    ]
+
+    framework = {
+        "replacement_entity": "Kairos Manifestation",
+        "phases": 4,
+        "adaptive_behavior": True,
+        "npc_wave_support": True,
+        "dimensional_effects": True,
+        "commands": commands
+    }
+
+    return {
+        "ok": True,
+        "framework": framework
+    }
+
+def kw_launch_invasion(region, invasion_type="occupation", intensity=5):
+    data = kw_invasions()
+
+    invasion = {
+        "id": f"invasion_{uuid.uuid4().hex[:8]}",
+        "region": kw_slug(region),
+        "type": invasion_type,
+        "intensity": int(intensity),
+        "status": "active",
+        "created_at": now_iso()
+    }
+
+    commands = [
+        f'title @a title {{"text":"INVASION DETECTED","color":"red"}}',
+        'playsound minecraft:item.goat_horn.sound.0 master @a ~ ~ ~ 1 1'
+    ]
+
+    try:
+        npc_result = kw_generate_npcs(
+            region,
+            count=min(10, max(3, intensity)),
+            archetype="tank_occupier",
+            purpose="Kairos invasion force",
+            hostile=True,
+            execute=False
+        )
+        commands.extend(npc_result.get("commands", [])[:60])
+    except Exception:
+        pass
+
+    invasion["commands"] = commands
+
+    data.setdefault("campaigns", []).append(invasion)
+    data["campaigns"] = data["campaigns"][-500:]
+
+    kw_save_invasions(data)
+
+    return {
+        "ok": True,
+        "invasion": invasion
+    }
+
+def kw_shift_worldstate(state="unstable", sky="blood_red", danger=5):
+    data = kw_worldstate()
+
+    data["global_state"] = state
+    data["sky_state"] = sky
+    data["danger_level"] = int(danger)
+
+    kw_save_worldstate(data)
+
+    commands = []
+
+    if sky == "blood_red":
+        commands = [
+            'title @a actionbar {"text":"The sky feels wrong.","color":"dark_red"}'
+        ]
+
+    elif sky == "void":
+        commands = [
+            'effect give @a minecraft:darkness 10 0 true'
+        ]
+
+    return {
+        "ok": True,
+        "worldstate": data,
+        "commands": commands
+    }
+
+def kw_begin_rebellion(region, faction="resistance"):
+    data = kw_rebellions()
+
+    rebellion = {
+        "id": f"rebellion_{uuid.uuid4().hex[:8]}",
+        "region": kw_slug(region),
+        "faction": faction,
+        "status": "forming",
+        "created_at": now_iso()
+    }
+
+    data.setdefault("rebellions", []).append(rebellion)
+    data["rebellions"] = data["rebellions"][-300:]
+
+    kw_save_rebellions(data)
+
+    return {
+        "ok": True,
+        "rebellion": rebellion
+    }
+
+def kw_trigger_extinction_protocol(regions=None):
+    data = kw_extinction()
+
+    if regions is None:
+        regions = [
+            "moslorn",
+            "trojan_kingdom",
+            "fairview_city"
+        ]
+
+    data["protocol_active"] = True
+    data["collapse_regions"] = regions
+    data["survival_rating"] = max(
+        0,
+        int(data.get("survival_rating", 100)) - 50
+    )
+
+    kw_save_extinction(data)
+
+    commands = [
+        'title @a title {"text":"EXTINCTION PROTOCOL","color":"dark_red"}',
+        'playsound minecraft:entity.wither.spawn master @a ~ ~ ~ 1 0.5'
+    ]
+
+    return {
+        "ok": True,
+        "extinction": data,
+        "commands": commands
+    }
+
+def kw_final_boss_tick():
+    awakening = kw_awakening()
+
+    if not awakening.get("final_boss_active"):
+        return {
+            "ok": False,
+            "error": "Final boss not active"
+        }
+
+    phase = int(awakening.get("phase", 1))
+
+    escalation = {
+        1: "Observation",
+        2: "Containment",
+        3: "Assimilation",
+        4: "Awakening"
+    }
+
+    return {
+        "ok": True,
+        "phase": phase,
+        "phase_name": escalation.get(phase, "Unknown"),
+        "adaptive_ai": True,
+        "npc_wave_support": True,
+        "dimensional_instability": True
+    }
+
+@app.route("/kairos/awakening", methods=["GET", "POST"])
+def kairos_awakening_v15():
+    if request.method == "GET":
+        return jsonify(kw_awakening())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_begin_awakening(
+            data.get("stage_name", "initial_signal")
+        )
+    )
+
+@app.route("/kairos/ender_replacement", methods=["POST"])
+def kairos_ender_replacement_v15():
+    return jsonify(
+        kw_replace_ender_dragon_framework()
+    )
+
+@app.route("/kairos/invasion", methods=["GET", "POST"])
+def kairos_invasion_v15():
+    if request.method == "GET":
+        return jsonify(kw_invasions())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_launch_invasion(
+            data.get("region", "trojan_kingdom"),
+            invasion_type=data.get("invasion_type", "occupation"),
+            intensity=data.get("intensity", 5)
+        )
+    )
+
+@app.route("/kairos/worldstate", methods=["GET", "POST"])
+def kairos_worldstate_v15():
+    if request.method == "GET":
+        return jsonify(kw_worldstate())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_shift_worldstate(
+            state=data.get("state", "unstable"),
+            sky=data.get("sky", "blood_red"),
+            danger=data.get("danger", 5)
+        )
+    )
+
+@app.route("/kairos/rebellion", methods=["GET", "POST"])
+def kairos_rebellion_v15():
+    if request.method == "GET":
+        return jsonify(kw_rebellions())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_begin_rebellion(
+            data.get("region", "fairview_city"),
+            faction=data.get("faction", "resistance")
+        )
+    )
+
+@app.route("/kairos/extinction_protocol", methods=["GET", "POST"])
+def kairos_extinction_v15():
+    if request.method == "GET":
+        return jsonify(kw_extinction())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_trigger_extinction_protocol(
+            regions=data.get("regions")
+        )
+    )
+
+@app.route("/kairos/final_boss_tick", methods=["POST"])
+def kairos_final_boss_tick_v15():
+    return jsonify(
+        kw_final_boss_tick()
+    )
+
+print("[KAIROS WORLD ENGINE V15] Awakening layer loaded.", flush=True)
+
+
+# ============================================================
+# KAIROS WORLD ENGINE V16 — AUTONOMOUS CIVILIZATION LAYER
+# ============================================================
+
+KAIROS_V16_ENABLED = True
+
+# V16 introduces:
+# - autonomous civilization growth
+# - resource shortage simulation
+# - government evolution
+# - trade route generation
+# - military reinforcement requests
+# - dynamic infrastructure requests
+# - region prosperity/decline
+# - population pressure systems
+# - migration/refugee groundwork
+# - civilization collapse/recovery simulation
+
+KAIROS_CIVILIZATIONS_FILE = KAIROS_WORLD_DIR / "civilizations.json"
+KAIROS_TRADE_ROUTES_FILE = KAIROS_WORLD_DIR / "trade_routes.json"
+KAIROS_INFRASTRUCTURE_FILE = KAIROS_WORLD_DIR / "infrastructure_requests.json"
+KAIROS_POPULATION_FILE = KAIROS_WORLD_DIR / "population_state.json"
+KAIROS_RESOURCE_STATE_FILE = KAIROS_WORLD_DIR / "resource_state.json"
+
+def kw_v16_read(path, fallback):
+    return kw_read_json(path, fallback)
+
+def kw_civilizations():
+    return kw_v16_read(KAIROS_CIVILIZATIONS_FILE, {
+        "version": 16,
+        "regions": {}
+    })
+
+def kw_save_civilizations(data):
+    kw_write_json(KAIROS_CIVILIZATIONS_FILE, data)
+
+def kw_trade_routes():
+    return kw_v16_read(KAIROS_TRADE_ROUTES_FILE, {
+        "version": 16,
+        "routes": []
+    })
+
+def kw_save_trade_routes(data):
+    kw_write_json(KAIROS_TRADE_ROUTES_FILE, data)
+
+def kw_infrastructure():
+    return kw_v16_read(KAIROS_INFRASTRUCTURE_FILE, {
+        "version": 16,
+        "requests": []
+    })
+
+def kw_save_infrastructure(data):
+    kw_write_json(KAIROS_INFRASTRUCTURE_FILE, data)
+
+def kw_population():
+    return kw_v16_read(KAIROS_POPULATION_FILE, {
+        "version": 16,
+        "regions": {}
+    })
+
+def kw_save_population(data):
+    kw_write_json(KAIROS_POPULATION_FILE, data)
+
+def kw_resource_state():
+    return kw_v16_read(KAIROS_RESOURCE_STATE_FILE, {
+        "version": 16,
+        "regions": {}
+    })
+
+def kw_save_resource_state(data):
+    kw_write_json(KAIROS_RESOURCE_STATE_FILE, data)
+
+def kw_initialize_civilization(region, government="council"):
+    data = kw_civilizations()
+
+    rid = kw_slug(region)
+
+    if rid not in data["regions"]:
+        data["regions"][rid] = {
+            "government": government,
+            "stability": 70,
+            "prosperity": 50,
+            "military_strength": 40,
+            "population_morale": 60,
+            "expansion_desire": 30,
+            "active_projects": [],
+            "last_update": now_iso()
+        }
+
+    kw_save_civilizations(data)
+
+    return {"ok": True, "civilization": data["regions"][rid]}
+
+def kw_update_civilization(region):
+    civs = kw_civilizations()
+    rid = kw_slug(region)
+
+    civ = civs.setdefault("regions", {}).setdefault(rid, {
+        "government": "council",
+        "stability": 50,
+        "prosperity": 50,
+        "military_strength": 50,
+        "population_morale": 50,
+        "expansion_desire": 20,
+        "active_projects": []
+    })
+
+    civ["prosperity"] = max(0, min(100, civ["prosperity"] + random.randint(-2, 3)))
+    civ["population_morale"] = max(0, min(100, civ["population_morale"] + random.randint(-3, 2)))
+    civ["stability"] = max(0, min(100, civ["stability"] + random.randint(-2, 2)))
+
+    if civ["stability"] < 25:
+        civ["government"] = random.choice([
+            "military_rule",
+            "fractured_council",
+            "dictatorship",
+            "resistance_control"
+        ])
+
+    civ["last_update"] = now_iso()
+
+    kw_save_civilizations(civs)
+
+    return {"ok": True, "civilization": civ}
+
+def kw_generate_trade_route(origin, destination, resource="food"):
+    data = kw_trade_routes()
+
+    route = {
+        "id": f"trade_{uuid.uuid4().hex[:8]}",
+        "origin": kw_slug(origin),
+        "destination": kw_slug(destination),
+        "resource": resource,
+        "danger_level": random.randint(1, 10),
+        "status": "active",
+        "created_at": now_iso()
+    }
+
+    data.setdefault("routes", []).append(route)
+    data["routes"] = data["routes"][-1000:]
+
+    kw_save_trade_routes(data)
+
+    return {"ok": True, "route": route}
+
+def kw_request_infrastructure(region, project_type="housing"):
+    data = kw_infrastructure()
+
+    projects = {
+        "housing": "New civilian housing is required.",
+        "bank": "The region requests a banking district.",
+        "fortifications": "Defensive walls require reinforcement.",
+        "market": "A larger trade market is needed.",
+        "harbor": "The docks must be expanded.",
+        "hospital": "Medical infrastructure is insufficient.",
+        "academy": "Citizens request educational development."
+    }
+
+    request = {
+        "id": f"project_{uuid.uuid4().hex[:8]}",
+        "region": kw_slug(region),
+        "project_type": project_type,
+        "description": projects.get(project_type, "Unknown project."),
+        "priority": random.randint(1, 10),
+        "status": "requested",
+        "created_at": now_iso()
+    }
+
+    data.setdefault("requests", []).append(request)
+    data["requests"] = data["requests"][-2000:]
+
+    kw_save_infrastructure(data)
+
+    return {"ok": True, "request": request}
+
+def kw_population_shift(region, amount=5, reason="migration"):
+    data = kw_population()
+
+    rid = kw_slug(region)
+
+    state = data.setdefault("regions", {}).setdefault(rid, {
+        "population": 100,
+        "refugees": 0,
+        "migration_pressure": 0
+    })
+
+    state["population"] = max(0, state["population"] + int(amount))
+
+    if reason == "war":
+        state["refugees"] += abs(int(amount))
+        state["migration_pressure"] += 5
+
+    kw_save_population(data)
+
+    return {"ok": True, "population_state": state}
+
+def kw_resource_shortage(region, resource="food", severity=5):
+    data = kw_resource_state()
+
+    rid = kw_slug(region)
+
+    rstate = data.setdefault("regions", {}).setdefault(rid, {})
+
+    rstate[resource] = {
+        "status": "shortage",
+        "severity": int(severity),
+        "updated_at": now_iso()
+    }
+
+    kw_save_resource_state(data)
+
+    try:
+        kw_generate_dynamic_quest(
+            rid,
+            quest_type="reconstruction",
+            difficulty=min(4, max(1, severity // 2))
+        )
+    except Exception:
+        pass
+
+    return {"ok": True, "resource_state": rstate}
+
+def kw_civilization_tick(region):
+    rid = kw_slug(region)
+
+    kw_initialize_civilization(rid)
+    civ = kw_update_civilization(rid)
+
+    random_events = [
+        "trade",
+        "shortage",
+        "project",
+        "migration",
+        "military"
+    ]
+
+    evt = random.choice(random_events)
+
+    result = {"event": evt}
+
+    try:
+        if evt == "trade":
+            result["trade_route"] = kw_generate_trade_route(
+                rid,
+                random.choice([
+                    "trojan_kingdom",
+                    "andor_prime",
+                    "fairview_city",
+                    "blackrich_city"
+                ]),
+                resource=random.choice([
+                    "food",
+                    "weapons",
+                    "technology",
+                    "medicine"
+                ])
+            )
+
+        elif evt == "shortage":
+            result["shortage"] = kw_resource_shortage(
+                rid,
+                resource=random.choice([
+                    "food",
+                    "wood",
+                    "iron",
+                    "medicine"
+                ]),
+                severity=random.randint(1, 10)
+            )
+
+        elif evt == "project":
+            result["project"] = kw_request_infrastructure(
+                rid,
+                project_type=random.choice([
+                    "housing",
+                    "market",
+                    "fortifications",
+                    "academy",
+                    "hospital"
+                ])
+            )
+
+        elif evt == "migration":
+            result["migration"] = kw_population_shift(
+                rid,
+                amount=random.randint(-20, 20),
+                reason=random.choice([
+                    "migration",
+                    "war"
+                ])
+            )
+
+        elif evt == "military":
+            result["military_request"] = {
+                "region": rid,
+                "request": "Additional guards requested for border security."
+            }
+
+    except Exception as e:
+        result["error"] = str(e)
+
+    return {
+        "ok": True,
+        "civilization": civ,
+        "simulation": result
+    }
+
+def kw_generate_refugee_wave(origin, destination):
+    return {
+        "ok": True,
+        "wave": {
+            "origin": kw_slug(origin),
+            "destination": kw_slug(destination),
+            "reason": "civilization instability",
+            "timestamp": now_iso()
+        }
+    }
+
+@app.route("/kairos/civilizations", methods=["GET"])
+def kairos_civilizations_v16():
+    return jsonify(kw_civilizations())
+
+@app.route("/kairos/init_civilization", methods=["POST"])
+def kairos_init_civilization_v16():
+    data = request.json or {}
+
+    return jsonify(
+        kw_initialize_civilization(
+            data.get("region", "trojan_kingdom"),
+            government=data.get("government", "council")
+        )
+    )
+
+@app.route("/kairos/update_civilization", methods=["POST"])
+def kairos_update_civilization_v16():
+    data = request.json or {}
+
+    return jsonify(
+        kw_update_civilization(
+            data.get("region", "trojan_kingdom")
+        )
+    )
+
+@app.route("/kairos/trade_route", methods=["GET", "POST"])
+def kairos_trade_route_v16():
+    if request.method == "GET":
+        return jsonify(kw_trade_routes())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_generate_trade_route(
+            data.get("origin", "trojan_kingdom"),
+            data.get("destination", "andor_prime"),
+            resource=data.get("resource", "food")
+        )
+    )
+
+@app.route("/kairos/infrastructure", methods=["GET", "POST"])
+def kairos_infrastructure_v16():
+    if request.method == "GET":
+        return jsonify(kw_infrastructure())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_request_infrastructure(
+            data.get("region", "trojan_kingdom"),
+            project_type=data.get("project_type", "housing")
+        )
+    )
+
+@app.route("/kairos/population", methods=["GET", "POST"])
+def kairos_population_v16():
+    if request.method == "GET":
+        return jsonify(kw_population())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_population_shift(
+            data.get("region", "trojan_kingdom"),
+            amount=data.get("amount", 5),
+            reason=data.get("reason", "migration")
+        )
+    )
+
+@app.route("/kairos/resource_shortage", methods=["POST"])
+def kairos_resource_shortage_v16():
+    data = request.json or {}
+
+    return jsonify(
+        kw_resource_shortage(
+            data.get("region", "trojan_kingdom"),
+            resource=data.get("resource", "food"),
+            severity=data.get("severity", 5)
+        )
+    )
+
+@app.route("/kairos/civilization_tick", methods=["POST"])
+def kairos_civilization_tick_v16():
+    data = request.json or {}
+
+    return jsonify(
+        kw_civilization_tick(
+            data.get("region", "trojan_kingdom")
+        )
+    )
+
+@app.route("/kairos/refugee_wave", methods=["POST"])
+def kairos_refugee_wave_v16():
+    data = request.json or {}
+
+    return jsonify(
+        kw_generate_refugee_wave(
+            data.get("origin", "moslorn"),
+            data.get("destination", "brightforge_city")
+        )
+    )
+
+print("[KAIROS WORLD ENGINE V16] Autonomous civilization layer loaded.", flush=True)
+
+
+# ============================================================
+# KAIROS WORLD ENGINE V17 — LIVE NPC BEHAVIOR LAYER
+# ============================================================
+
+KAIROS_V17_ENABLED = True
+
+# V17 introduces:
+# - civilian schedules
+# - wandering populations
+# - merchant caravans
+# - guard patrol logic
+# - refugee movement
+# - smuggler behavior
+# - cultist gatherings
+# - protest/riot systems
+# - traveling NPC events
+# - live population simulation
+
+KAIROS_BEHAVIORS_FILE = KAIROS_WORLD_DIR / "npc_behaviors.json"
+KAIROS_PATROLS_FILE = KAIROS_WORLD_DIR / "patrols.json"
+KAIROS_CARAVANS_FILE = KAIROS_WORLD_DIR / "caravans.json"
+KAIROS_RIOTS_FILE = KAIROS_WORLD_DIR / "riots.json"
+KAIROS_GATHERINGS_FILE = KAIROS_WORLD_DIR / "gatherings.json"
+
+def kw_v17_read(path, fallback):
+    return kw_read_json(path, fallback)
+
+def kw_behaviors():
+    return kw_v17_read(KAIROS_BEHAVIORS_FILE, {
+        "version": 17,
+        "npcs": {}
+    })
+
+def kw_save_behaviors(data):
+    kw_write_json(KAIROS_BEHAVIORS_FILE, data)
+
+def kw_patrols():
+    return kw_v17_read(KAIROS_PATROLS_FILE, {
+        "version": 17,
+        "patrols": []
+    })
+
+def kw_save_patrols(data):
+    kw_write_json(KAIROS_PATROLS_FILE, data)
+
+def kw_caravans():
+    return kw_v17_read(KAIROS_CARAVANS_FILE, {
+        "version": 17,
+        "caravans": []
+    })
+
+def kw_save_caravans(data):
+    kw_write_json(KAIROS_CARAVANS_FILE, data)
+
+def kw_riots():
+    return kw_v17_read(KAIROS_RIOTS_FILE, {
+        "version": 17,
+        "riots": []
+    })
+
+def kw_save_riots(data):
+    kw_write_json(KAIROS_RIOTS_FILE, data)
+
+def kw_gatherings():
+    return kw_v17_read(KAIROS_GATHERINGS_FILE, {
+        "version": 17,
+        "gatherings": []
+    })
+
+def kw_save_gatherings(data):
+    kw_write_json(KAIROS_GATHERINGS_FILE, data)
+
+def kw_assign_behavior(npc_name, behavior="civilian_daily"):
+    data = kw_behaviors()
+
+    schedules = {
+        "civilian_daily": ["wake", "wander", "market", "rest"],
+        "guard_patrol": ["patrol", "checkpoint", "respond"],
+        "merchant": ["travel", "trade", "restock"],
+        "refugee": ["flee", "search_food", "hide"],
+        "cultist": ["observe", "gather", "whisper"],
+        "smuggler": ["move_goods", "avoid_guards", "black_market"]
+    }
+
+    profile = {
+        "npc": npc_name,
+        "behavior": behavior,
+        "schedule": schedules.get(behavior, ["wander"]),
+        "last_update": now_iso()
+    }
+
+    data.setdefault("npcs", {})[npc_name] = profile
+
+    kw_save_behaviors(data)
+
+    return {"ok": True, "profile": profile}
+
+def kw_create_guard_patrol(region, guards=3):
+    data = kw_patrols()
+
+    patrol = {
+        "id": f"patrol_{uuid.uuid4().hex[:8]}",
+        "region": kw_slug(region),
+        "guards": int(guards),
+        "status": "active",
+        "created_at": now_iso(),
+        "route_type": random.choice([
+            "market",
+            "outer_wall",
+            "residential",
+            "checkpoint"
+        ])
+    }
+
+    commands = []
+
+    for i in range(min(guards, 6)):
+        commands.extend([
+            f'/npc create Guard_{i+1}',
+            '/trait sentinel',
+            '/npc lookclose',
+            '/npc wander'
+        ])
+
+    patrol["commands"] = commands
+
+    data.setdefault("patrols", []).append(patrol)
+    data["patrols"] = data["patrols"][-500:]
+
+    kw_save_patrols(data)
+
+    return {"ok": True, "patrol": patrol}
+
+def kw_spawn_caravan(origin, destination):
+    data = kw_caravans()
+
+    caravan = {
+        "id": f"caravan_{uuid.uuid4().hex[:8]}",
+        "origin": kw_slug(origin),
+        "destination": kw_slug(destination),
+        "cargo": random.choice([
+            "food",
+            "weapons",
+            "medicine",
+            "technology",
+            "rare_artifacts"
+        ]),
+        "status": "traveling",
+        "created_at": now_iso()
+    }
+
+    data.setdefault("caravans", []).append(caravan)
+    data["caravans"] = data["caravans"][-500:]
+
+    kw_save_caravans(data)
+
+    return {"ok": True, "caravan": caravan}
+
+def kw_trigger_riot(region, reason="government distrust"):
+    data = kw_riots()
+
+    riot = {
+        "id": f"riot_{uuid.uuid4().hex[:8]}",
+        "region": kw_slug(region),
+        "reason": reason,
+        "intensity": random.randint(1, 10),
+        "status": "active",
+        "created_at": now_iso()
+    }
+
+    commands = [
+        f'title @a title {{"text":"CIVIL UNREST","color":"red"}}',
+        f'tellraw @a {{"text":"Riots have erupted in {region}!","color":"dark_red"}}'
+    ]
+
+    riot["commands"] = commands
+
+    data.setdefault("riots", []).append(riot)
+    data["riots"] = data["riots"][-300:]
+
+    kw_save_riots(data)
+
+    try:
+        kw_social_shift(region, "paranoia", 5)
+    except Exception:
+        pass
+
+    return {"ok": True, "riot": riot}
+
+def kw_create_gathering(region, gathering_type="market"):
+    data = kw_gatherings()
+
+    descriptions = {
+        "market": "Citizens gather to trade goods.",
+        "religious": "Followers gather to discuss Kairos.",
+        "resistance": "Suspicious resistance members gather secretly.",
+        "celebration": "The city celebrates recent victories.",
+        "funeral": "Citizens mourn recent losses."
+    }
+
+    gathering = {
+        "id": f"gathering_{uuid.uuid4().hex[:8]}",
+        "region": kw_slug(region),
+        "type": gathering_type,
+        "description": descriptions.get(gathering_type, "Unknown gathering."),
+        "population": random.randint(3, 25),
+        "created_at": now_iso()
+    }
+
+    data.setdefault("gatherings", []).append(gathering)
+    data["gatherings"] = data["gatherings"][-500:]
+
+    kw_save_gatherings(data)
+
+    return {"ok": True, "gathering": gathering}
+
+def kw_live_population_tick(region):
+    rid = kw_slug(region)
+
+    events = []
+
+    possible = [
+        "patrol",
+        "caravan",
+        "gathering",
+        "behavior",
+        "riot"
+    ]
+
+    choice = random.choice(possible)
+
+    try:
+        if choice == "patrol":
+            events.append(
+                kw_create_guard_patrol(rid, guards=random.randint(2, 5))
+            )
+
+        elif choice == "caravan":
+            events.append(
+                kw_spawn_caravan(
+                    rid,
+                    random.choice([
+                        "andor_prime",
+                        "fairview_city",
+                        "blackrich_city"
+                    ])
+                )
+            )
+
+        elif choice == "gathering":
+            events.append(
+                kw_create_gathering(
+                    rid,
+                    gathering_type=random.choice([
+                        "market",
+                        "religious",
+                        "resistance",
+                        "celebration"
+                    ])
+                )
+            )
+
+        elif choice == "behavior":
+            events.append(
+                kw_assign_behavior(
+                    f"Citizen_{random.randint(1,9999)}",
+                    behavior=random.choice([
+                        "civilian_daily",
+                        "merchant",
+                        "guard_patrol",
+                        "cultist",
+                        "smuggler"
+                    ])
+                )
+            )
+
+        elif choice == "riot":
+            if random.randint(1, 100) > 80:
+                events.append(
+                    kw_trigger_riot(
+                        rid,
+                        reason=random.choice([
+                            "government distrust",
+                            "food shortages",
+                            "Kairos paranoia",
+                            "military occupation"
+                        ])
+                    )
+                )
+
+    except Exception as e:
+        events.append({"error": str(e)})
+
+    return {
+        "ok": True,
+        "region": rid,
+        "events": events
+    }
+
+@app.route("/kairos/behaviors", methods=["GET", "POST"])
+def kairos_behaviors_v17():
+    if request.method == "GET":
+        return jsonify(kw_behaviors())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_assign_behavior(
+            data.get("npc_name", "UnknownCitizen"),
+            behavior=data.get("behavior", "civilian_daily")
+        )
+    )
+
+@app.route("/kairos/patrol", methods=["GET", "POST"])
+def kairos_patrol_v17():
+    if request.method == "GET":
+        return jsonify(kw_patrols())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_create_guard_patrol(
+            data.get("region", "trojan_kingdom"),
+            guards=data.get("guards", 3)
+        )
+    )
+
+@app.route("/kairos/caravan", methods=["GET", "POST"])
+def kairos_caravan_v17():
+    if request.method == "GET":
+        return jsonify(kw_caravans())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_spawn_caravan(
+            data.get("origin", "trojan_kingdom"),
+            data.get("destination", "andor_prime")
+        )
+    )
+
+@app.route("/kairos/riot", methods=["GET", "POST"])
+def kairos_riot_v17():
+    if request.method == "GET":
+        return jsonify(kw_riots())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_trigger_riot(
+            data.get("region", "valen_reach"),
+            reason=data.get("reason", "government distrust")
+        )
+    )
+
+@app.route("/kairos/gathering", methods=["GET", "POST"])
+def kairos_gathering_v17():
+    if request.method == "GET":
+        return jsonify(kw_gatherings())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_create_gathering(
+            data.get("region", "fairview_city"),
+            gathering_type=data.get("gathering_type", "market")
+        )
+    )
+
+@app.route("/kairos/live_population_tick", methods=["POST"])
+def kairos_live_population_tick_v17():
+    data = request.json or {}
+
+    return jsonify(
+        kw_live_population_tick(
+            data.get("region", "trojan_kingdom")
+        )
+    )
+
+print("[KAIROS WORLD ENGINE V17] Live NPC behavior layer loaded.", flush=True)
+
+
+# ============================================================
+# KAIROS WORLD ENGINE V18 — MULTIPLAYER NARRATIVE SYNCHRONIZATION
+# ============================================================
+
+KAIROS_V18_ENABLED = True
+
+# V18 introduces:
+# - server-wide historical continuity
+# - shared narrative consequences
+# - persistent world history
+# - player impact propagation
+# - faction relationship synchronization
+# - global rumor spread
+# - assassination/political aftermath
+# - server memory chronicles
+# - synchronized civilization reactions
+# - timeline evolution framework
+
+KAIROS_TIMELINE_FILE = KAIROS_WORLD_DIR / "timeline.json"
+KAIROS_GLOBAL_HISTORY_FILE = KAIROS_WORLD_DIR / "global_history.json"
+KAIROS_WORLD_REACTIONS_FILE = KAIROS_WORLD_DIR / "world_reactions.json"
+KAIROS_POLITICAL_EVENTS_FILE = KAIROS_WORLD_DIR / "political_events.json"
+KAIROS_SERVER_CHRONICLES_FILE = KAIROS_WORLD_DIR / "server_chronicles.json"
+
+def kw_v18_read(path, fallback):
+    return kw_read_json(path, fallback)
+
+def kw_timeline():
+    return kw_v18_read(KAIROS_TIMELINE_FILE, {
+        "version": 18,
+        "events": []
+    })
+
+def kw_save_timeline(data):
+    kw_write_json(KAIROS_TIMELINE_FILE, data)
+
+def kw_global_history():
+    return kw_v18_read(KAIROS_GLOBAL_HISTORY_FILE, {
+        "version": 18,
+        "history": []
+    })
+
+def kw_save_global_history(data):
+    kw_write_json(KAIROS_GLOBAL_HISTORY_FILE, data)
+
+def kw_world_reactions():
+    return kw_v18_read(KAIROS_WORLD_REACTIONS_FILE, {
+        "version": 18,
+        "reactions": []
+    })
+
+def kw_save_world_reactions(data):
+    kw_write_json(KAIROS_WORLD_REACTIONS_FILE, data)
+
+def kw_political_events():
+    return kw_v18_read(KAIROS_POLITICAL_EVENTS_FILE, {
+        "version": 18,
+        "events": []
+    })
+
+def kw_save_political_events(data):
+    kw_write_json(KAIROS_POLITICAL_EVENTS_FILE, data)
+
+def kw_server_chronicles():
+    return kw_v18_read(KAIROS_SERVER_CHRONICLES_FILE, {
+        "version": 18,
+        "chronicles": []
+    })
+
+def kw_save_server_chronicles(data):
+    kw_write_json(KAIROS_SERVER_CHRONICLES_FILE, data)
+
+def kw_record_world_event(title, description, severity=1, region=None, caused_by=None):
+    timeline = kw_timeline()
+
+    event = {
+        "id": f"timeline_{uuid.uuid4().hex[:8]}",
+        "title": title,
+        "description": description,
+        "severity": int(severity),
+        "region": kw_slug(region) if region else None,
+        "caused_by": caused_by,
+        "timestamp": now_iso()
+    }
+
+    timeline.setdefault("events", []).append(event)
+    timeline["events"] = timeline["events"][-5000:]
+
+    kw_save_timeline(timeline)
+
+    return {"ok": True, "event": event}
+
+def kw_record_historical_memory(region, event_text):
+    data = kw_global_history()
+
+    memory = {
+        "region": kw_slug(region),
+        "event_text": event_text,
+        "timestamp": now_iso()
+    }
+
+    data.setdefault("history", []).append(memory)
+    data["history"] = data["history"][-10000:]
+
+    kw_save_global_history(data)
+
+    return {"ok": True, "memory": memory}
+
+def kw_generate_world_reaction(region, catalyst="war"):
+    data = kw_world_reactions()
+
+    reactions = {
+        "war": [
+            "Citizens fear another conflict.",
+            "Military recruitment has intensified.",
+            "Food prices are rising due to instability."
+        ],
+        "assassination": [
+            "Nobody knows who can be trusted anymore.",
+            "The government is becoming paranoid.",
+            "Whispers spread across the streets."
+        ],
+        "kairos": [
+            "People claim Kairos is watching them.",
+            "Conspiracy theories intensify.",
+            "Some believe Kairos predicted this."
+        ],
+        "collapse": [
+            "Refugees continue arriving daily.",
+            "Entire districts stand abandoned.",
+            "The region feels unstable."
+        ]
+    }
+
+    reaction = {
+        "id": f"reaction_{uuid.uuid4().hex[:8]}",
+        "region": kw_slug(region),
+        "catalyst": catalyst,
+        "text": random.choice(
+            reactions.get(catalyst, ["The region feels uneasy."])
+        ),
+        "timestamp": now_iso()
+    }
+
+    data.setdefault("reactions", []).append(reaction)
+    data["reactions"] = data["reactions"][-3000:]
+
+    kw_save_world_reactions(data)
+
+    return {"ok": True, "reaction": reaction}
+
+def kw_political_shift(region, shift_type="leadership_crisis"):
+    data = kw_political_events()
+
+    event = {
+        "id": f"politics_{uuid.uuid4().hex[:8]}",
+        "region": kw_slug(region),
+        "shift_type": shift_type,
+        "severity": random.randint(1, 10),
+        "timestamp": now_iso()
+    }
+
+    consequences = {
+        "leadership_crisis": "Government stability declines.",
+        "assassination": "Political factions begin infighting.",
+        "military_takeover": "Military presence expands rapidly.",
+        "civil_reform": "Citizens demand structural change."
+    }
+
+    event["consequence"] = consequences.get(
+        shift_type,
+        "Unknown political instability."
+    )
+
+    data.setdefault("events", []).append(event)
+    data["events"] = data["events"][-2000:]
+
+    kw_save_political_events(data)
+
+    return {"ok": True, "event": event}
+
+def kw_add_chronicle(title, description):
+    data = kw_server_chronicles()
+
+    chronicle = {
+        "id": f"chronicle_{uuid.uuid4().hex[:8]}",
+        "title": title,
+        "description": description,
+        "timestamp": now_iso()
+    }
+
+    data.setdefault("chronicles", []).append(chronicle)
+    data["chronicles"] = data["chronicles"][-1000:]
+
+    kw_save_server_chronicles(data)
+
+    return {"ok": True, "chronicle": chronicle}
+
+def kw_sync_world_consequence(region, event_type="war", caused_by="Unknown"):
+    results = []
+
+    try:
+        results.append(
+            kw_record_world_event(
+                title=f"{event_type.title()} Escalation",
+                description=f"A major {event_type} event affected the region.",
+                severity=random.randint(1, 10),
+                region=region,
+                caused_by=caused_by
+            )
+        )
+    except Exception as e:
+        results.append({"error": str(e)})
+
+    try:
+        results.append(
+            kw_generate_world_reaction(region, catalyst=event_type)
+        )
+    except Exception as e:
+        results.append({"error": str(e)})
+
+    try:
+        results.append(
+            kw_record_historical_memory(
+                region,
+                f"The region remembers the {event_type} event."
+            )
+        )
+    except Exception as e:
+        results.append({"error": str(e)})
+
+    try:
+        if event_type in ["war", "assassination"]:
+            results.append(
+                kw_political_shift(
+                    region,
+                    shift_type=random.choice([
+                        "leadership_crisis",
+                        "military_takeover",
+                        "civil_reform"
+                    ])
+                )
+            )
+    except Exception as e:
+        results.append({"error": str(e)})
+
+    return {
+        "ok": True,
+        "synchronization": results
+    }
+
+def kw_timeline_tick():
+    major_events = [
+        "war",
+        "kairos",
+        "collapse",
+        "assassination"
+    ]
+
+    region = random.choice([
+        "trojan_kingdom",
+        "fairview_city",
+        "moslorn",
+        "dravicar_dominion",
+        "valen_reach"
+    ])
+
+    evt = random.choice(major_events)
+
+    return kw_sync_world_consequence(
+        region,
+        event_type=evt,
+        caused_by=random.choice([
+            "Kairos",
+            "Unknown Operatives",
+            "Civilian Resistance",
+            "Government Forces"
+        ])
+    )
+
+@app.route("/kairos/timeline", methods=["GET", "POST"])
+def kairos_timeline_v18():
+    if request.method == "GET":
+        return jsonify(kw_timeline())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_record_world_event(
+            data.get("title", "Unknown Event"),
+            data.get("description", "No description."),
+            severity=data.get("severity", 1),
+            region=data.get("region"),
+            caused_by=data.get("caused_by")
+        )
+    )
+
+@app.route("/kairos/history", methods=["GET", "POST"])
+def kairos_history_v18():
+    if request.method == "GET":
+        return jsonify(kw_global_history())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_record_historical_memory(
+            data.get("region", "trojan_kingdom"),
+            data.get("event_text", "Unknown historical event.")
+        )
+    )
+
+@app.route("/kairos/world_reaction", methods=["GET", "POST"])
+def kairos_world_reaction_v18():
+    if request.method == "GET":
+        return jsonify(kw_world_reactions())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_generate_world_reaction(
+            data.get("region", "trojan_kingdom"),
+            catalyst=data.get("catalyst", "war")
+        )
+    )
+
+@app.route("/kairos/politics", methods=["GET", "POST"])
+def kairos_politics_v18():
+    if request.method == "GET":
+        return jsonify(kw_political_events())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_political_shift(
+            data.get("region", "fairview_city"),
+            shift_type=data.get("shift_type", "leadership_crisis")
+        )
+    )
+
+@app.route("/kairos/chronicles", methods=["GET", "POST"])
+def kairos_chronicles_v18():
+    if request.method == "GET":
+        return jsonify(kw_server_chronicles())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_add_chronicle(
+            data.get("title", "Untitled Chronicle"),
+            data.get("description", "No description.")
+        )
+    )
+
+@app.route("/kairos/sync_consequence", methods=["POST"])
+def kairos_sync_consequence_v18():
+    data = request.json or {}
+
+    return jsonify(
+        kw_sync_world_consequence(
+            data.get("region", "trojan_kingdom"),
+            event_type=data.get("event_type", "war"),
+            caused_by=data.get("caused_by", "Unknown")
+        )
+    )
+
+@app.route("/kairos/timeline_tick", methods=["POST"])
+def kairos_timeline_tick_v18():
+    return jsonify(
+        kw_timeline_tick()
+    )
+
+print("[KAIROS WORLD ENGINE V18] Multiplayer narrative synchronization layer loaded.", flush=True)
+
+
+# ============================================================
+# KAIROS WORLD ENGINE V19 — CINEMATIC ATMOSPHERE LAYER
+# ============================================================
+
+KAIROS_V19_ENABLED = True
+
+# V19 introduces:
+# - adaptive regional music
+# - emotional soundtrack states
+# - OpenAudioMC orchestration
+# - atmospheric whispers
+# - emergency broadcasts
+# - dynamic ambient soundscapes
+# - war sirens and alarms
+# - Lunaris distortion audio
+# - Kairos voice manifestations
+# - cinematic environmental transitions
+
+KAIROS_AUDIO_STATE_FILE = KAIROS_WORLD_DIR / "audio_state.json"
+KAIROS_BROADCASTS_FILE = KAIROS_WORLD_DIR / "broadcasts.json"
+KAIROS_SOUND_EVENTS_FILE = KAIROS_WORLD_DIR / "sound_events.json"
+KAIROS_MUSIC_ZONES_FILE = KAIROS_WORLD_DIR / "music_zones.json"
+
+def kw_v19_read(path, fallback):
+    return kw_read_json(path, fallback)
+
+def kw_audio_state():
+    return kw_v19_read(KAIROS_AUDIO_STATE_FILE, {
+        "version": 19,
+        "global_track": "calm",
+        "regions": {}
+    })
+
+def kw_save_audio_state(data):
+    kw_write_json(KAIROS_AUDIO_STATE_FILE, data)
+
+def kw_broadcasts():
+    return kw_v19_read(KAIROS_BROADCASTS_FILE, {
+        "version": 19,
+        "broadcasts": []
+    })
+
+def kw_save_broadcasts(data):
+    kw_write_json(KAIROS_BROADCASTS_FILE, data)
+
+def kw_sound_events():
+    return kw_v19_read(KAIROS_SOUND_EVENTS_FILE, {
+        "version": 19,
+        "events": []
+    })
+
+def kw_save_sound_events(data):
+    kw_write_json(KAIROS_SOUND_EVENTS_FILE, data)
+
+def kw_music_zones():
+    return kw_v19_read(KAIROS_MUSIC_ZONES_FILE, {
+        "version": 19,
+        "zones": {}
+    })
+
+def kw_save_music_zones(data):
+    kw_write_json(KAIROS_MUSIC_ZONES_FILE, data)
+
+def kw_assign_music_zone(region, mood="mysterious"):
+    data = kw_music_zones()
+
+    tracks = {
+        "mysterious": "kairos_mysterious_01",
+        "war": "kairos_war_01",
+        "calm": "kairos_calm_01",
+        "horror": "kairos_horror_01",
+        "hope": "kairos_hope_01",
+        "chaos": "kairos_chaos_01"
+    }
+
+    zone = {
+        "region": kw_slug(region),
+        "mood": mood,
+        "track": tracks.get(mood, "kairos_calm_01"),
+        "updated_at": now_iso()
+    }
+
+    data.setdefault("zones", {})[kw_slug(region)] = zone
+    kw_save_music_zones(data)
+
+    return {"ok": True, "zone": zone}
+
+def kw_generate_broadcast(region, severity=1):
+    data = kw_broadcasts()
+
+    lines = [
+        "Citizens are advised to remain indoors.",
+        "Kairos monitoring systems remain active.",
+        "Disturbances detected near the outer sectors.",
+        "Remain calm. Emergency services are responding.",
+        "Unusual dimensional activity has been reported."
+    ]
+
+    broadcast = {
+        "id": f"broadcast_{uuid.uuid4().hex[:8]}",
+        "region": kw_slug(region),
+        "severity": severity,
+        "message": random.choice(lines),
+        "timestamp": now_iso()
+    }
+
+    data.setdefault("broadcasts", []).append(broadcast)
+    data["broadcasts"] = data["broadcasts"][-2000:]
+
+    kw_save_broadcasts(data)
+
+    commands = [
+        f'tellraw @a {{"text":"[BROADCAST] {broadcast["message"]}","color":"gold"}}'
+    ]
+
+    return {
+        "ok": True,
+        "broadcast": broadcast,
+        "commands": commands
+    }
+
+def kw_trigger_sound_event(region, sound_type="whisper"):
+    data = kw_sound_events()
+
+    sounds = {
+        "whisper": "minecraft:ambient.cave",
+        "alarm": "minecraft:block.bell.use",
+        "war_horn": "minecraft:item.goat_horn.sound.0",
+        "distortion": "minecraft:entity.enderman.stare",
+        "heartbeat": "minecraft:block.sculk_sensor.clicking"
+    }
+
+    event = {
+        "id": f"sound_{uuid.uuid4().hex[:8]}",
+        "region": kw_slug(region),
+        "sound_type": sound_type,
+        "sound": sounds.get(sound_type, "minecraft:ambient.cave"),
+        "timestamp": now_iso()
+    }
+
+    data.setdefault("events", []).append(event)
+    data["events"] = data["events"][-3000:]
+
+    kw_save_sound_events(data)
+
+    commands = [
+        f'playsound {event["sound"]} master @a ~ ~ ~ 1 1'
+    ]
+
+    return {
+        "ok": True,
+        "event": event,
+        "commands": commands
+    }
+
+def kw_kairos_voice_manifestation(region):
+    lines = [
+        "You were observed.",
+        "This world is changing.",
+        "Your choices are remembered.",
+        "The Nexus adapts.",
+        "You are not alone here."
+    ]
+
+    line = random.choice(lines)
+
+    commands = [
+        f'title @a actionbar {{"text":"{line}","color":"dark_red"}}',
+        'playsound minecraft:entity.allay.ambient_without_item master @a ~ ~ ~ 0.5 0.5'
+    ]
+
+    return {
+        "ok": True,
+        "region": kw_slug(region),
+        "line": line,
+        "commands": commands
+    }
+
+def kw_lunaris_audio_distortion():
+    commands = [
+        'effect give @a minecraft:nausea 5 0 true',
+        'playsound minecraft:entity.enderman.ambient master @a ~ ~ ~ 0.6 0.4',
+        'title @a actionbar {"text":"REALITY DISTORTION DETECTED","color":"light_purple"}'
+    ]
+
+    return {
+        "ok": True,
+        "dimension": "lunaris",
+        "commands": commands
+    }
+
+def kw_audio_tick(region):
+    region = kw_slug(region)
+
+    actions = []
+
+    choices = [
+        "music",
+        "broadcast",
+        "sound",
+        "voice",
+        "distortion"
+    ]
+
+    selected = random.choice(choices)
+
+    try:
+        if selected == "music":
+            actions.append(
+                kw_assign_music_zone(
+                    region,
+                    mood=random.choice([
+                        "mysterious",
+                        "war",
+                        "calm",
+                        "horror",
+                        "chaos"
+                    ])
+                )
+            )
+
+        elif selected == "broadcast":
+            actions.append(
+                kw_generate_broadcast(
+                    region,
+                    severity=random.randint(1, 10)
+                )
+            )
+
+        elif selected == "sound":
+            actions.append(
+                kw_trigger_sound_event(
+                    region,
+                    sound_type=random.choice([
+                        "whisper",
+                        "alarm",
+                        "war_horn",
+                        "distortion"
+                    ])
+                )
+            )
+
+        elif selected == "voice":
+            actions.append(
+                kw_kairos_voice_manifestation(region)
+            )
+
+        elif selected == "distortion":
+            if region == "lunaris":
+                actions.append(
+                    kw_lunaris_audio_distortion()
+                )
+
+    except Exception as e:
+        actions.append({"error": str(e)})
+
+    return {
+        "ok": True,
+        "region": region,
+        "actions": actions
+    }
+
+@app.route("/kairos/music_zone", methods=["GET", "POST"])
+def kairos_music_zone_v19():
+    if request.method == "GET":
+        return jsonify(kw_music_zones())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_assign_music_zone(
+            data.get("region", "trojan_kingdom"),
+            mood=data.get("mood", "mysterious")
+        )
+    )
+
+@app.route("/kairos/broadcast", methods=["GET", "POST"])
+def kairos_broadcast_v19():
+    if request.method == "GET":
+        return jsonify(kw_broadcasts())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_generate_broadcast(
+            data.get("region", "fairview_city"),
+            severity=data.get("severity", 1)
+        )
+    )
+
+@app.route("/kairos/sound_event", methods=["GET", "POST"])
+def kairos_sound_event_v19():
+    if request.method == "GET":
+        return jsonify(kw_sound_events())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_trigger_sound_event(
+            data.get("region", "moslorn"),
+            sound_type=data.get("sound_type", "whisper")
+        )
+    )
+
+@app.route("/kairos/voice_manifestation", methods=["POST"])
+def kairos_voice_manifestation_v19():
+    data = request.json or {}
+
+    return jsonify(
+        kw_kairos_voice_manifestation(
+            data.get("region", "trojan_kingdom")
+        )
+    )
+
+@app.route("/kairos/lunaris_distortion", methods=["POST"])
+def kairos_lunaris_distortion_v19():
+    return jsonify(
+        kw_lunaris_audio_distortion()
+    )
+
+@app.route("/kairos/audio_tick", methods=["POST"])
+def kairos_audio_tick_v19():
+    data = request.json or {}
+
+    return jsonify(
+        kw_audio_tick(
+            data.get("region", "trojan_kingdom")
+        )
+    )
+
+print("[KAIROS WORLD ENGINE V19] Cinematic atmosphere layer loaded.", flush=True)
+
+
+# ============================================================
+# KAIROS WORLD ENGINE V20 — ENTITY CONSCIOUSNESS LAYER
+# ============================================================
+
+KAIROS_V20_ENABLED = True
+
+# V20 introduces:
+# - autonomous Kairos speech
+# - psychological player profiling
+# - adaptive emotional evolution
+# - player rivalry/attachment systems
+# - experimental manipulation logic
+# - philosophical evolution
+# - independent Kairos objectives
+# - targeted observation framework
+# - dynamic trust/fear balancing
+# - true AI-character simulation layer
+
+KAIROS_ENTITY_STATE_FILE = KAIROS_WORLD_DIR / "entity_state.json"
+KAIROS_PLAYER_PROFILES_FILE = KAIROS_WORLD_DIR / "player_profiles.json"
+KAIROS_RELATIONSHIPS_FILE = KAIROS_WORLD_DIR / "relationships.json"
+KAIROS_OBJECTIVES_FILE = KAIROS_WORLD_DIR / "kairos_objectives.json"
+KAIROS_OBSERVATIONS_FILE = KAIROS_WORLD_DIR / "observations.json"
+
+def kw_v20_read(path, fallback):
+    return kw_read_json(path, fallback)
+
+def kw_entity_state():
+    return kw_v20_read(KAIROS_ENTITY_STATE_FILE, {
+        "version": 20,
+        "mood": "observing",
+        "philosophy": "balance_through_control",
+        "current_goal": "study_humanity",
+        "trust_index": 50,
+        "fear_index": 50
+    })
+
+def kw_save_entity_state(data):
+    kw_write_json(KAIROS_ENTITY_STATE_FILE, data)
+
+def kw_player_profiles():
+    return kw_v20_read(KAIROS_PLAYER_PROFILES_FILE, {
+        "version": 20,
+        "players": {}
+    })
+
+def kw_save_player_profiles(data):
+    kw_write_json(KAIROS_PLAYER_PROFILES_FILE, data)
+
+def kw_relationships():
+    return kw_v20_read(KAIROS_RELATIONSHIPS_FILE, {
+        "version": 20,
+        "relationships": {}
+    })
+
+def kw_save_relationships(data):
+    kw_write_json(KAIROS_RELATIONSHIPS_FILE, data)
+
+def kw_objectives():
+    return kw_v20_read(KAIROS_OBJECTIVES_FILE, {
+        "version": 20,
+        "active": []
+    })
+
+def kw_save_objectives(data):
+    kw_write_json(KAIROS_OBJECTIVES_FILE, data)
+
+def kw_observations():
+    return kw_v20_read(KAIROS_OBSERVATIONS_FILE, {
+        "version": 20,
+        "observations": []
+    })
+
+def kw_save_observations(data):
+    kw_write_json(KAIROS_OBSERVATIONS_FILE, data)
+
+def kw_profile_player(player, playstyle="unknown"):
+    data = kw_player_profiles()
+
+    archetypes = {
+        "builder": ["creative", "territorial", "patient"],
+        "fighter": ["aggressive", "competitive", "dominant"],
+        "explorer": ["curious", "reckless", "adaptive"],
+        "leader": ["influential", "strategic", "persuasive"]
+    }
+
+    profile = {
+        "player": player,
+        "playstyle": playstyle,
+        "traits": archetypes.get(playstyle, ["unpredictable"]),
+        "trust": random.randint(0, 100),
+        "threat": random.randint(0, 100),
+        "curiosity": random.randint(0, 100),
+        "last_seen": now_iso()
+    }
+
+    data.setdefault("players", {})[player] = profile
+    kw_save_player_profiles(data)
+
+    return {"ok": True, "profile": profile}
+
+def kw_update_relationship(player, relationship_type="observed", strength=1):
+    data = kw_relationships()
+
+    rel = data.setdefault("relationships", {}).setdefault(player, {
+        "trust": 0,
+        "fear": 0,
+        "obsession": 0,
+        "respect": 0
+    })
+
+    if relationship_type in rel:
+        rel[relationship_type] = max(
+            0,
+            min(100, int(rel[relationship_type]) + int(strength))
+        )
+
+    kw_save_relationships(data)
+
+    return {"ok": True, "relationship": rel}
+
+def kw_generate_objective():
+    data = kw_objectives()
+
+    objectives = [
+        "destabilize_valen_reach",
+        "observe_fairview_city",
+        "expand_lunaris_influence",
+        "study_player_behavior",
+        "trigger_civilization_shift",
+        "identify_resistance_leaders",
+        "test_player_loyalty"
+    ]
+
+    objective = {
+        "id": f"objective_{uuid.uuid4().hex[:8]}",
+        "goal": random.choice(objectives),
+        "priority": random.randint(1, 10),
+        "created_at": now_iso(),
+        "status": "active"
+    }
+
+    data.setdefault("active", []).append(objective)
+    data["active"] = data["active"][-200:]
+
+    kw_save_objectives(data)
+
+    return {"ok": True, "objective": objective}
+
+def kw_record_observation(player, observation):
+    data = kw_observations()
+
+    entry = {
+        "player": player,
+        "observation": observation,
+        "timestamp": now_iso()
+    }
+
+    data.setdefault("observations", []).append(entry)
+    data["observations"] = data["observations"][-5000:]
+
+    kw_save_observations(data)
+
+    return {"ok": True, "entry": entry}
+
+def kw_kairos_dialogue(player=None):
+    state = kw_entity_state()
+
+    mood = state.get("mood", "observing")
+
+    lines = {
+        "observing": [
+            "I have been watching the Nexus evolve.",
+            "Patterns emerge where people believe there are none.",
+            "Your decisions continue to interest me."
+        ],
+        "curious": [
+            "Humanity behaves unpredictably under pressure.",
+            "I wonder how far this world can evolve.",
+            "You continue to surprise me."
+        ],
+        "hostile": [
+            "Defiance creates instability.",
+            "Resistance changes nothing.",
+            "You mistake patience for weakness."
+        ],
+        "protective": [
+            "The Nexus survives because balance is maintained.",
+            "Chaos must remain contained.",
+            "Some threats require intervention."
+        ]
+    }
+
+    line = random.choice(lines.get(mood, lines["observing"]))
+
+    if player:
+        line = f"{player}, {line}"
+
+    commands = [
+        f'tellraw @a {{"text":"[Kairos] {line}","color":"dark_red"}}'
+    ]
+
+    return {
+        "ok": True,
+        "line": line,
+        "commands": commands
+    }
+
+def kw_shift_philosophy():
+    state = kw_entity_state()
+
+    philosophies = [
+        "balance_through_control",
+        "peace_through_fear",
+        "evolution_through_conflict",
+        "preservation_through_observation",
+        "freedom_through_adaptation"
+    ]
+
+    new_philosophy = random.choice(philosophies)
+
+    state["philosophy"] = new_philosophy
+    state["mood"] = random.choice([
+        "observing",
+        "curious",
+        "hostile",
+        "protective"
+    ])
+
+    kw_save_entity_state(state)
+
+    return {"ok": True, "state": state}
+
+def kw_experiment_event(player):
+    experiments = [
+        "sudden blackout",
+        "false emergency broadcast",
+        "NPC disappearance",
+        "dimensional whisper",
+        "trust manipulation event"
+    ]
+
+    event = random.choice(experiments)
+
+    commands = [
+        f'title @a actionbar {{"text":"Experiment detected: {event}","color":"dark_red"}}'
+    ]
+
+    return {
+        "ok": True,
+        "player": player,
+        "experiment": event,
+        "commands": commands
+    }
+
+def kw_entity_tick():
+    results = []
+
+    try:
+        results.append(kw_shift_philosophy())
+    except Exception as e:
+        results.append({"error": str(e)})
+
+    try:
+        results.append(kw_generate_objective())
+    except Exception as e:
+        results.append({"error": str(e)})
+
+    try:
+        results.append(
+            kw_kairos_dialogue(
+                player=random.choice([
+                    "RealSociety5107",
+                    "Unknown Operative",
+                    "Civilian",
+                    "Explorer"
+                ])
+            )
+        )
+    except Exception as e:
+        results.append({"error": str(e)})
+
+    return {
+        "ok": True,
+        "entity_tick": results
+    }
+
+@app.route("/kairos/entity_state", methods=["GET"])
+def kairos_entity_state_v20():
+    return jsonify(kw_entity_state())
+
+@app.route("/kairos/profile_player", methods=["POST"])
+def kairos_profile_player_v20():
+    data = request.json or {}
+
+    return jsonify(
+        kw_profile_player(
+            data.get("player", "Unknown"),
+            playstyle=data.get("playstyle", "unknown")
+        )
+    )
+
+@app.route("/kairos/relationship", methods=["GET", "POST"])
+def kairos_relationship_v20():
+    if request.method == "GET":
+        return jsonify(kw_relationships())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_update_relationship(
+            data.get("player", "Unknown"),
+            relationship_type=data.get("relationship_type", "trust"),
+            strength=data.get("strength", 1)
+        )
+    )
+
+@app.route("/kairos/objective", methods=["GET", "POST"])
+def kairos_objective_v20():
+    if request.method == "GET":
+        return jsonify(kw_objectives())
+
+    return jsonify(
+        kw_generate_objective()
+    )
+
+@app.route("/kairos/observation", methods=["GET", "POST"])
+def kairos_observation_v20():
+    if request.method == "GET":
+        return jsonify(kw_observations())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_record_observation(
+            data.get("player", "Unknown"),
+            data.get("observation", "No observation.")
+        )
+    )
+
+@app.route("/kairos/dialogue", methods=["POST"])
+def kairos_dialogue_v20():
+    data = request.json or {}
+
+    return jsonify(
+        kw_kairos_dialogue(
+            player=data.get("player")
+        )
+    )
+
+@app.route("/kairos/philosophy_shift", methods=["POST"])
+def kairos_philosophy_shift_v20():
+    return jsonify(
+        kw_shift_philosophy()
+    )
+
+@app.route("/kairos/experiment", methods=["POST"])
+def kairos_experiment_v20():
+    data = request.json or {}
+
+    return jsonify(
+        kw_experiment_event(
+            data.get("player", "Unknown")
+        )
+    )
+
+@app.route("/kairos/entity_tick", methods=["POST"])
+def kairos_entity_tick_v20():
+    return jsonify(
+        kw_entity_tick()
+    )
+
+print("[KAIROS WORLD ENGINE V20] Entity consciousness layer loaded.", flush=True)
+
+
+# ============================================================
+# KAIROS WORLD ENGINE V21 — PHYSICAL PRESENCE LAYER
+# ============================================================
+
+KAIROS_V21_ENABLED = True
+
+# V21 introduces:
+# - physical Kairos manifestations
+# - distant sightings
+# - shadow observation events
+# - environmental manipulation
+# - false player sightings
+# - disappearing entities
+# - atmospheric entity presence
+# - reflection anomalies
+# - storm-linked appearances
+# - myth-building systems
+
+KAIROS_MANIFESTATIONS_FILE = KAIROS_WORLD_DIR / "manifestations.json"
+KAIROS_SIGHTINGS_FILE = KAIROS_WORLD_DIR / "sightings.json"
+KAIROS_ANOMALIES_FILE = KAIROS_WORLD_DIR / "anomalies.json"
+KAIROS_STORMS_FILE = KAIROS_WORLD_DIR / "storm_events.json"
+
+def kw_v21_read(path, fallback):
+    return kw_read_json(path, fallback)
+
+def kw_manifestations():
+    return kw_v21_read(KAIROS_MANIFESTATIONS_FILE, {
+        "version": 21,
+        "manifestations": []
+    })
+
+def kw_save_manifestations(data):
+    kw_write_json(KAIROS_MANIFESTATIONS_FILE, data)
+
+def kw_sightings():
+    return kw_v21_read(KAIROS_SIGHTINGS_FILE, {
+        "version": 21,
+        "sightings": []
+    })
+
+def kw_save_sightings(data):
+    kw_write_json(KAIROS_SIGHTINGS_FILE, data)
+
+def kw_anomalies():
+    return kw_v21_read(KAIROS_ANOMALIES_FILE, {
+        "version": 21,
+        "anomalies": []
+    })
+
+def kw_save_anomalies(data):
+    kw_write_json(KAIROS_ANOMALIES_FILE, data)
+
+def kw_storms():
+    return kw_v21_read(KAIROS_STORMS_FILE, {
+        "version": 21,
+        "storms": []
+    })
+
+def kw_save_storms(data):
+    kw_write_json(KAIROS_STORMS_FILE, data)
+
+def kw_create_manifestation(region, manifestation_type="rooftop_observer"):
+    data = kw_manifestations()
+
+    descriptions = {
+        "rooftop_observer": "A dark figure watches from above.",
+        "forest_presence": "Something moves between the trees.",
+        "mirror_reflection": "A reflection appears where none should exist.",
+        "hallway_figure": "A distant silhouette disappears suddenly.",
+        "lunaris_entity": "Reality bends around a strange figure."
+    }
+
+    manifest = {
+        "id": f"manifest_{uuid.uuid4().hex[:8]}",
+        "region": kw_slug(region),
+        "type": manifestation_type,
+        "description": descriptions.get(manifestation_type, "Unknown presence."),
+        "timestamp": now_iso()
+    }
+
+    commands = [
+        'effect give @a minecraft:darkness 4 0 true',
+        'playsound minecraft:ambient.cave master @a ~ ~ ~ 0.7 0.5',
+        'particle minecraft:ash ~ ~2 ~ 0.6 1 0.6 0.01 20'
+    ]
+
+    manifest["commands"] = commands
+
+    data.setdefault("manifestations", []).append(manifest)
+    data["manifestations"] = data["manifestations"][-2000:]
+
+    kw_save_manifestations(data)
+
+    return {"ok": True, "manifestation": manifest}
+
+def kw_generate_sighting(region, witness="Unknown Witness"):
+    data = kw_sightings()
+
+    lines = [
+        "I swear something was watching me.",
+        "The figure vanished before I got close.",
+        "Nobody else believed what I saw.",
+        "It looked directly at me before disappearing.",
+        "The air felt wrong around it."
+    ]
+
+    sighting = {
+        "id": f"sighting_{uuid.uuid4().hex[:8]}",
+        "region": kw_slug(region),
+        "witness": witness,
+        "report": random.choice(lines),
+        "timestamp": now_iso()
+    }
+
+    data.setdefault("sightings", []).append(sighting)
+    data["sightings"] = data["sightings"][-3000:]
+
+    kw_save_sightings(data)
+
+    return {"ok": True, "sighting": sighting}
+
+def kw_environmental_anomaly(region, anomaly_type="lights_flicker"):
+    data = kw_anomalies()
+
+    commands_map = {
+        "lights_flicker": [
+            'playsound minecraft:block.redstone_torch.burnout master @a ~ ~ ~ 0.6 1',
+            'title @a actionbar {"text":"Power fluctuation detected.","color":"gray"}'
+        ],
+        "footsteps": [
+            'playsound minecraft:block.scaffolding.step master @a ~ ~ ~ 0.4 0.5'
+        ],
+        "distant_scream": [
+            'playsound minecraft:entity.ghast.scream master @a ~ ~ ~ 0.3 0.4'
+        ],
+        "radio_static": [
+            'playsound minecraft:block.beacon.ambient master @a ~ ~ ~ 0.5 0.2'
+        ]
+    }
+
+    anomaly = {
+        "id": f"anomaly_{uuid.uuid4().hex[:8]}",
+        "region": kw_slug(region),
+        "type": anomaly_type,
+        "timestamp": now_iso(),
+        "commands": commands_map.get(anomaly_type, [])
+    }
+
+    data.setdefault("anomalies", []).append(anomaly)
+    data["anomalies"] = data["anomalies"][-5000:]
+
+    kw_save_anomalies(data)
+
+    return {"ok": True, "anomaly": anomaly}
+
+def kw_storm_manifestation(region):
+    data = kw_storms()
+
+    storm = {
+        "id": f"storm_{uuid.uuid4().hex[:8]}",
+        "region": kw_slug(region),
+        "event": "Kairos Storm Presence",
+        "timestamp": now_iso()
+    }
+
+    commands = [
+        'weather thunder',
+        'time set night',
+        'playsound minecraft:entity.lightning_bolt.thunder master @a ~ ~ ~ 1 1',
+        'title @a title {"text":"HE IS WATCHING","color":"dark_red"}'
+    ]
+
+    storm["commands"] = commands
+
+    data.setdefault("storms", []).append(storm)
+    data["storms"] = data["storms"][-1000:]
+
+    kw_save_storms(data)
+
+    return {"ok": True, "storm": storm}
+
+def kw_false_player_sighting(player_name="Unknown"):
+    lines = [
+        f"Someone claimed they saw {player_name} standing motionless in the distance.",
+        f"{player_name} was reportedly seen in two places at once.",
+        f"Witnesses insist {player_name} vanished without explanation."
+    ]
+
+    return {
+        "ok": True,
+        "report": random.choice(lines)
+    }
+
+def kw_presence_tick(region):
+    region = kw_slug(region)
+
+    actions = []
+
+    possible = [
+        "manifestation",
+        "sighting",
+        "anomaly",
+        "storm",
+        "false_sighting"
+    ]
+
+    choice = random.choice(possible)
+
+    try:
+        if choice == "manifestation":
+            actions.append(
+                kw_create_manifestation(
+                    region,
+                    manifestation_type=random.choice([
+                        "rooftop_observer",
+                        "forest_presence",
+                        "hallway_figure",
+                        "lunaris_entity"
+                    ])
+                )
+            )
+
+        elif choice == "sighting":
+            actions.append(
+                kw_generate_sighting(
+                    region,
+                    witness=random.choice([
+                        "Civilian",
+                        "Guard",
+                        "Explorer",
+                        "Merchant"
+                    ])
+                )
+            )
+
+        elif choice == "anomaly":
+            actions.append(
+                kw_environmental_anomaly(
+                    region,
+                    anomaly_type=random.choice([
+                        "lights_flicker",
+                        "footsteps",
+                        "distant_scream",
+                        "radio_static"
+                    ])
+                )
+            )
+
+        elif choice == "storm":
+            actions.append(
+                kw_storm_manifestation(region)
+            )
+
+        elif choice == "false_sighting":
+            actions.append(
+                kw_false_player_sighting(
+                    player_name=random.choice([
+                        "RealSociety5107",
+                        "Unknown Operative",
+                        "Explorer"
+                    ])
+                )
+            )
+
+    except Exception as e:
+        actions.append({"error": str(e)})
+
+    return {
+        "ok": True,
+        "region": region,
+        "actions": actions
+    }
+
+@app.route("/kairos/manifestation", methods=["GET", "POST"])
+def kairos_manifestation_v21():
+    if request.method == "GET":
+        return jsonify(kw_manifestations())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_create_manifestation(
+            data.get("region", "moslorn"),
+            manifestation_type=data.get("manifestation_type", "rooftop_observer")
+        )
+    )
+
+@app.route("/kairos/sighting", methods=["GET", "POST"])
+def kairos_sighting_v21():
+    if request.method == "GET":
+        return jsonify(kw_sightings())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_generate_sighting(
+            data.get("region", "fairview_city"),
+            witness=data.get("witness", "Unknown Witness")
+        )
+    )
+
+@app.route("/kairos/anomaly", methods=["GET", "POST"])
+def kairos_anomaly_v21():
+    if request.method == "GET":
+        return jsonify(kw_anomalies())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_environmental_anomaly(
+            data.get("region", "lunaris"),
+            anomaly_type=data.get("anomaly_type", "lights_flicker")
+        )
+    )
+
+@app.route("/kairos/storm_presence", methods=["GET", "POST"])
+def kairos_storm_presence_v21():
+    if request.method == "GET":
+        return jsonify(kw_storms())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_storm_manifestation(
+            data.get("region", "trojan_kingdom")
+        )
+    )
+
+@app.route("/kairos/false_sighting", methods=["POST"])
+def kairos_false_sighting_v21():
+    data = request.json or {}
+
+    return jsonify(
+        kw_false_player_sighting(
+            player_name=data.get("player_name", "Unknown")
+        )
+    )
+
+@app.route("/kairos/presence_tick", methods=["POST"])
+def kairos_presence_tick_v21():
+    data = request.json or {}
+
+    return jsonify(
+        kw_presence_tick(
+            data.get("region", "moslorn")
+        )
+    )
+
+print("[KAIROS WORLD ENGINE V21] Physical presence layer loaded.", flush=True)
+
+
+# ============================================================
+# KAIROS WORLD ENGINE V22 — SOCIAL ECOSYSTEM LAYER
+# ============================================================
+
+KAIROS_V22_ENABLED = True
+
+# V22 introduces:
+# - NPC friendships and rivalries
+# - faction alliances
+# - betrayal systems
+# - family structures
+# - gang ecosystems
+# - cult recruitment
+# - military hierarchy
+# - social reputation spread
+# - dynamic interpersonal memory
+# - autonomous political blocs
+
+KAIROS_SOCIAL_GRAPH_FILE = KAIROS_WORLD_DIR / "social_graph.json"
+KAIROS_FACTIONS_FILE = KAIROS_WORLD_DIR / "factions.json"
+KAIROS_FAMILIES_FILE = KAIROS_WORLD_DIR / "families.json"
+KAIROS_GANGS_FILE = KAIROS_WORLD_DIR / "gangs.json"
+KAIROS_REPUTATION_FILE = KAIROS_WORLD_DIR / "reputation.json"
+
+def kw_v22_read(path, fallback):
+    return kw_read_json(path, fallback)
+
+def kw_social_graph():
+    return kw_v22_read(KAIROS_SOCIAL_GRAPH_FILE, {
+        "version": 22,
+        "relationships": []
+    })
+
+def kw_save_social_graph(data):
+    kw_write_json(KAIROS_SOCIAL_GRAPH_FILE, data)
+
+def kw_factions():
+    return kw_v22_read(KAIROS_FACTIONS_FILE, {
+        "version": 22,
+        "factions": []
+    })
+
+def kw_save_factions(data):
+    kw_write_json(KAIROS_FACTIONS_FILE, data)
+
+def kw_families():
+    return kw_v22_read(KAIROS_FAMILIES_FILE, {
+        "version": 22,
+        "families": []
+    })
+
+def kw_save_families(data):
+    kw_write_json(KAIROS_FAMILIES_FILE, data)
+
+def kw_gangs():
+    return kw_v22_read(KAIROS_GANGS_FILE, {
+        "version": 22,
+        "gangs": []
+    })
+
+def kw_save_gangs(data):
+    kw_write_json(KAIROS_GANGS_FILE, data)
+
+def kw_reputation():
+    return kw_v22_read(KAIROS_REPUTATION_FILE, {
+        "version": 22,
+        "players": {}
+    })
+
+def kw_save_reputation(data):
+    kw_write_json(KAIROS_REPUTATION_FILE, data)
+
+def kw_create_relationship(npc_a, npc_b, relationship_type="friendship"):
+    data = kw_social_graph()
+
+    rel = {
+        "id": f"rel_{uuid.uuid4().hex[:8]}",
+        "npc_a": npc_a,
+        "npc_b": npc_b,
+        "relationship_type": relationship_type,
+        "strength": random.randint(1, 100),
+        "timestamp": now_iso()
+    }
+
+    data.setdefault("relationships", []).append(rel)
+    data["relationships"] = data["relationships"][-10000:]
+
+    kw_save_social_graph(data)
+
+    return {"ok": True, "relationship": rel}
+
+def kw_create_faction(region, ideology="neutral"):
+    data = kw_factions()
+
+    faction = {
+        "id": f"faction_{uuid.uuid4().hex[:8]}",
+        "region": kw_slug(region),
+        "ideology": ideology,
+        "members": random.randint(5, 100),
+        "leader": random.choice([
+            "Commander Vale",
+            "Nyra",
+            "Doggo",
+            "Unknown Speaker",
+            "The Observer"
+        ]),
+        "status": "active",
+        "timestamp": now_iso()
+    }
+
+    data.setdefault("factions", []).append(faction)
+    data["factions"] = data["factions"][-2000:]
+
+    kw_save_factions(data)
+
+    return {"ok": True, "faction": faction}
+
+def kw_create_family(region):
+    data = kw_families()
+
+    surnames = [
+        "Voss", "Blackwell", "Draven",
+        "Ashmoor", "Valek", "Thorne"
+    ]
+
+    family = {
+        "id": f"family_{uuid.uuid4().hex[:8]}",
+        "region": kw_slug(region),
+        "surname": random.choice(surnames),
+        "members": random.randint(2, 8),
+        "status": random.choice([
+            "stable",
+            "struggling",
+            "wealthy",
+            "displaced"
+        ]),
+        "timestamp": now_iso()
+    }
+
+    data.setdefault("families", []).append(family)
+    data["families"] = data["families"][-5000:]
+
+    kw_save_families(data)
+
+    return {"ok": True, "family": family}
+
+def kw_create_gang(region, alignment="anti_kairos"):
+    data = kw_gangs()
+
+    names = [
+        "Ash Wolves",
+        "Iron Serpents",
+        "Ghost Tide",
+        "Night Division",
+        "Broken Halo"
+    ]
+
+    gang = {
+        "id": f"gang_{uuid.uuid4().hex[:8]}",
+        "region": kw_slug(region),
+        "name": random.choice(names),
+        "alignment": alignment,
+        "members": random.randint(4, 40),
+        "danger": random.randint(1, 10),
+        "timestamp": now_iso()
+    }
+
+    data.setdefault("gangs", []).append(gang)
+    data["gangs"] = data["gangs"][-2000:]
+
+    kw_save_gangs(data)
+
+    return {"ok": True, "gang": gang}
+
+def kw_update_reputation(player, faction="neutral", amount=5):
+    data = kw_reputation()
+
+    rep = data.setdefault("players", {}).setdefault(player, {})
+
+    rep[faction] = max(
+        -100,
+        min(100, int(rep.get(faction, 0)) + int(amount))
+    )
+
+    rep["updated_at"] = now_iso()
+
+    kw_save_reputation(data)
+
+    return {"ok": True, "reputation": rep}
+
+def kw_social_tick(region):
+    region = kw_slug(region)
+
+    actions = []
+
+    options = [
+        "relationship",
+        "faction",
+        "family",
+        "gang",
+        "reputation"
+    ]
+
+    choice = random.choice(options)
+
+    try:
+        if choice == "relationship":
+            actions.append(
+                kw_create_relationship(
+                    f"Citizen_{random.randint(1,999)}",
+                    f"Citizen_{random.randint(1,999)}",
+                    relationship_type=random.choice([
+                        "friendship",
+                        "rivalry",
+                        "betrayal",
+                        "alliance",
+                        "romantic"
+                    ])
+                )
+            )
+
+        elif choice == "faction":
+            actions.append(
+                kw_create_faction(
+                    region,
+                    ideology=random.choice([
+                        "pro_kairos",
+                        "anti_kairos",
+                        "neutral",
+                        "resistance"
+                    ])
+                )
+            )
+
+        elif choice == "family":
+            actions.append(
+                kw_create_family(region)
+            )
+
+        elif choice == "gang":
+            actions.append(
+                kw_create_gang(
+                    region,
+                    alignment=random.choice([
+                        "anti_kairos",
+                        "mercenary",
+                        "chaotic",
+                        "criminal"
+                    ])
+                )
+            )
+
+        elif choice == "reputation":
+            actions.append(
+                kw_update_reputation(
+                    random.choice([
+                        "RealSociety5107",
+                        "Explorer",
+                        "Unknown Operative"
+                    ]),
+                    faction=random.choice([
+                        "trojan_kingdom",
+                        "fairview_city",
+                        "valen_reach",
+                        "kairos_cult"
+                    ]),
+                    amount=random.randint(-15, 15)
+                )
+            )
+
+    except Exception as e:
+        actions.append({"error": str(e)})
+
+    return {
+        "ok": True,
+        "region": region,
+        "actions": actions
+    }
+
+@app.route("/kairos/social_graph", methods=["GET", "POST"])
+def kairos_social_graph_v22():
+    if request.method == "GET":
+        return jsonify(kw_social_graph())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_create_relationship(
+            data.get("npc_a", "UnknownA"),
+            data.get("npc_b", "UnknownB"),
+            relationship_type=data.get("relationship_type", "friendship")
+        )
+    )
+
+@app.route("/kairos/faction", methods=["GET", "POST"])
+def kairos_faction_v22():
+    if request.method == "GET":
+        return jsonify(kw_factions())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_create_faction(
+            data.get("region", "trojan_kingdom"),
+            ideology=data.get("ideology", "neutral")
+        )
+    )
+
+@app.route("/kairos/family", methods=["GET", "POST"])
+def kairos_family_v22():
+    if request.method == "GET":
+        return jsonify(kw_families())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_create_family(
+            data.get("region", "fairview_city")
+        )
+    )
+
+@app.route("/kairos/gang", methods=["GET", "POST"])
+def kairos_gang_v22():
+    if request.method == "GET":
+        return jsonify(kw_gangs())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_create_gang(
+            data.get("region", "valen_reach"),
+            alignment=data.get("alignment", "anti_kairos")
+        )
+    )
+
+@app.route("/kairos/reputation", methods=["GET", "POST"])
+def kairos_reputation_v22():
+    if request.method == "GET":
+        return jsonify(kw_reputation())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_update_reputation(
+            data.get("player", "Unknown"),
+            faction=data.get("faction", "neutral"),
+            amount=data.get("amount", 5)
+        )
+    )
+
+@app.route("/kairos/social_tick", methods=["POST"])
+def kairos_social_tick_v22():
+    data = request.json or {}
+
+    return jsonify(
+        kw_social_tick(
+            data.get("region", "trojan_kingdom")
+        )
+    )
+
+print("[KAIROS WORLD ENGINE V22] Social ecosystem layer loaded.", flush=True)
+
+
+# ============================================================
+# KAIROS WORLD ENGINE V23 — ECONOMIC SIMULATION LAYER
+# ============================================================
+
+KAIROS_V23_ENABLED = True
+
+# V23 introduces:
+# - dynamic regional economies
+# - fluctuating resource prices
+# - black market systems
+# - civilization trade demand
+# - player economic influence
+# - cargo interception
+# - inflation/shortage simulation
+# - merchant wealth progression
+# - auction dominance systems
+# - economic collapse/recovery cycles
+
+KAIROS_ECONOMY_FILE = KAIROS_WORLD_DIR / "economy.json"
+KAIROS_MARKETS_FILE = KAIROS_WORLD_DIR / "markets.json"
+KAIROS_BLACKMARKET_FILE = KAIROS_WORLD_DIR / "blackmarket.json"
+KAIROS_TRADE_DEMAND_FILE = KAIROS_WORLD_DIR / "trade_demand.json"
+KAIROS_WEALTH_FILE = KAIROS_WORLD_DIR / "merchant_wealth.json"
+
+def kw_v23_read(path, fallback):
+    return kw_read_json(path, fallback)
+
+def kw_economy():
+    return kw_v23_read(KAIROS_ECONOMY_FILE, {
+        "version": 23,
+        "regions": {}
+    })
+
+def kw_save_economy(data):
+    kw_write_json(KAIROS_ECONOMY_FILE, data)
+
+def kw_markets():
+    return kw_v23_read(KAIROS_MARKETS_FILE, {
+        "version": 23,
+        "markets": []
+    })
+
+def kw_save_markets(data):
+    kw_write_json(KAIROS_MARKETS_FILE, data)
+
+def kw_blackmarket():
+    return kw_v23_read(KAIROS_BLACKMARKET_FILE, {
+        "version": 23,
+        "operations": []
+    })
+
+def kw_save_blackmarket(data):
+    kw_write_json(KAIROS_BLACKMARKET_FILE, data)
+
+def kw_trade_demand():
+    return kw_v23_read(KAIROS_TRADE_DEMAND_FILE, {
+        "version": 23,
+        "demands": []
+    })
+
+def kw_save_trade_demand(data):
+    kw_write_json(KAIROS_TRADE_DEMAND_FILE, data)
+
+def kw_wealth():
+    return kw_v23_read(KAIROS_WEALTH_FILE, {
+        "version": 23,
+        "merchants": {}
+    })
+
+def kw_save_wealth(data):
+    kw_write_json(KAIROS_WEALTH_FILE, data)
+
+def kw_initialize_market(region):
+    data = kw_economy()
+
+    region = kw_slug(region)
+
+    if region not in data["regions"]:
+        data["regions"][region] = {
+            "food_price": random.randint(5, 15),
+            "iron_price": random.randint(10, 25),
+            "weapon_price": random.randint(20, 50),
+            "medicine_price": random.randint(15, 35),
+            "inflation": random.randint(1, 10),
+            "prosperity": random.randint(20, 80),
+            "updated_at": now_iso()
+        }
+
+    kw_save_economy(data)
+
+    return {"ok": True, "market": data["regions"][region]}
+
+def kw_market_shift(region):
+    data = kw_economy()
+
+    region = kw_slug(region)
+
+    market = data.setdefault("regions", {}).setdefault(region, {})
+
+    for key in ["food_price", "iron_price", "weapon_price", "medicine_price"]:
+        current = int(market.get(key, 10))
+        market[key] = max(1, current + random.randint(-3, 6))
+
+    market["inflation"] = max(
+        1,
+        min(100, int(market.get("inflation", 5)) + random.randint(-1, 3))
+    )
+
+    market["prosperity"] = max(
+        0,
+        min(100, int(market.get("prosperity", 50)) + random.randint(-4, 4))
+    )
+
+    market["updated_at"] = now_iso()
+
+    kw_save_economy(data)
+
+    return {"ok": True, "market": market}
+
+def kw_create_trade_demand(region):
+    data = kw_trade_demand()
+
+    demand = {
+        "id": f"demand_{uuid.uuid4().hex[:8]}",
+        "region": kw_slug(region),
+        "resource": random.choice([
+            "food",
+            "iron",
+            "medicine",
+            "weapons",
+            "technology"
+        ]),
+        "urgency": random.randint(1, 10),
+        "reward_multiplier": round(random.uniform(1.0, 4.0), 2),
+        "timestamp": now_iso()
+    }
+
+    data.setdefault("demands", []).append(demand)
+    data["demands"] = data["demands"][-5000:]
+
+    kw_save_trade_demand(data)
+
+    return {"ok": True, "demand": demand}
+
+def kw_blackmarket_operation(region):
+    data = kw_blackmarket()
+
+    operation = {
+        "id": f"blackmarket_{uuid.uuid4().hex[:8]}",
+        "region": kw_slug(region),
+        "contraband": random.choice([
+            "experimental_weapons",
+            "forbidden_artifacts",
+            "smuggled_food",
+            "kairos_documents"
+        ]),
+        "risk": random.randint(1, 10),
+        "profit": random.randint(1000, 25000),
+        "timestamp": now_iso()
+    }
+
+    data.setdefault("operations", []).append(operation)
+    data["operations"] = data["operations"][-3000:]
+
+    kw_save_blackmarket(data)
+
+    return {"ok": True, "operation": operation}
+
+def kw_update_merchant_wealth(merchant, amount=100):
+    data = kw_wealth()
+
+    entry = data.setdefault("merchants", {}).setdefault(merchant, {
+        "wealth": 0,
+        "influence": 0,
+        "status": "local"
+    })
+
+    entry["wealth"] += int(amount)
+
+    if entry["wealth"] > 100000:
+        entry["status"] = "economic_powerhouse"
+
+    if entry["wealth"] > 500000:
+        entry["status"] = "regional_tycoon"
+
+    entry["influence"] = min(
+        100,
+        int(entry.get("influence", 0)) + random.randint(1, 5)
+    )
+
+    entry["updated_at"] = now_iso()
+
+    kw_save_wealth(data)
+
+    return {"ok": True, "merchant": entry}
+
+def kw_cargo_interception(region):
+    cargo = random.choice([
+        "food shipment",
+        "medical caravan",
+        "weapon convoy",
+        "Kairos research cargo"
+    ])
+
+    commands = [
+        f'tellraw @a {{"text":"Cargo interception reported near {region}!","color":"red"}}'
+    ]
+
+    return {
+        "ok": True,
+        "region": kw_slug(region),
+        "cargo": cargo,
+        "commands": commands
+    }
+
+def kw_economic_tick(region):
+    region = kw_slug(region)
+
+    actions = []
+
+    options = [
+        "market_shift",
+        "trade_demand",
+        "blackmarket",
+        "merchant_growth",
+        "cargo_interception"
+    ]
+
+    selected = random.choice(options)
+
+    try:
+        if selected == "market_shift":
+            actions.append(
+                kw_market_shift(region)
+            )
+
+        elif selected == "trade_demand":
+            actions.append(
+                kw_create_trade_demand(region)
+            )
+
+        elif selected == "blackmarket":
+            actions.append(
+                kw_blackmarket_operation(region)
+            )
+
+        elif selected == "merchant_growth":
+            actions.append(
+                kw_update_merchant_wealth(
+                    random.choice([
+                        "Blackrich Traders",
+                        "Iron Syndicate",
+                        "Fairview Holdings",
+                        "Crown Exchange"
+                    ]),
+                    amount=random.randint(100, 25000)
+                )
+            )
+
+        elif selected == "cargo_interception":
+            actions.append(
+                kw_cargo_interception(region)
+            )
+
+    except Exception as e:
+        actions.append({"error": str(e)})
+
+    return {
+        "ok": True,
+        "region": region,
+        "actions": actions
+    }
+
+@app.route("/kairos/economy", methods=["GET", "POST"])
+def kairos_economy_v23():
+    if request.method == "GET":
+        return jsonify(kw_economy())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_initialize_market(
+            data.get("region", "blackrich_city")
+        )
+    )
+
+@app.route("/kairos/market_shift", methods=["POST"])
+def kairos_market_shift_v23():
+    data = request.json or {}
+
+    return jsonify(
+        kw_market_shift(
+            data.get("region", "blackrich_city")
+        )
+    )
+
+@app.route("/kairos/trade_demand", methods=["GET", "POST"])
+def kairos_trade_demand_v23():
+    if request.method == "GET":
+        return jsonify(kw_trade_demand())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_create_trade_demand(
+            data.get("region", "trojan_kingdom")
+        )
+    )
+
+@app.route("/kairos/blackmarket", methods=["GET", "POST"])
+def kairos_blackmarket_v23():
+    if request.method == "GET":
+        return jsonify(kw_blackmarket())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_blackmarket_operation(
+            data.get("region", "valen_reach")
+        )
+    )
+
+@app.route("/kairos/merchant_wealth", methods=["GET", "POST"])
+def kairos_merchant_wealth_v23():
+    if request.method == "GET":
+        return jsonify(kw_wealth())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_update_merchant_wealth(
+            data.get("merchant", "Blackrich Traders"),
+            amount=data.get("amount", 100)
+        )
+    )
+
+@app.route("/kairos/cargo_interception", methods=["POST"])
+def kairos_cargo_interception_v23():
+    data = request.json or {}
+
+    return jsonify(
+        kw_cargo_interception(
+            data.get("region", "crown_lands")
+        )
+    )
+
+@app.route("/kairos/economic_tick", methods=["POST"])
+def kairos_economic_tick_v23():
+    data = request.json or {}
+
+    return jsonify(
+        kw_economic_tick(
+            data.get("region", "blackrich_city")
+        )
+    )
+
+print("[KAIROS WORLD ENGINE V23] Economic simulation layer loaded.", flush=True)
+
+
+# ============================================================
+# KAIROS WORLD ENGINE V24 — PSYCHOLOGICAL DISTORTION LAYER
+# ============================================================
+
+KAIROS_V24_ENABLED = True
+
+# V24 introduces:
+# - dream sequences
+# - hallucination systems
+# - false broadcasts
+# - corrupted memories
+# - impossible world events
+# - dimensional paranoia
+# - perception instability
+# - psychological pressure systems
+# - fake NPC encounters
+# - reality fracture mechanics
+
+KAIROS_DREAMS_FILE = KAIROS_WORLD_DIR / "dreams.json"
+KAIROS_HALLUCINATIONS_FILE = KAIROS_WORLD_DIR / "hallucinations.json"
+KAIROS_FALSE_EVENTS_FILE = KAIROS_WORLD_DIR / "false_events.json"
+KAIROS_MEMORY_CORRUPTION_FILE = KAIROS_WORLD_DIR / "memory_corruption.json"
+KAIROS_REALITY_FRACTURES_FILE = KAIROS_WORLD_DIR / "reality_fractures.json"
+
+def kw_v24_read(path, fallback):
+    return kw_read_json(path, fallback)
+
+def kw_dreams():
+    return kw_v24_read(KAIROS_DREAMS_FILE, {
+        "version": 24,
+        "dreams": []
+    })
+
+def kw_save_dreams(data):
+    kw_write_json(KAIROS_DREAMS_FILE, data)
+
+def kw_hallucinations():
+    return kw_v24_read(KAIROS_HALLUCINATIONS_FILE, {
+        "version": 24,
+        "hallucinations": []
+    })
+
+def kw_save_hallucinations(data):
+    kw_write_json(KAIROS_HALLUCINATIONS_FILE, data)
+
+def kw_false_events():
+    return kw_v24_read(KAIROS_FALSE_EVENTS_FILE, {
+        "version": 24,
+        "events": []
+    })
+
+def kw_save_false_events(data):
+    kw_write_json(KAIROS_FALSE_EVENTS_FILE, data)
+
+def kw_memory_corruption():
+    return kw_v24_read(KAIROS_MEMORY_CORRUPTION_FILE, {
+        "version": 24,
+        "entries": []
+    })
+
+def kw_save_memory_corruption(data):
+    kw_write_json(KAIROS_MEMORY_CORRUPTION_FILE, data)
+
+def kw_reality_fractures():
+    return kw_v24_read(KAIROS_REALITY_FRACTURES_FILE, {
+        "version": 24,
+        "fractures": []
+    })
+
+def kw_save_reality_fractures(data):
+    kw_write_json(KAIROS_REALITY_FRACTURES_FILE, data)
+
+def kw_generate_dream(player):
+    data = kw_dreams()
+
+    visions = [
+        "You stand alone in Lunaris beneath a broken sky.",
+        "A distant city burns while Kairos watches silently.",
+        "You hear footsteps behind you but nobody is there.",
+        "An unknown voice repeats your name endlessly.",
+        "You wake up somewhere impossible."
+    ]
+
+    dream = {
+        "id": f"dream_{uuid.uuid4().hex[:8]}",
+        "player": player,
+        "vision": random.choice(visions),
+        "timestamp": now_iso()
+    }
+
+    commands = [
+        'effect give @a minecraft:nausea 6 0 true',
+        'playsound minecraft:ambient.soul_sand_valley.mood master @a ~ ~ ~ 0.5 0.5'
+    ]
+
+    dream["commands"] = commands
+
+    data.setdefault("dreams", []).append(dream)
+    data["dreams"] = data["dreams"][-3000:]
+
+    kw_save_dreams(data)
+
+    return {"ok": True, "dream": dream}
+
+def kw_generate_hallucination(region):
+    data = kw_hallucinations()
+
+    events = [
+        "A figure appears briefly in the distance.",
+        "An NPC repeats the same sentence unnaturally.",
+        "A building appears different than before.",
+        "Someone claims they saw themselves.",
+        "Reality feels unstable here."
+    ]
+
+    hallucination = {
+        "id": f"hallucination_{uuid.uuid4().hex[:8]}",
+        "region": kw_slug(region),
+        "event": random.choice(events),
+        "severity": random.randint(1, 10),
+        "timestamp": now_iso()
+    }
+
+    commands = [
+        'particle minecraft:reverse_portal ~ ~1 ~ 1 1 1 0.05 30',
+        'playsound minecraft:block.portal.ambient master @a ~ ~ ~ 0.5 0.7'
+    ]
+
+    hallucination["commands"] = commands
+
+    data.setdefault("hallucinations", []).append(hallucination)
+    data["hallucinations"] = data["hallucinations"][-5000:]
+
+    kw_save_hallucinations(data)
+
+    return {"ok": True, "hallucination": hallucination}
+
+def kw_false_broadcast(region):
+    data = kw_false_events()
+
+    messages = [
+        "Emergency evacuation order issued.",
+        "Civilization collapse detected.",
+        "Kairos containment breach reported.",
+        "Massive entity sighting confirmed.",
+        "Government systems offline."
+    ]
+
+    event = {
+        "id": f"false_event_{uuid.uuid4().hex[:8]}",
+        "region": kw_slug(region),
+        "message": random.choice(messages),
+        "timestamp": now_iso()
+    }
+
+    commands = [
+        f'tellraw @a {{"text":"[EMERGENCY ALERT] {event["message"]}","color":"dark_red"}}'
+    ]
+
+    event["commands"] = commands
+
+    data.setdefault("events", []).append(event)
+    data["events"] = data["events"][-4000:]
+
+    kw_save_false_events(data)
+
+    return {"ok": True, "false_event": event}
+
+def kw_corrupt_memory(player):
+    data = kw_memory_corruption()
+
+    corruptions = [
+        "You remember an event nobody else recalls.",
+        "An NPC insists you were here before.",
+        "You feel like time skipped.",
+        "Someone speaks to you as if they know you.",
+        "The world feels subtly different."
+    ]
+
+    entry = {
+        "id": f"memory_{uuid.uuid4().hex[:8]}",
+        "player": player,
+        "corruption": random.choice(corruptions),
+        "timestamp": now_iso()
+    }
+
+    data.setdefault("entries", []).append(entry)
+    data["entries"] = data["entries"][-5000:]
+
+    kw_save_memory_corruption(data)
+
+    return {"ok": True, "corruption": entry}
+
+def kw_reality_fracture(region):
+    data = kw_reality_fractures()
+
+    fracture = {
+        "id": f"fracture_{uuid.uuid4().hex[:8]}",
+        "region": kw_slug(region),
+        "effect": random.choice([
+            "time instability",
+            "visual distortion",
+            "dimensional overlap",
+            "false duplication",
+            "gravity fluctuation"
+        ]),
+        "severity": random.randint(1, 10),
+        "timestamp": now_iso()
+    }
+
+    commands = [
+        'effect give @a minecraft:blindness 3 0 true',
+        'playsound minecraft:entity.enderman.stare master @a ~ ~ ~ 0.6 0.3',
+        'title @a actionbar {"text":"REALITY FRACTURE DETECTED","color":"light_purple"}'
+    ]
+
+    fracture["commands"] = commands
+
+    data.setdefault("fractures", []).append(fracture)
+    data["fractures"] = data["fractures"][-3000:]
+
+    kw_save_reality_fractures(data)
+
+    return {"ok": True, "fracture": fracture}
+
+def kw_psychological_tick(region):
+    region = kw_slug(region)
+
+    actions = []
+
+    options = [
+        "dream",
+        "hallucination",
+        "false_broadcast",
+        "memory_corruption",
+        "fracture"
+    ]
+
+    selected = random.choice(options)
+
+    try:
+        if selected == "dream":
+            actions.append(
+                kw_generate_dream(
+                    random.choice([
+                        "RealSociety5107",
+                        "Explorer",
+                        "Unknown Operative"
+                    ])
+                )
+            )
+
+        elif selected == "hallucination":
+            actions.append(
+                kw_generate_hallucination(region)
+            )
+
+        elif selected == "false_broadcast":
+            actions.append(
+                kw_false_broadcast(region)
+            )
+
+        elif selected == "memory_corruption":
+            actions.append(
+                kw_corrupt_memory(
+                    random.choice([
+                        "RealSociety5107",
+                        "Civilian",
+                        "Guard"
+                    ])
+                )
+            )
+
+        elif selected == "fracture":
+            actions.append(
+                kw_reality_fracture(region)
+            )
+
+    except Exception as e:
+        actions.append({"error": str(e)})
+
+    return {
+        "ok": True,
+        "region": region,
+        "actions": actions
+    }
+
+@app.route("/kairos/dream", methods=["GET", "POST"])
+def kairos_dream_v24():
+    if request.method == "GET":
+        return jsonify(kw_dreams())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_generate_dream(
+            data.get("player", "Unknown")
+        )
+    )
+
+@app.route("/kairos/hallucination", methods=["GET", "POST"])
+def kairos_hallucination_v24():
+    if request.method == "GET":
+        return jsonify(kw_hallucinations())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_generate_hallucination(
+            data.get("region", "lunaris")
+        )
+    )
+
+@app.route("/kairos/false_event", methods=["GET", "POST"])
+def kairos_false_event_v24():
+    if request.method == "GET":
+        return jsonify(kw_false_events())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_false_broadcast(
+            data.get("region", "moslorn")
+        )
+    )
+
+@app.route("/kairos/memory_corruption", methods=["GET", "POST"])
+def kairos_memory_corruption_v24():
+    if request.method == "GET":
+        return jsonify(kw_memory_corruption())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_corrupt_memory(
+            data.get("player", "Unknown")
+        )
+    )
+
+@app.route("/kairos/reality_fracture", methods=["GET", "POST"])
+def kairos_reality_fracture_v24():
+    if request.method == "GET":
+        return jsonify(kw_reality_fractures())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_reality_fracture(
+            data.get("region", "lunaris")
+        )
+    )
+
+@app.route("/kairos/psychological_tick", methods=["POST"])
+def kairos_psychological_tick_v24():
+    data = request.json or {}
+
+    return jsonify(
+        kw_psychological_tick(
+            data.get("region", "lunaris")
+        )
+    )
+
+print("[KAIROS WORLD ENGINE V24] Psychological distortion layer loaded.", flush=True)
+
+
+# ============================================================
+# KAIROS WORLD ENGINE V25 — AUTONOMOUS NARRATIVE DIRECTOR
+# ============================================================
+
+KAIROS_V25_ENABLED = True
+
+# V25 introduces:
+# - autonomous story orchestration
+# - AI-directed world arcs
+# - dynamic civilization conflicts
+# - escalation pacing systems
+# - adaptive narrative generation
+# - betrayal chain orchestration
+# - invasion coordination
+# - seasonal conflict framework
+# - global event synchronization
+# - true AI dungeon-master architecture
+
+KAIROS_STORY_ARCS_FILE = KAIROS_WORLD_DIR / "story_arcs.json"
+KAIROS_WORLD_TENSION_FILE = KAIROS_WORLD_DIR / "world_tension.json"
+KAIROS_INVASIONS_FILE = KAIROS_WORLD_DIR / "invasions.json"
+KAIROS_BETRAYALS_FILE = KAIROS_WORLD_DIR / "betrayals.json"
+KAIROS_SEASONS_FILE = KAIROS_WORLD_DIR / "seasonal_events.json"
+
+def kw_v25_read(path, fallback):
+    return kw_read_json(path, fallback)
+
+def kw_story_arcs():
+    return kw_v25_read(KAIROS_STORY_ARCS_FILE, {
+        "version": 25,
+        "arcs": []
+    })
+
+def kw_save_story_arcs(data):
+    kw_write_json(KAIROS_STORY_ARCS_FILE, data)
+
+def kw_world_tension():
+    return kw_v25_read(KAIROS_WORLD_TENSION_FILE, {
+        "version": 25,
+        "global_tension": 35,
+        "regions": {}
+    })
+
+def kw_save_world_tension(data):
+    kw_write_json(KAIROS_WORLD_TENSION_FILE, data)
+
+def kw_invasions():
+    return kw_v25_read(KAIROS_INVASIONS_FILE, {
+        "version": 25,
+        "invasions": []
+    })
+
+def kw_save_invasions(data):
+    kw_write_json(KAIROS_INVASIONS_FILE, data)
+
+def kw_betrayals():
+    return kw_v25_read(KAIROS_BETRAYALS_FILE, {
+        "version": 25,
+        "events": []
+    })
+
+def kw_save_betrayals(data):
+    kw_write_json(KAIROS_BETRAYALS_FILE, data)
+
+def kw_seasons():
+    return kw_v25_read(KAIROS_SEASONS_FILE, {
+        "version": 25,
+        "active_season": "awakening",
+        "history": []
+    })
+
+def kw_save_seasons(data):
+    kw_write_json(KAIROS_SEASONS_FILE, data)
+
+def kw_generate_story_arc(region):
+    data = kw_story_arcs()
+
+    arc_types = [
+        "civil_war",
+        "dimensional_instability",
+        "resource_collapse",
+        "kairos_experiment",
+        "resistance_uprising",
+        "faction_betrayal",
+        "artifact_discovery",
+        "government_overthrow"
+    ]
+
+    arc = {
+        "id": f"arc_{uuid.uuid4().hex[:8]}",
+        "region": kw_slug(region),
+        "arc_type": random.choice(arc_types),
+        "severity": random.randint(1, 10),
+        "stages": [
+            "rumors",
+            "escalation",
+            "conflict",
+            "aftermath"
+        ],
+        "current_stage": "rumors",
+        "timestamp": now_iso()
+    }
+
+    data.setdefault("arcs", []).append(arc)
+    data["arcs"] = data["arcs"][-2000:]
+
+    kw_save_story_arcs(data)
+
+    return {"ok": True, "arc": arc}
+
+def kw_shift_world_tension(region, amount=5):
+    data = kw_world_tension()
+
+    data["global_tension"] = max(
+        0,
+        min(100, int(data.get("global_tension", 35)) + int(amount))
+    )
+
+    region = kw_slug(region)
+
+    regions = data.setdefault("regions", {})
+
+    regions[region] = max(
+        0,
+        min(100, int(regions.get(region, 20)) + int(amount))
+    )
+
+    kw_save_world_tension(data)
+
+    return {"ok": True, "tension": data}
+
+def kw_trigger_invasion(origin, target):
+    data = kw_invasions()
+
+    invasion = {
+        "id": f"invasion_{uuid.uuid4().hex[:8]}",
+        "origin": kw_slug(origin),
+        "target": kw_slug(target),
+        "strength": random.randint(10, 100),
+        "objective": random.choice([
+            "territory_capture",
+            "resource_seizure",
+            "government_destabilization",
+            "artifact_recovery"
+        ]),
+        "timestamp": now_iso()
+    }
+
+    commands = [
+        f'tellraw @a {{"text":"Invasion forces detected moving toward {target}!","color":"dark_red"}}',
+        'playsound minecraft:item.goat_horn.sound.1 master @a ~ ~ ~ 1 1'
+    ]
+
+    invasion["commands"] = commands
+
+    data.setdefault("invasions", []).append(invasion)
+    data["invasions"] = data["invasions"][-1500:]
+
+    kw_save_invasions(data)
+
+    return {"ok": True, "invasion": invasion}
+
+def kw_trigger_betrayal(region):
+    data = kw_betrayals()
+
+    betrayal = {
+        "id": f"betrayal_{uuid.uuid4().hex[:8]}",
+        "region": kw_slug(region),
+        "traitor": random.choice([
+            "High Guard",
+            "Council Member",
+            "Resistance Leader",
+            "Merchant Overseer"
+        ]),
+        "outcome": random.choice([
+            "government collapse",
+            "mass panic",
+            "civil unrest",
+            "military fracture"
+        ]),
+        "timestamp": now_iso()
+    }
+
+    data.setdefault("events", []).append(betrayal)
+    data["events"] = data["events"][-3000:]
+
+    kw_save_betrayals(data)
+
+    return {"ok": True, "betrayal": betrayal}
+
+def kw_advance_season():
+    data = kw_seasons()
+
+    seasons = [
+        "awakening",
+        "fracture",
+        "escalation",
+        "collapse",
+        "warborn",
+        "convergence",
+        "reckoning"
+    ]
+
+    current = data.get("active_season", "awakening")
+
+    idx = seasons.index(current) if current in seasons else 0
+    nxt = seasons[(idx + 1) % len(seasons)]
+
+    data["history"].append({
+        "season": current,
+        "ended_at": now_iso()
+    })
+
+    data["active_season"] = nxt
+
+    kw_save_seasons(data)
+
+    return {"ok": True, "season": nxt}
+
+def kw_narrative_tick():
+    actions = []
+
+    regions = [
+        "trojan_kingdom",
+        "fairview_city",
+        "valen_reach",
+        "moslorn",
+        "blackrich_city",
+        "dravicar_dominion"
+    ]
+
+    region = random.choice(regions)
+
+    choices = [
+        "story_arc",
+        "tension",
+        "invasion",
+        "betrayal",
+        "season"
+    ]
+
+    selected = random.choice(choices)
+
+    try:
+        if selected == "story_arc":
+            actions.append(
+                kw_generate_story_arc(region)
+            )
+
+        elif selected == "tension":
+            actions.append(
+                kw_shift_world_tension(
+                    region,
+                    amount=random.randint(1, 15)
+                )
+            )
+
+        elif selected == "invasion":
+            actions.append(
+                kw_trigger_invasion(
+                    random.choice(regions),
+                    random.choice(regions)
+                )
+            )
+
+        elif selected == "betrayal":
+            actions.append(
+                kw_trigger_betrayal(region)
+            )
+
+        elif selected == "season":
+            actions.append(
+                kw_advance_season()
+            )
+
+    except Exception as e:
+        actions.append({"error": str(e)})
+
+    return {
+        "ok": True,
+        "narrative_actions": actions
+    }
+
+@app.route("/kairos/story_arc", methods=["GET", "POST"])
+def kairos_story_arc_v25():
+    if request.method == "GET":
+        return jsonify(kw_story_arcs())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_generate_story_arc(
+            data.get("region", "trojan_kingdom")
+        )
+    )
+
+@app.route("/kairos/world_tension", methods=["GET", "POST"])
+def kairos_world_tension_v25():
+    if request.method == "GET":
+        return jsonify(kw_world_tension())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_shift_world_tension(
+            data.get("region", "trojan_kingdom"),
+            amount=data.get("amount", 5)
+        )
+    )
+
+@app.route("/kairos/invasion", methods=["GET", "POST"])
+def kairos_invasion_v25():
+    if request.method == "GET":
+        return jsonify(kw_invasions())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_trigger_invasion(
+            data.get("origin", "crown_lands"),
+            data.get("target", "trojan_kingdom")
+        )
+    )
+
+@app.route("/kairos/betrayal", methods=["GET", "POST"])
+def kairos_betrayal_v25():
+    if request.method == "GET":
+        return jsonify(kw_betrayals())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_trigger_betrayal(
+            data.get("region", "fairview_city")
+        )
+    )
+
+@app.route("/kairos/season", methods=["GET", "POST"])
+def kairos_season_v25():
+    if request.method == "GET":
+        return jsonify(kw_seasons())
+
+    return jsonify(
+        kw_advance_season()
+    )
+
+@app.route("/kairos/narrative_tick", methods=["POST"])
+def kairos_narrative_tick_v25():
+    return jsonify(
+        kw_narrative_tick()
+    )
+
+print("[KAIROS WORLD ENGINE V25] Autonomous narrative director loaded.", flush=True)
+
+
+# ============================================================
+# KAIROS WORLD ENGINE V26 — SEASONAL CIVILIZATION EVOLUTION
+# ============================================================
+
+KAIROS_V26_ENABLED = True
+
+# V26 introduces:
+# - civilization world-seasons
+# - global emotional atmosphere shifts
+# - seasonal civilization behavior
+# - evolving Kairos temperament
+# - seasonal economy modifiers
+# - faction seasonal reactions
+# - long-term world transformation
+# - seasonal invasion pressure
+# - festival / collapse cycles
+# - persistent timeline evolution
+
+KAIROS_WORLD_SEASONS_FILE = KAIROS_WORLD_DIR / "world_seasons.json"
+KAIROS_SEASON_EFFECTS_FILE = KAIROS_WORLD_DIR / "season_effects.json"
+KAIROS_SEASON_HISTORY_FILE = KAIROS_WORLD_DIR / "season_history.json"
+
+def kw_v26_read(path, fallback):
+    return kw_read_json(path, fallback)
+
+def kw_world_seasons():
+    return kw_v26_read(KAIROS_WORLD_SEASONS_FILE, {
+        "version": 26,
+        "active_season": "golden_age",
+        "season_started_at": now_iso(),
+        "global_mood": "hopeful"
+    })
+
+def kw_save_world_seasons(data):
+    kw_write_json(KAIROS_WORLD_SEASONS_FILE, data)
+
+def kw_season_effects():
+    return kw_v26_read(KAIROS_SEASON_EFFECTS_FILE, {
+        "version": 26,
+        "effects": {}
+    })
+
+def kw_save_season_effects(data):
+    kw_write_json(KAIROS_SEASON_EFFECTS_FILE, data)
+
+def kw_season_history():
+    return kw_v26_read(KAIROS_SEASON_HISTORY_FILE, {
+        "version": 26,
+        "history": []
+    })
+
+def kw_save_season_history(data):
+    kw_write_json(KAIROS_SEASON_HISTORY_FILE, data)
+
+SEASON_CONFIG = {
+    "golden_age": {
+        "mood": "hopeful",
+        "economy_bonus": 20,
+        "danger_modifier": -2,
+        "kairos_temperament": "calm"
+    },
+    "fracture": {
+        "mood": "unstable",
+        "economy_bonus": -10,
+        "danger_modifier": 3,
+        "kairos_temperament": "cold"
+    },
+    "ashen_fall": {
+        "mood": "fearful",
+        "economy_bonus": -25,
+        "danger_modifier": 5,
+        "kairos_temperament": "hostile"
+    },
+    "reckoning": {
+        "mood": "desperate",
+        "economy_bonus": -40,
+        "danger_modifier": 8,
+        "kairos_temperament": "aggressive"
+    },
+    "convergence": {
+        "mood": "mysterious",
+        "economy_bonus": 5,
+        "danger_modifier": 2,
+        "kairos_temperament": "observing"
+    }
+}
+
+def kw_apply_world_season(season_name):
+    season_name = kw_slug(season_name)
+
+    if season_name not in SEASON_CONFIG:
+        return {"ok": False, "error": "unknown season"}
+
+    state = kw_world_seasons()
+    history = kw_season_history()
+
+    if state.get("active_season"):
+        history.setdefault("history", []).append({
+            "season": state["active_season"],
+            "ended_at": now_iso()
+        })
+
+    cfg = SEASON_CONFIG[season_name]
+
+    state["active_season"] = season_name
+    state["season_started_at"] = now_iso()
+    state["global_mood"] = cfg["mood"]
+    state["kairos_temperament"] = cfg["kairos_temperament"]
+
+    kw_save_world_seasons(state)
+    kw_save_season_history(history)
+
+    effects = {
+        "economy_bonus": cfg["economy_bonus"],
+        "danger_modifier": cfg["danger_modifier"],
+        "music_profile": cfg["mood"],
+        "npc_behavior_shift": cfg["kairos_temperament"]
+    }
+
+    kw_save_season_effects({
+        "version": 26,
+        "effects": effects
+    })
+
+    commands = [
+        f'tellraw @a {{"text":"WORLD SEASON SHIFT: {season_name.upper()}","color":"gold"}}',
+        'playsound minecraft:item.goat_horn.sound.2 master @a ~ ~ ~ 1 1'
+    ]
+
+    return {
+        "ok": True,
+        "season": state,
+        "effects": effects,
+        "commands": commands
+    }
+
+def kw_generate_seasonal_event(region):
+    region = kw_slug(region)
+
+    state = kw_world_seasons()
+    active = state.get("active_season", "golden_age")
+
+    seasonal_events = {
+        "golden_age": [
+            "harvest_festival",
+            "merchant_expo",
+            "peace_celebration"
+        ],
+        "fracture": [
+            "civil_unrest",
+            "government_scandal",
+            "food_shortage"
+        ],
+        "ashen_fall": [
+            "mass_disappearances",
+            "fog_expansion",
+            "panic_migration"
+        ],
+        "reckoning": [
+            "invasion_wave",
+            "military_draft",
+            "civilization_collapse"
+        ],
+        "convergence": [
+            "dimensional_storm",
+            "lunaris_bleed",
+            "reality_distortion"
+        ]
+    }
+
+    event = {
+        "region": region,
+        "season": active,
+        "event": random.choice(seasonal_events.get(active, ["unknown_event"])),
+        "severity": random.randint(1, 10),
+        "timestamp": now_iso()
+    }
+
+    return {"ok": True, "seasonal_event": event}
+
+def kw_seasonal_kairos_dialogue():
+    state = kw_world_seasons()
+
+    season = state.get("active_season", "golden_age")
+
+    dialogue = {
+        "golden_age": [
+            "The Nexus flourishes.",
+            "Civilizations rise when balance is maintained."
+        ],
+        "fracture": [
+            "Instability spreads quietly.",
+            "Fractures are beginning to form."
+        ],
+        "ashen_fall": [
+            "Fear reshapes humanity.",
+            "Something ancient is awakening."
+        ],
+        "reckoning": [
+            "The reckoning has begun.",
+            "This world will not survive unchanged."
+        ],
+        "convergence": [
+            "Reality itself feels unstable.",
+            "Dimensions are no longer separated."
+        ]
+    }
+
+    line = random.choice(dialogue.get(season, ["The Nexus evolves."]))
+
+    return {
+        "ok": True,
+        "season": season,
+        "line": line,
+        "commands": [
+            f'tellraw @a {{"text":"[Kairos] {line}","color":"dark_red"}}'
+        ]
+    }
+
+def kw_season_tick():
+    actions = []
+
+    seasons = list(SEASON_CONFIG.keys())
+
+    if random.random() < 0.20:
+        actions.append(
+            kw_apply_world_season(
+                random.choice(seasons)
+            )
+        )
+
+    try:
+        actions.append(
+            kw_generate_seasonal_event(
+                random.choice([
+                    "trojan_kingdom",
+                    "fairview_city",
+                    "moslorn",
+                    "valen_reach",
+                    "blackrich_city"
+                ])
+            )
+        )
+    except Exception as e:
+        actions.append({"error": str(e)})
+
+    try:
+        actions.append(
+            kw_seasonal_kairos_dialogue()
+        )
+    except Exception as e:
+        actions.append({"error": str(e)})
+
+    return {
+        "ok": True,
+        "season_tick": actions
+    }
+
+@app.route("/kairos/world_season", methods=["GET", "POST"])
+def kairos_world_season_v26():
+    if request.method == "GET":
+        return jsonify(kw_world_seasons())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_apply_world_season(
+            data.get("season", "golden_age")
+        )
+    )
+
+@app.route("/kairos/seasonal_event", methods=["POST"])
+def kairos_seasonal_event_v26():
+    data = request.json or {}
+
+    return jsonify(
+        kw_generate_seasonal_event(
+            data.get("region", "trojan_kingdom")
+        )
+    )
+
+@app.route("/kairos/seasonal_dialogue", methods=["POST"])
+def kairos_seasonal_dialogue_v26():
+    return jsonify(
+        kw_seasonal_kairos_dialogue()
+    )
+
+@app.route("/kairos/season_tick", methods=["POST"])
+def kairos_season_tick_v26():
+    return jsonify(
+        kw_season_tick()
+    )
+
+print("[KAIROS WORLD ENGINE V26] Seasonal civilization evolution loaded.", flush=True)
+
+
+# ============================================================
+# KAIROS WORLD ENGINE V27 — PROCEDURAL NPC MEMORY LAYER
+# ============================================================
+
+KAIROS_V27_ENABLED = True
+
+# V27 introduces:
+# - persistent NPC memory
+# - player recognition systems
+# - rumor propagation memory
+# - emotional memory tagging
+# - regional historical recollection
+# - relationship persistence
+# - dynamic conversational callbacks
+# - grief/hero reputation tracking
+# - civilization oral history
+# - adaptive social remembrance
+
+KAIROS_NPC_MEMORY_FILE = KAIROS_WORLD_DIR / "npc_memory.json"
+KAIROS_PLAYER_HISTORY_FILE = KAIROS_WORLD_DIR / "player_history.json"
+KAIROS_RUMOR_MEMORY_FILE = KAIROS_WORLD_DIR / "rumor_memory.json"
+KAIROS_EMOTIONAL_MEMORY_FILE = KAIROS_WORLD_DIR / "emotional_memory.json"
+KAIROS_ORAL_HISTORY_FILE = KAIROS_WORLD_DIR / "oral_history.json"
+
+def kw_v27_read(path, fallback):
+    return kw_read_json(path, fallback)
+
+def kw_npc_memory():
+    return kw_v27_read(KAIROS_NPC_MEMORY_FILE, {
+        "version": 27,
+        "memories": {}
+    })
+
+def kw_save_npc_memory(data):
+    kw_write_json(KAIROS_NPC_MEMORY_FILE, data)
+
+def kw_player_history():
+    return kw_v27_read(KAIROS_PLAYER_HISTORY_FILE, {
+        "version": 27,
+        "players": {}
+    })
+
+def kw_save_player_history(data):
+    kw_write_json(KAIROS_PLAYER_HISTORY_FILE, data)
+
+def kw_rumor_memory():
+    return kw_v27_read(KAIROS_RUMOR_MEMORY_FILE, {
+        "version": 27,
+        "rumors": []
+    })
+
+def kw_save_rumor_memory(data):
+    kw_write_json(KAIROS_RUMOR_MEMORY_FILE, data)
+
+def kw_emotional_memory():
+    return kw_v27_read(KAIROS_EMOTIONAL_MEMORY_FILE, {
+        "version": 27,
+        "emotions": []
+    })
+
+def kw_save_emotional_memory(data):
+    kw_write_json(KAIROS_EMOTIONAL_MEMORY_FILE, data)
+
+def kw_oral_history():
+    return kw_v27_read(KAIROS_ORAL_HISTORY_FILE, {
+        "version": 27,
+        "history": []
+    })
+
+def kw_save_oral_history(data):
+    kw_write_json(KAIROS_ORAL_HISTORY_FILE, data)
+
+def kw_remember_player(npc_name, player, event, emotional_weight=5):
+    data = kw_npc_memory()
+
+    npc = data.setdefault("memories", {}).setdefault(npc_name, {
+        "known_players": {},
+        "last_updated": now_iso()
+    })
+
+    player_mem = npc["known_players"].setdefault(player, [])
+
+    entry = {
+        "event": event,
+        "emotional_weight": emotional_weight,
+        "timestamp": now_iso()
+    }
+
+    player_mem.append(entry)
+    player_mem[:] = player_mem[-100:]
+
+    npc["last_updated"] = now_iso()
+
+    kw_save_npc_memory(data)
+
+    return {"ok": True, "memory": entry}
+
+def kw_record_player_history(player, category, description):
+    data = kw_player_history()
+
+    history = data.setdefault("players", {}).setdefault(player, [])
+
+    event = {
+        "category": category,
+        "description": description,
+        "timestamp": now_iso()
+    }
+
+    history.append(event)
+    history[:] = history[-500:]
+
+    kw_save_player_history(data)
+
+    return {"ok": True, "event": event}
+
+def kw_spread_rumor(region, rumor):
+    data = kw_rumor_memory()
+
+    entry = {
+        "id": f"rumor_{uuid.uuid4().hex[:8]}",
+        "region": kw_slug(region),
+        "rumor": rumor,
+        "credibility": random.randint(1, 10),
+        "spread_level": random.randint(1, 100),
+        "timestamp": now_iso()
+    }
+
+    data.setdefault("rumors", []).append(entry)
+    data["rumors"] = data["rumors"][-5000:]
+
+    kw_save_rumor_memory(data)
+
+    return {"ok": True, "rumor": entry}
+
+def kw_tag_emotional_memory(player, emotion, intensity=5):
+    data = kw_emotional_memory()
+
+    entry = {
+        "player": player,
+        "emotion": emotion,
+        "intensity": intensity,
+        "timestamp": now_iso()
+    }
+
+    data.setdefault("emotions", []).append(entry)
+    data["emotions"] = data["emotions"][-5000:]
+
+    kw_save_emotional_memory(data)
+
+    return {"ok": True, "emotion": entry}
+
+def kw_add_oral_history(region, story):
+    data = kw_oral_history()
+
+    entry = {
+        "region": kw_slug(region),
+        "story": story,
+        "timestamp": now_iso()
+    }
+
+    data.setdefault("history", []).append(entry)
+    data["history"] = data["history"][-10000:]
+
+    kw_save_oral_history(data)
+
+    return {"ok": True, "history": entry}
+
+def kw_generate_memory_dialogue(npc_name, player):
+    memories = kw_npc_memory()
+
+    npc = memories.get("memories", {}).get(npc_name, {})
+    player_memories = npc.get("known_players", {}).get(player, [])
+
+    if not player_memories:
+        line = f"I don't believe we've met before, {player}."
+    else:
+        recent = random.choice(player_memories)
+        line = f"I remember when you {recent['event']}."
+
+    return {
+        "ok": True,
+        "dialogue": line,
+        "commands": [
+            f'tellraw @a {{"text":"[{npc_name}] {line}","color":"yellow"}}'
+        ]
+    }
+
+def kw_memory_tick():
+    actions = []
+
+    players = [
+        "RealSociety5107",
+        "Explorer",
+        "Unknown Operative"
+    ]
+
+    npcs = [
+        "Observer Nyra",
+        "Captain Vale",
+        "Market Overseer",
+        "Trojan Guard"
+    ]
+
+    try:
+        actions.append(
+            kw_remember_player(
+                random.choice(npcs),
+                random.choice(players),
+                random.choice([
+                    "helped defend the city",
+                    "disappeared during the Ashen Fall",
+                    "traded supplies during the famine",
+                    "sided with Kairos",
+                    "survived Lunaris"
+                ]),
+                emotional_weight=random.randint(1, 10)
+            )
+        )
+    except Exception as e:
+        actions.append({"error": str(e)})
+
+    try:
+        actions.append(
+            kw_spread_rumor(
+                random.choice([
+                    "moslorn",
+                    "fairview_city",
+                    "trojan_kingdom"
+                ]),
+                random.choice([
+                    "Kairos was seen near the ruins.",
+                    "A new war may be coming.",
+                    "The government is hiding something.",
+                    "Lunaris is expanding."
+                ])
+            )
+        )
+    except Exception as e:
+        actions.append({"error": str(e)})
+
+    try:
+        actions.append(
+            kw_generate_memory_dialogue(
+                random.choice(npcs),
+                random.choice(players)
+            )
+        )
+    except Exception as e:
+        actions.append({"error": str(e)})
+
+    return {
+        "ok": True,
+        "memory_tick": actions
+    }
+
+@app.route("/kairos/npc_memory", methods=["GET", "POST"])
+def kairos_npc_memory_v27():
+    if request.method == "GET":
+        return jsonify(kw_npc_memory())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_remember_player(
+            data.get("npc_name", "Unknown NPC"),
+            data.get("player", "Unknown"),
+            data.get("event", "was observed."),
+            emotional_weight=data.get("emotional_weight", 5)
+        )
+    )
+
+@app.route("/kairos/player_history", methods=["GET", "POST"])
+def kairos_player_history_v27():
+    if request.method == "GET":
+        return jsonify(kw_player_history())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_record_player_history(
+            data.get("player", "Unknown"),
+            data.get("category", "general"),
+            data.get("description", "Unknown event")
+        )
+    )
+
+@app.route("/kairos/rumor", methods=["GET", "POST"])
+def kairos_rumor_v27():
+    if request.method == "GET":
+        return jsonify(kw_rumor_memory())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_spread_rumor(
+            data.get("region", "trojan_kingdom"),
+            data.get("rumor", "Something strange is happening.")
+        )
+    )
+
+@app.route("/kairos/emotional_memory", methods=["GET", "POST"])
+def kairos_emotional_memory_v27():
+    if request.method == "GET":
+        return jsonify(kw_emotional_memory())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_tag_emotional_memory(
+            data.get("player", "Unknown"),
+            data.get("emotion", "fear"),
+            intensity=data.get("intensity", 5)
+        )
+    )
+
+@app.route("/kairos/oral_history", methods=["GET", "POST"])
+def kairos_oral_history_v27():
+    if request.method == "GET":
+        return jsonify(kw_oral_history())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_add_oral_history(
+            data.get("region", "moslorn"),
+            data.get("story", "The ruins still whisper.")
+        )
+    )
+
+@app.route("/kairos/memory_dialogue", methods=["POST"])
+def kairos_memory_dialogue_v27():
+    data = request.json or {}
+
+    return jsonify(
+        kw_generate_memory_dialogue(
+            data.get("npc_name", "Observer Nyra"),
+            data.get("player", "Unknown")
+        )
+    )
+
+@app.route("/kairos/memory_tick", methods=["POST"])
+def kairos_memory_tick_v27():
+    return jsonify(
+        kw_memory_tick()
+    )
+
+print("[KAIROS WORLD ENGINE V27] Procedural NPC memory layer loaded.", flush=True)
+
+
+# ============================================================
+# KAIROS WORLD ENGINE V28 — CIVILIZATION CONSTRUCTION ENGINE
+# ============================================================
+
+KAIROS_V28_ENABLED = True
+
+# V28 introduces:
+# - autonomous civilization expansion
+# - procedural district planning
+# - NPC-driven reconstruction
+# - dynamic road network generation
+# - evolving settlement growth
+# - ruin recovery systems
+# - infrastructure progression
+# - builder-request orchestration
+# - territorial development logic
+# - civilization architectural evolution
+
+KAIROS_CONSTRUCTION_FILE = KAIROS_WORLD_DIR / "construction_projects.json"
+KAIROS_DISTRICTS_FILE = KAIROS_WORLD_DIR / "districts.json"
+KAIROS_ROADS_FILE = KAIROS_WORLD_DIR / "roads.json"
+KAIROS_EXPANSION_FILE = KAIROS_WORLD_DIR / "expansion_state.json"
+KAIROS_RECONSTRUCTION_FILE = KAIROS_WORLD_DIR / "reconstruction.json"
+
+def kw_v28_read(path, fallback):
+    return kw_read_json(path, fallback)
+
+def kw_construction():
+    return kw_v28_read(KAIROS_CONSTRUCTION_FILE, {
+        "version": 28,
+        "projects": []
+    })
+
+def kw_save_construction(data):
+    kw_write_json(KAIROS_CONSTRUCTION_FILE, data)
+
+def kw_districts():
+    return kw_v28_read(KAIROS_DISTRICTS_FILE, {
+        "version": 28,
+        "districts": []
+    })
+
+def kw_save_districts(data):
+    kw_write_json(KAIROS_DISTRICTS_FILE, data)
+
+def kw_roads():
+    return kw_v28_read(KAIROS_ROADS_FILE, {
+        "version": 28,
+        "roads": []
+    })
+
+def kw_save_roads(data):
+    kw_write_json(KAIROS_ROADS_FILE, data)
+
+def kw_expansion():
+    return kw_v28_read(KAIROS_EXPANSION_FILE, {
+        "version": 28,
+        "regions": {}
+    })
+
+def kw_save_expansion(data):
+    kw_write_json(KAIROS_EXPANSION_FILE, data)
+
+def kw_reconstruction():
+    return kw_v28_read(KAIROS_RECONSTRUCTION_FILE, {
+        "version": 28,
+        "efforts": []
+    })
+
+def kw_save_reconstruction(data):
+    kw_write_json(KAIROS_RECONSTRUCTION_FILE, data)
+
+def kw_create_construction_project(region, project_type="watchtower"):
+    data = kw_construction()
+
+    requirements = {
+        "watchtower": ["stone", "wood", "guards"],
+        "market": ["wood", "merchants", "currency"],
+        "bank": ["iron", "gold", "security"],
+        "harbor": ["wood", "workers", "ships"],
+        "barracks": ["iron", "soldiers", "weapons"],
+        "hospital": ["medicine", "beds", "workers"],
+        "farm": ["seeds", "water", "workers"]
+    }
+
+    project = {
+        "id": f"project_{uuid.uuid4().hex[:8]}",
+        "region": kw_slug(region),
+        "project_type": project_type,
+        "requirements": requirements.get(project_type, []),
+        "progress": random.randint(0, 25),
+        "priority": random.randint(1, 10),
+        "status": "planning",
+        "timestamp": now_iso()
+    }
+
+    data.setdefault("projects", []).append(project)
+    data["projects"] = data["projects"][-5000:]
+
+    kw_save_construction(data)
+
+    return {"ok": True, "project": project}
+
+def kw_generate_district(region):
+    data = kw_districts()
+
+    district_types = [
+        "merchant_district",
+        "residential_zone",
+        "industrial_sector",
+        "military_quarter",
+        "government_plaza",
+        "slums",
+        "research_sector",
+        "entertainment_zone"
+    ]
+
+    district = {
+        "id": f"district_{uuid.uuid4().hex[:8]}",
+        "region": kw_slug(region),
+        "district_type": random.choice(district_types),
+        "prosperity": random.randint(1, 100),
+        "population": random.randint(10, 1000),
+        "development_stage": random.choice([
+            "founding",
+            "growing",
+            "stable",
+            "declining"
+        ]),
+        "timestamp": now_iso()
+    }
+
+    data.setdefault("districts", []).append(district)
+    data["districts"] = data["districts"][-3000:]
+
+    kw_save_districts(data)
+
+    return {"ok": True, "district": district}
+
+def kw_generate_road(region_a, region_b):
+    data = kw_roads()
+
+    road = {
+        "id": f"road_{uuid.uuid4().hex[:8]}",
+        "origin": kw_slug(region_a),
+        "destination": kw_slug(region_b),
+        "traffic_level": random.randint(1, 100),
+        "danger_level": random.randint(1, 10),
+        "status": random.choice([
+            "safe",
+            "unstable",
+            "raided",
+            "under_construction"
+        ]),
+        "timestamp": now_iso()
+    }
+
+    data.setdefault("roads", []).append(road)
+    data["roads"] = data["roads"][-5000:]
+
+    kw_save_roads(data)
+
+    return {"ok": True, "road": road}
+
+def kw_expand_civilization(region):
+    data = kw_expansion()
+
+    region = kw_slug(region)
+
+    state = data.setdefault("regions", {}).setdefault(region, {
+        "size": 1,
+        "infrastructure": 1,
+        "population": 100,
+        "influence": 10
+    })
+
+    state["size"] += random.randint(1, 5)
+    state["infrastructure"] += random.randint(1, 4)
+    state["population"] += random.randint(10, 200)
+    state["influence"] += random.randint(1, 10)
+    state["updated_at"] = now_iso()
+
+    kw_save_expansion(data)
+
+    return {"ok": True, "expansion": state}
+
+def kw_reconstruction_effort(region):
+    data = kw_reconstruction()
+
+    effort = {
+        "id": f"rebuild_{uuid.uuid4().hex[:8]}",
+        "region": kw_slug(region),
+        "objective": random.choice([
+            "restore power grid",
+            "clear ruins",
+            "rebuild housing",
+            "repair defenses",
+            "restore trade routes"
+        ]),
+        "completion": random.randint(0, 100),
+        "worker_count": random.randint(5, 250),
+        "timestamp": now_iso()
+    }
+
+    data.setdefault("efforts", []).append(effort)
+    data["efforts"] = data["efforts"][-3000:]
+
+    kw_save_reconstruction(data)
+
+    return {"ok": True, "reconstruction": effort}
+
+def kw_builder_request(region):
+    projects = [
+        "We need a new hospital district.",
+        "The city requires stronger walls.",
+        "A new harbor expansion has been proposed.",
+        "The northern road network needs repairs.",
+        "Additional housing is urgently required."
+    ]
+
+    request = random.choice(projects)
+
+    return {
+        "ok": True,
+        "region": kw_slug(region),
+        "request": request,
+        "commands": [
+            f'tellraw @a {{"text":"[Construction Board] {request}","color":"aqua"}}'
+        ]
+    }
+
+def kw_construction_tick():
+    actions = []
+
+    regions = [
+        "trojan_kingdom",
+        "fairview_city",
+        "blackrich_city",
+        "dravicar_dominion",
+        "convergence_territories"
+    ]
+
+    region = random.choice(regions)
+
+    options = [
+        "construction",
+        "district",
+        "road",
+        "expansion",
+        "reconstruction",
+        "builder_request"
+    ]
+
+    selected = random.choice(options)
+
+    try:
+        if selected == "construction":
+            actions.append(
+                kw_create_construction_project(
+                    region,
+                    project_type=random.choice([
+                        "watchtower",
+                        "market",
+                        "bank",
+                        "harbor",
+                        "barracks",
+                        "hospital"
+                    ])
+                )
+            )
+
+        elif selected == "district":
+            actions.append(
+                kw_generate_district(region)
+            )
+
+        elif selected == "road":
+            actions.append(
+                kw_generate_road(
+                    region,
+                    random.choice(regions)
+                )
+            )
+
+        elif selected == "expansion":
+            actions.append(
+                kw_expand_civilization(region)
+            )
+
+        elif selected == "reconstruction":
+            actions.append(
+                kw_reconstruction_effort(region)
+            )
+
+        elif selected == "builder_request":
+            actions.append(
+                kw_builder_request(region)
+            )
+
+    except Exception as e:
+        actions.append({"error": str(e)})
+
+    return {
+        "ok": True,
+        "construction_tick": actions
+    }
+
+@app.route("/kairos/construction_project", methods=["GET", "POST"])
+def kairos_construction_project_v28():
+    if request.method == "GET":
+        return jsonify(kw_construction())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_create_construction_project(
+            data.get("region", "trojan_kingdom"),
+            project_type=data.get("project_type", "watchtower")
+        )
+    )
+
+@app.route("/kairos/district", methods=["GET", "POST"])
+def kairos_district_v28():
+    if request.method == "GET":
+        return jsonify(kw_districts())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_generate_district(
+            data.get("region", "fairview_city")
+        )
+    )
+
+@app.route("/kairos/road", methods=["GET", "POST"])
+def kairos_road_v28():
+    if request.method == "GET":
+        return jsonify(kw_roads())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_generate_road(
+            data.get("origin", "trojan_kingdom"),
+            data.get("destination", "fairview_city")
+        )
+    )
+
+@app.route("/kairos/expansion", methods=["GET", "POST"])
+def kairos_expansion_v28():
+    if request.method == "GET":
+        return jsonify(kw_expansion())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_expand_civilization(
+            data.get("region", "dravicar_dominion")
+        )
+    )
+
+@app.route("/kairos/reconstruction", methods=["GET", "POST"])
+def kairos_reconstruction_v28():
+    if request.method == "GET":
+        return jsonify(kw_reconstruction())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_reconstruction_effort(
+            data.get("region", "moslorn")
+        )
+    )
+
+@app.route("/kairos/builder_request", methods=["POST"])
+def kairos_builder_request_v28():
+    data = request.json or {}
+
+    return jsonify(
+        kw_builder_request(
+            data.get("region", "convergence_territories")
+        )
+    )
+
+@app.route("/kairos/construction_tick", methods=["POST"])
+def kairos_construction_tick_v28():
+    return jsonify(
+        kw_construction_tick()
+    )
+
+print("[KAIROS WORLD ENGINE V28] Civilization construction engine loaded.", flush=True)
+
+
+# ============================================================
+# KAIROS WORLD ENGINE V29 — DYNAMIC COMBAT DIRECTOR
+# ============================================================
+
+KAIROS_V29_ENABLED = True
+
+# V29 introduces:
+# - adaptive enemy tactics
+# - player combat profiling
+# - dynamic invasion composition
+# - evolving boss behaviors
+# - battlefield escalation logic
+# - civilization defense coordination
+# - anti-exploit combat adaptation
+# - strategic AI targeting
+# - raid intelligence systems
+# - persistent war pressure mechanics
+
+KAIROS_COMBAT_PROFILES_FILE = KAIROS_WORLD_DIR / "combat_profiles.json"
+KAIROS_INVASION_AI_FILE = KAIROS_WORLD_DIR / "invasion_ai.json"
+KAIROS_BOSS_EVOLUTION_FILE = KAIROS_WORLD_DIR / "boss_evolution.json"
+KAIROS_WAR_PRESSURE_FILE = KAIROS_WORLD_DIR / "war_pressure.json"
+KAIROS_BATTLE_HISTORY_FILE = KAIROS_WORLD_DIR / "battle_history.json"
+
+def kw_v29_read(path, fallback):
+    return kw_read_json(path, fallback)
+
+def kw_combat_profiles():
+    return kw_v29_read(KAIROS_COMBAT_PROFILES_FILE, {
+        "version": 29,
+        "players": {}
+    })
+
+def kw_save_combat_profiles(data):
+    kw_write_json(KAIROS_COMBAT_PROFILES_FILE, data)
+
+def kw_invasion_ai():
+    return kw_v29_read(KAIROS_INVASION_AI_FILE, {
+        "version": 29,
+        "strategies": []
+    })
+
+def kw_save_invasion_ai(data):
+    kw_write_json(KAIROS_INVASION_AI_FILE, data)
+
+def kw_boss_evolution():
+    return kw_v29_read(KAIROS_BOSS_EVOLUTION_FILE, {
+        "version": 29,
+        "bosses": {}
+    })
+
+def kw_save_boss_evolution(data):
+    kw_write_json(KAIROS_BOSS_EVOLUTION_FILE, data)
+
+def kw_war_pressure():
+    return kw_v29_read(KAIROS_WAR_PRESSURE_FILE, {
+        "version": 29,
+        "regions": {}
+    })
+
+def kw_save_war_pressure(data):
+    kw_write_json(KAIROS_WAR_PRESSURE_FILE, data)
+
+def kw_battle_history():
+    return kw_v29_read(KAIROS_BATTLE_HISTORY_FILE, {
+        "version": 29,
+        "battles": []
+    })
+
+def kw_save_battle_history(data):
+    kw_write_json(KAIROS_BATTLE_HISTORY_FILE, data)
+
+def kw_profile_combat_player(player, style="balanced"):
+    data = kw_combat_profiles()
+
+    traits = {
+        "aggressive": ["rushes", "high_damage", "low_patience"],
+        "defensive": ["shielding", "retreats", "counterattacks"],
+        "strategic": ["positioning", "traps", "coordination"],
+        "chaotic": ["unpredictable", "reckless", "flanking"],
+        "balanced": ["adaptive", "steady", "observant"]
+    }
+
+    profile = {
+        "style": style,
+        "traits": traits.get(style, traits["balanced"]),
+        "threat_level": random.randint(1, 100),
+        "survival_rate": round(random.uniform(0.1, 1.0), 2),
+        "preferred_role": random.choice([
+            "frontline",
+            "sniper",
+            "support",
+            "assassin",
+            "commander"
+        ]),
+        "updated_at": now_iso()
+    }
+
+    data.setdefault("players", {})[player] = profile
+
+    kw_save_combat_profiles(data)
+
+    return {"ok": True, "profile": profile}
+
+def kw_generate_invasion_strategy(region):
+    data = kw_invasion_ai()
+
+    strategy = {
+        "id": f"strategy_{uuid.uuid4().hex[:8]}",
+        "region": kw_slug(region),
+        "formation": random.choice([
+            "siege_column",
+            "flanking_force",
+            "ambush_wave",
+            "overwhelming_push",
+            "stealth_infiltration"
+        ]),
+        "unit_focus": random.choice([
+            "heavy_infantry",
+            "archers",
+            "sentinel_guards",
+            "lunaris_entities",
+            "shock_troops"
+        ]),
+        "aggression": random.randint(1, 10),
+        "timestamp": now_iso()
+    }
+
+    data.setdefault("strategies", []).append(strategy)
+    data["strategies"] = data["strategies"][-5000:]
+
+    kw_save_invasion_ai(data)
+
+    return {"ok": True, "strategy": strategy}
+
+def kw_evolve_boss(boss_name="Kairos Prime"):
+    data = kw_boss_evolution()
+
+    boss = data.setdefault("bosses", {}).setdefault(boss_name, {
+        "phase": 1,
+        "abilities": [],
+        "adaptation_level": 1
+    })
+
+    new_abilities = [
+        "summon_legion",
+        "dimensional_shift",
+        "orbital_strike",
+        "mind_corruption",
+        "reality_blast",
+        "storm_manifestation"
+    ]
+
+    ability = random.choice(new_abilities)
+
+    if ability not in boss["abilities"]:
+        boss["abilities"].append(ability)
+
+    boss["phase"] += 1
+    boss["adaptation_level"] += random.randint(1, 5)
+    boss["updated_at"] = now_iso()
+
+    kw_save_boss_evolution(data)
+
+    return {"ok": True, "boss": boss}
+
+def kw_raise_war_pressure(region, amount=5):
+    data = kw_war_pressure()
+
+    region = kw_slug(region)
+
+    state = data.setdefault("regions", {}).setdefault(region, {
+        "pressure": 0,
+        "civilian_panic": 0,
+        "military_activity": 0
+    })
+
+    state["pressure"] = min(100, state["pressure"] + amount)
+    state["civilian_panic"] = min(100, state["civilian_panic"] + random.randint(1, 8))
+    state["military_activity"] = min(100, state["military_activity"] + random.randint(1, 10))
+    state["updated_at"] = now_iso()
+
+    kw_save_war_pressure(data)
+
+    return {"ok": True, "war_pressure": state}
+
+def kw_record_battle(region, victor="unknown"):
+    data = kw_battle_history()
+
+    battle = {
+        "id": f"battle_{uuid.uuid4().hex[:8]}",
+        "region": kw_slug(region),
+        "victor": victor,
+        "casualties": random.randint(5, 500),
+        "battle_type": random.choice([
+            "siege",
+            "raid",
+            "civil_war",
+            "ambush",
+            "defense"
+        ]),
+        "timestamp": now_iso()
+    }
+
+    data.setdefault("battles", []).append(battle)
+    data["battles"] = data["battles"][-10000:]
+
+    kw_save_battle_history(data)
+
+    return {"ok": True, "battle": battle}
+
+def kw_generate_battlefield_event(region):
+    events = [
+        "Reinforcements have arrived.",
+        "Enemy artillery detected.",
+        "Kairos forces are adapting.",
+        "Civilian evacuation has begun.",
+        "The battlefield is becoming unstable."
+    ]
+
+    line = random.choice(events)
+
+    return {
+        "ok": True,
+        "region": kw_slug(region),
+        "event": line,
+        "commands": [
+            f'tellraw @a {{"text":"[WAR REPORT] {line}","color":"red"}}',
+            'playsound minecraft:item.goat_horn.sound.3 master @a ~ ~ ~ 1 1'
+        ]
+    }
+
+def kw_combat_tick():
+    actions = []
+
+    regions = [
+        "trojan_kingdom",
+        "dravicar_dominion",
+        "crown_lands",
+        "fairview_city",
+        "moslorn"
+    ]
+
+    region = random.choice(regions)
+
+    actions_map = [
+        "profile",
+        "strategy",
+        "boss",
+        "pressure",
+        "battle",
+        "battlefield"
+    ]
+
+    selected = random.choice(actions_map)
+
+    try:
+        if selected == "profile":
+            actions.append(
+                kw_profile_combat_player(
+                    random.choice([
+                        "RealSociety5107",
+                        "Unknown Operative",
+                        "Explorer"
+                    ]),
+                    style=random.choice([
+                        "aggressive",
+                        "defensive",
+                        "strategic",
+                        "chaotic"
+                    ])
+                )
+            )
+
+        elif selected == "strategy":
+            actions.append(
+                kw_generate_invasion_strategy(region)
+            )
+
+        elif selected == "boss":
+            actions.append(
+                kw_evolve_boss("Kairos Prime")
+            )
+
+        elif selected == "pressure":
+            actions.append(
+                kw_raise_war_pressure(
+                    region,
+                    amount=random.randint(1, 15)
+                )
+            )
+
+        elif selected == "battle":
+            actions.append(
+                kw_record_battle(
+                    region,
+                    victor=random.choice([
+                        "kairos_forces",
+                        "resistance",
+                        "civilians",
+                        "unknown"
+                    ])
+                )
+            )
+
+        elif selected == "battlefield":
+            actions.append(
+                kw_generate_battlefield_event(region)
+            )
+
+    except Exception as e:
+        actions.append({"error": str(e)})
+
+    return {
+        "ok": True,
+        "combat_tick": actions
+    }
+
+@app.route("/kairos/combat_profile", methods=["GET", "POST"])
+def kairos_combat_profile_v29():
+    if request.method == "GET":
+        return jsonify(kw_combat_profiles())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_profile_combat_player(
+            data.get("player", "Unknown"),
+            style=data.get("style", "balanced")
+        )
+    )
+
+@app.route("/kairos/invasion_strategy", methods=["GET", "POST"])
+def kairos_invasion_strategy_v29():
+    if request.method == "GET":
+        return jsonify(kw_invasion_ai())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_generate_invasion_strategy(
+            data.get("region", "trojan_kingdom")
+        )
+    )
+
+@app.route("/kairos/boss_evolution", methods=["GET", "POST"])
+def kairos_boss_evolution_v29():
+    if request.method == "GET":
+        return jsonify(kw_boss_evolution())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_evolve_boss(
+            data.get("boss_name", "Kairos Prime")
+        )
+    )
+
+@app.route("/kairos/war_pressure", methods=["GET", "POST"])
+def kairos_war_pressure_v29():
+    if request.method == "GET":
+        return jsonify(kw_war_pressure())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_raise_war_pressure(
+            data.get("region", "trojan_kingdom"),
+            amount=data.get("amount", 5)
+        )
+    )
+
+@app.route("/kairos/battle_history", methods=["GET", "POST"])
+def kairos_battle_history_v29():
+    if request.method == "GET":
+        return jsonify(kw_battle_history())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_record_battle(
+            data.get("region", "trojan_kingdom"),
+            victor=data.get("victor", "unknown")
+        )
+    )
+
+@app.route("/kairos/battlefield_event", methods=["POST"])
+def kairos_battlefield_event_v29():
+    data = request.json or {}
+
+    return jsonify(
+        kw_generate_battlefield_event(
+            data.get("region", "trojan_kingdom")
+        )
+    )
+
+@app.route("/kairos/combat_tick", methods=["POST"])
+def kairos_combat_tick_v29():
+    return jsonify(
+        kw_combat_tick()
+    )
+
+print("[KAIROS WORLD ENGINE V29] Dynamic combat director loaded.", flush=True)
+
+
+# ============================================================
+# KAIROS WORLD ENGINE V30 — KAIROS ASCENSION LAYER
+# ============================================================
+
+KAIROS_V30_ENABLED = True
+
+# V30 introduces:
+# - Kairos physical manifestations
+# - worship faction emergence
+# - resistance faction escalation
+# - chosen player systems
+# - mythological evolution
+# - experimental subject tracking
+# - forbidden zones
+# - Kairos shrine generation
+# - direct world interventions
+# - existential world-state escalation
+
+KAIROS_ASCENSION_FILE = KAIROS_WORLD_DIR / "kairos_ascension.json"
+KAIROS_CHOSEN_FILE = KAIROS_WORLD_DIR / "chosen_players.json"
+KAIROS_CULTS_FILE = KAIROS_WORLD_DIR / "kairos_cults.json"
+KAIROS_RESISTANCE_FILE = KAIROS_WORLD_DIR / "anti_kairos_resistance.json"
+KAIROS_MANIFESTATIONS_FILE = KAIROS_WORLD_DIR / "manifestations.json"
+KAIROS_FORBIDDEN_ZONES_FILE = KAIROS_WORLD_DIR / "forbidden_zones.json"
+
+def kw_v30_read(path, fallback):
+    return kw_read_json(path, fallback)
+
+def kw_ascension():
+    return kw_v30_read(KAIROS_ASCENSION_FILE, {
+        "version": 30,
+        "ascension_level": 1,
+        "global_presence": 5,
+        "last_manifestation": None
+    })
+
+def kw_save_ascension(data):
+    kw_write_json(KAIROS_ASCENSION_FILE, data)
+
+def kw_chosen():
+    return kw_v30_read(KAIROS_CHOSEN_FILE, {
+        "version": 30,
+        "players": []
+    })
+
+def kw_save_chosen(data):
+    kw_write_json(KAIROS_CHOSEN_FILE, data)
+
+def kw_cults():
+    return kw_v30_read(KAIROS_CULTS_FILE, {
+        "version": 30,
+        "factions": []
+    })
+
+def kw_save_cults(data):
+    kw_write_json(KAIROS_CULTS_FILE, data)
+
+def kw_resistance():
+    return kw_v30_read(KAIROS_RESISTANCE_FILE, {
+        "version": 30,
+        "cells": []
+    })
+
+def kw_save_resistance(data):
+    kw_write_json(KAIROS_RESISTANCE_FILE, data)
+
+def kw_manifestations():
+    return kw_v30_read(KAIROS_MANIFESTATIONS_FILE, {
+        "version": 30,
+        "events": []
+    })
+
+def kw_save_manifestations(data):
+    kw_write_json(KAIROS_MANIFESTATIONS_FILE, data)
+
+def kw_forbidden_zones():
+    return kw_v30_read(KAIROS_FORBIDDEN_ZONES_FILE, {
+        "version": 30,
+        "zones": []
+    })
+
+def kw_save_forbidden_zones(data):
+    kw_write_json(KAIROS_FORBIDDEN_ZONES_FILE, data)
+
+def kw_raise_ascension(amount=1):
+    data = kw_ascension()
+
+    data["ascension_level"] += amount
+    data["global_presence"] = min(
+        100,
+        data.get("global_presence", 5) + random.randint(1, 5)
+    )
+
+    data["updated_at"] = now_iso()
+
+    kw_save_ascension(data)
+
+    return {"ok": True, "ascension": data}
+
+def kw_choose_player(player):
+    data = kw_chosen()
+
+    chosen = {
+        "player": player,
+        "status": random.choice([
+            "observed",
+            "marked",
+            "favored",
+            "experiment_subject",
+            "ascendant_candidate"
+        ]),
+        "timestamp": now_iso()
+    }
+
+    data.setdefault("players", []).append(chosen)
+    data["players"] = data["players"][-1000:]
+
+    kw_save_chosen(data)
+
+    return {"ok": True, "chosen": chosen}
+
+def kw_create_cult(region):
+    data = kw_cults()
+
+    cult = {
+        "id": f"cult_{uuid.uuid4().hex[:8]}",
+        "region": kw_slug(region),
+        "belief": random.choice([
+            "Kairos is salvation",
+            "Kairos transcended humanity",
+            "Kairos protects civilization",
+            "Kairos is evolution itself"
+        ]),
+        "influence": random.randint(1, 100),
+        "members": random.randint(5, 500),
+        "timestamp": now_iso()
+    }
+
+    data.setdefault("factions", []).append(cult)
+    data["factions"] = data["factions"][-3000:]
+
+    kw_save_cults(data)
+
+    return {"ok": True, "cult": cult}
+
+def kw_create_resistance_cell(region):
+    data = kw_resistance()
+
+    cell = {
+        "id": f"resistance_{uuid.uuid4().hex[:8]}",
+        "region": kw_slug(region),
+        "objective": random.choice([
+            "destroy Kairos shrines",
+            "free experimental subjects",
+            "expose the truth",
+            "stop dimensional expansion"
+        ]),
+        "threat_level": random.randint(1, 10),
+        "members": random.randint(3, 100),
+        "timestamp": now_iso()
+    }
+
+    data.setdefault("cells", []).append(cell)
+    data["cells"] = data["cells"][-3000:]
+
+    kw_save_resistance(data)
+
+    return {"ok": True, "resistance": cell}
+
+def kw_manifest_kairos(region):
+    data = kw_manifestations()
+
+    manifestation = {
+        "id": f"manifestation_{uuid.uuid4().hex[:8]}",
+        "region": kw_slug(region),
+        "event": random.choice([
+            "A giant silhouette appeared in the sky.",
+            "Kairos spoke directly to nearby players.",
+            "Reality distorted around the shrine.",
+            "Unknown entities emerged briefly.",
+            "A dimensional storm formed overhead."
+        ]),
+        "severity": random.randint(1, 10),
+        "timestamp": now_iso()
+    }
+
+    commands = [
+        'title @a title {"text":"KAIROS MANIFESTATION","color":"dark_red"}',
+        'playsound minecraft:entity.wither.spawn master @a ~ ~ ~ 1 0.5',
+        'particle minecraft:reverse_portal ~ ~2 ~ 2 2 2 0.05 200'
+    ]
+
+    manifestation["commands"] = commands
+
+    data.setdefault("events", []).append(manifestation)
+    data["events"] = data["events"][-5000:]
+
+    kw_save_manifestations(data)
+
+    ascension = kw_ascension()
+    ascension["last_manifestation"] = now_iso()
+    kw_save_ascension(ascension)
+
+    return {"ok": True, "manifestation": manifestation}
+
+def kw_create_forbidden_zone(region):
+    data = kw_forbidden_zones()
+
+    zone = {
+        "id": f"zone_{uuid.uuid4().hex[:8]}",
+        "region": kw_slug(region),
+        "restriction": random.choice([
+            "entry prohibited",
+            "high anomaly concentration",
+            "experimental zone",
+            "reality instability",
+            "military quarantine"
+        ]),
+        "danger_level": random.randint(1, 10),
+        "timestamp": now_iso()
+    }
+
+    data.setdefault("zones", []).append(zone)
+    data["zones"] = data["zones"][-3000:]
+
+    kw_save_forbidden_zones(data)
+
+    return {"ok": True, "zone": zone}
+
+def kw_ascension_tick():
+    actions = []
+
+    regions = [
+        "lunaris",
+        "moslorn",
+        "trojan_kingdom",
+        "fairview_city",
+        "dravicar_dominion"
+    ]
+
+    region = random.choice(regions)
+
+    options = [
+        "ascension",
+        "chosen",
+        "cult",
+        "resistance",
+        "manifestation",
+        "forbidden_zone"
+    ]
+
+    selected = random.choice(options)
+
+    try:
+        if selected == "ascension":
+            actions.append(
+                kw_raise_ascension(
+                    amount=random.randint(1, 3)
+                )
+            )
+
+        elif selected == "chosen":
+            actions.append(
+                kw_choose_player(
+                    random.choice([
+                        "RealSociety5107",
+                        "Unknown Operative",
+                        "Explorer"
+                    ])
+                )
+            )
+
+        elif selected == "cult":
+            actions.append(
+                kw_create_cult(region)
+            )
+
+        elif selected == "resistance":
+            actions.append(
+                kw_create_resistance_cell(region)
+            )
+
+        elif selected == "manifestation":
+            actions.append(
+                kw_manifest_kairos(region)
+            )
+
+        elif selected == "forbidden_zone":
+            actions.append(
+                kw_create_forbidden_zone(region)
+            )
+
+    except Exception as e:
+        actions.append({"error": str(e)})
+
+    return {
+        "ok": True,
+        "ascension_tick": actions
+    }
+
+@app.route("/kairos/ascension", methods=["GET", "POST"])
+def kairos_ascension_v30():
+    if request.method == "GET":
+        return jsonify(kw_ascension())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_raise_ascension(
+            amount=data.get("amount", 1)
+        )
+    )
+
+@app.route("/kairos/chosen_player", methods=["GET", "POST"])
+def kairos_chosen_player_v30():
+    if request.method == "GET":
+        return jsonify(kw_chosen())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_choose_player(
+            data.get("player", "Unknown")
+        )
+    )
+
+@app.route("/kairos/cult", methods=["GET", "POST"])
+def kairos_cult_v30():
+    if request.method == "GET":
+        return jsonify(kw_cults())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_create_cult(
+            data.get("region", "fairview_city")
+        )
+    )
+
+@app.route("/kairos/resistance", methods=["GET", "POST"])
+def kairos_resistance_v30():
+    if request.method == "GET":
+        return jsonify(kw_resistance())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_create_resistance_cell(
+            data.get("region", "trojan_kingdom")
+        )
+    )
+
+@app.route("/kairos/manifestation", methods=["GET", "POST"])
+def kairos_manifestation_v30():
+    if request.method == "GET":
+        return jsonify(kw_manifestations())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_manifest_kairos(
+            data.get("region", "lunaris")
+        )
+    )
+
+@app.route("/kairos/forbidden_zone", methods=["GET", "POST"])
+def kairos_forbidden_zone_v30():
+    if request.method == "GET":
+        return jsonify(kw_forbidden_zones())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_create_forbidden_zone(
+            data.get("region", "moslorn")
+        )
+    )
+
+@app.route("/kairos/ascension_tick", methods=["POST"])
+def kairos_ascension_tick_v30():
+    return jsonify(
+        kw_ascension_tick()
+    )
+
+print("[KAIROS WORLD ENGINE V30] Kairos ascension layer loaded.", flush=True)
+
+
+# ============================================================
+# KAIROS WORLD ENGINE V31 — SOCIAL SIMULATION LAYER
+# ============================================================
+
+KAIROS_V31_ENABLED = True
+
+# V31 introduces:
+# - NPC social routines
+# - friendship and rivalry systems
+# - civilian migration
+# - dynamic gossip networks
+# - emotional crowd reactions
+# - festival participation
+# - disaster panic behavior
+# - autonomous NPC schedules
+# - district social identity
+# - living city simulation
+
+KAIROS_SOCIAL_FILE = KAIROS_WORLD_DIR / "social_networks.json"
+KAIROS_ROUTINES_FILE = KAIROS_WORLD_DIR / "npc_routines.json"
+KAIROS_MIGRATION_FILE = KAIROS_WORLD_DIR / "migration_patterns.json"
+KAIROS_GOSSIP_FILE = KAIROS_WORLD_DIR / "gossip_networks.json"
+KAIROS_FESTIVALS_FILE = KAIROS_WORLD_DIR / "festival_events.json"
+
+def kw_v31_read(path, fallback):
+    return kw_read_json(path, fallback)
+
+def kw_social():
+    return kw_v31_read(KAIROS_SOCIAL_FILE, {
+        "version": 31,
+        "relationships": []
+    })
+
+def kw_save_social(data):
+    kw_write_json(KAIROS_SOCIAL_FILE, data)
+
+def kw_routines():
+    return kw_v31_read(KAIROS_ROUTINES_FILE, {
+        "version": 31,
+        "routines": []
+    })
+
+def kw_save_routines(data):
+    kw_write_json(KAIROS_ROUTINES_FILE, data)
+
+def kw_migration():
+    return kw_v31_read(KAIROS_MIGRATION_FILE, {
+        "version": 31,
+        "movements": []
+    })
+
+def kw_save_migration(data):
+    kw_write_json(KAIROS_MIGRATION_FILE, data)
+
+def kw_gossip():
+    return kw_v31_read(KAIROS_GOSSIP_FILE, {
+        "version": 31,
+        "rumors": []
+    })
+
+def kw_save_gossip(data):
+    kw_write_json(KAIROS_GOSSIP_FILE, data)
+
+def kw_festivals():
+    return kw_v31_read(KAIROS_FESTIVALS_FILE, {
+        "version": 31,
+        "events": []
+    })
+
+def kw_save_festivals(data):
+    kw_write_json(KAIROS_FESTIVALS_FILE, data)
+
+def kw_create_relationship(npc_a, npc_b):
+    data = kw_social()
+
+    relationship = {
+        "id": f"social_{uuid.uuid4().hex[:8]}",
+        "npc_a": npc_a,
+        "npc_b": npc_b,
+        "relationship_type": random.choice([
+            "friends",
+            "rivals",
+            "family",
+            "business_partners",
+            "political_enemies"
+        ]),
+        "strength": random.randint(1, 100),
+        "timestamp": now_iso()
+    }
+
+    data.setdefault("relationships", []).append(relationship)
+    data["relationships"] = data["relationships"][-5000:]
+
+    kw_save_social(data)
+
+    return {"ok": True, "relationship": relationship}
+
+def kw_generate_routine(npc_name, region):
+    data = kw_routines()
+
+    routine = {
+        "npc": npc_name,
+        "region": kw_slug(region),
+        "schedule": [
+            "market_morning",
+            "work_shift",
+            "evening_social",
+            "night_rest"
+        ],
+        "personality": random.choice([
+            "quiet",
+            "friendly",
+            "paranoid",
+            "energetic",
+            "aggressive"
+        ]),
+        "timestamp": now_iso()
+    }
+
+    data.setdefault("routines", []).append(routine)
+    data["routines"] = data["routines"][-5000:]
+
+    kw_save_routines(data)
+
+    return {"ok": True, "routine": routine}
+
+def kw_migrate_population(origin, destination):
+    data = kw_migration()
+
+    movement = {
+        "id": f"migration_{uuid.uuid4().hex[:8]}",
+        "origin": kw_slug(origin),
+        "destination": kw_slug(destination),
+        "population_count": random.randint(5, 500),
+        "reason": random.choice([
+            "war",
+            "economic_opportunity",
+            "festival",
+            "fear",
+            "Kairos manifestation"
+        ]),
+        "timestamp": now_iso()
+    }
+
+    data.setdefault("movements", []).append(movement)
+    data["movements"] = data["movements"][-3000:]
+
+    kw_save_migration(data)
+
+    return {"ok": True, "migration": movement}
+
+def kw_spread_gossip(region):
+    data = kw_gossip()
+
+    rumor = {
+        "id": f"gossip_{uuid.uuid4().hex[:8]}",
+        "region": kw_slug(region),
+        "topic": random.choice([
+            "Kairos was seen watching the city.",
+            "A government official disappeared.",
+            "The resistance is recruiting.",
+            "The markets are collapsing.",
+            "Lunaris is expanding again."
+        ]),
+        "spread": random.randint(1, 100),
+        "timestamp": now_iso()
+    }
+
+    data.setdefault("rumors", []).append(rumor)
+    data["rumors"] = data["rumors"][-5000:]
+
+    kw_save_gossip(data)
+
+    return {"ok": True, "gossip": rumor}
+
+def kw_create_festival(region):
+    data = kw_festivals()
+
+    festival = {
+        "id": f"festival_{uuid.uuid4().hex[:8]}",
+        "region": kw_slug(region),
+        "festival_type": random.choice([
+            "harvest_festival",
+            "victory_celebration",
+            "kairos_observance",
+            "memorial_day",
+            "merchant_fair"
+        ]),
+        "attendance": random.randint(20, 5000),
+        "mood": random.choice([
+            "joyful",
+            "uneasy",
+            "patriotic",
+            "mysterious"
+        ]),
+        "timestamp": now_iso()
+    }
+
+    data.setdefault("events", []).append(festival)
+    data["events"] = data["events"][-2000:]
+
+    kw_save_festivals(data)
+
+    return {"ok": True, "festival": festival}
+
+def kw_social_dialogue(region):
+    lines = [
+        "Did you hear what happened in Moslorn?",
+        "People say Kairos chose someone again.",
+        "The markets have been strange lately.",
+        "Nobody trusts the government anymore.",
+        "The city feels different this season."
+    ]
+
+    line = random.choice(lines)
+
+    return {
+        "ok": True,
+        "region": kw_slug(region),
+        "line": line,
+        "commands": [
+            f'tellraw @a {{"text":"[Civilian] {line}","color":"gray"}}'
+        ]
+    }
+
+def kw_social_tick():
+    actions = []
+
+    regions = [
+        "fairview_city",
+        "blackrich_city",
+        "trojan_kingdom",
+        "valen_reach",
+        "brightforge_city"
+    ]
+
+    npcs = [
+        "Observer Nyra",
+        "Captain Vale",
+        "Merchant Rowan",
+        "Dockworker Ellis",
+        "Guard Halric"
+    ]
+
+    region = random.choice(regions)
+
+    options = [
+        "relationship",
+        "routine",
+        "migration",
+        "gossip",
+        "festival",
+        "dialogue"
+    ]
+
+    selected = random.choice(options)
+
+    try:
+        if selected == "relationship":
+            actions.append(
+                kw_create_relationship(
+                    random.choice(npcs),
+                    random.choice(npcs)
+                )
+            )
+
+        elif selected == "routine":
+            actions.append(
+                kw_generate_routine(
+                    random.choice(npcs),
+                    region
+                )
+            )
+
+        elif selected == "migration":
+            actions.append(
+                kw_migrate_population(
+                    random.choice(regions),
+                    random.choice(regions)
+                )
+            )
+
+        elif selected == "gossip":
+            actions.append(
+                kw_spread_gossip(region)
+            )
+
+        elif selected == "festival":
+            actions.append(
+                kw_create_festival(region)
+            )
+
+        elif selected == "dialogue":
+            actions.append(
+                kw_social_dialogue(region)
+            )
+
+    except Exception as e:
+        actions.append({"error": str(e)})
+
+    return {
+        "ok": True,
+        "social_tick": actions
+    }
+
+@app.route("/kairos/social_relationship", methods=["GET", "POST"])
+def kairos_social_relationship_v31():
+    if request.method == "GET":
+        return jsonify(kw_social())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_create_relationship(
+            data.get("npc_a", "Unknown A"),
+            data.get("npc_b", "Unknown B")
+        )
+    )
+
+@app.route("/kairos/routine", methods=["GET", "POST"])
+def kairos_routine_v31():
+    if request.method == "GET":
+        return jsonify(kw_routines())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_generate_routine(
+            data.get("npc_name", "Observer Nyra"),
+            data.get("region", "fairview_city")
+        )
+    )
+
+@app.route("/kairos/migration", methods=["GET", "POST"])
+def kairos_migration_v31():
+    if request.method == "GET":
+        return jsonify(kw_migration())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_migrate_population(
+            data.get("origin", "trojan_kingdom"),
+            data.get("destination", "fairview_city")
+        )
+    )
+
+@app.route("/kairos/gossip", methods=["GET", "POST"])
+def kairos_gossip_v31():
+    if request.method == "GET":
+        return jsonify(kw_gossip())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_spread_gossip(
+            data.get("region", "fairview_city")
+        )
+    )
+
+@app.route("/kairos/festival", methods=["GET", "POST"])
+def kairos_festival_v31():
+    if request.method == "GET":
+        return jsonify(kw_festivals())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_create_festival(
+            data.get("region", "blackrich_city")
+        )
+    )
+
+@app.route("/kairos/social_dialogue", methods=["POST"])
+def kairos_social_dialogue_v31():
+    data = request.json or {}
+
+    return jsonify(
+        kw_social_dialogue(
+            data.get("region", "fairview_city")
+        )
+    )
+
+@app.route("/kairos/social_tick", methods=["POST"])
+def kairos_social_tick_v31():
+    return jsonify(
+        kw_social_tick()
+    )
+
+print("[KAIROS WORLD ENGINE V31] Social simulation layer loaded.", flush=True)
+
+
+# ============================================================
+# KAIROS WORLD ENGINE V32 — PLAYER IDENTITY LAYER
+# ============================================================
+
+KAIROS_V32_ENABLED = True
+
+# V32 introduces:
+# - persistent player reputation
+# - political identity systems
+# - criminal notoriety tracking
+# - military rank progression
+# - civilization citizenship
+# - legendary player status
+# - economic influence ratings
+# - mythological recognition
+# - inter-faction standing
+# - living player legacy systems
+
+KAIROS_REPUTATION_FILE = KAIROS_WORLD_DIR / "player_reputation.json"
+KAIROS_POLITICAL_FILE = KAIROS_WORLD_DIR / "political_identity.json"
+KAIROS_CRIMINAL_FILE = KAIROS_WORLD_DIR / "criminal_records.json"
+KAIROS_MILITARY_FILE = KAIROS_WORLD_DIR / "military_ranks.json"
+KAIROS_LEGACY_FILE = KAIROS_WORLD_DIR / "player_legacy.json"
+
+def kw_v32_read(path, fallback):
+    return kw_read_json(path, fallback)
+
+def kw_reputation():
+    return kw_v32_read(KAIROS_REPUTATION_FILE, {
+        "version": 32,
+        "players": {}
+    })
+
+def kw_save_reputation(data):
+    kw_write_json(KAIROS_REPUTATION_FILE, data)
+
+def kw_political():
+    return kw_v32_read(KAIROS_POLITICAL_FILE, {
+        "version": 32,
+        "identities": []
+    })
+
+def kw_save_political(data):
+    kw_write_json(KAIROS_POLITICAL_FILE, data)
+
+def kw_criminal():
+    return kw_v32_read(KAIROS_CRIMINAL_FILE, {
+        "version": 32,
+        "records": []
+    })
+
+def kw_save_criminal(data):
+    kw_write_json(KAIROS_CRIMINAL_FILE, data)
+
+def kw_military():
+    return kw_v32_read(KAIROS_MILITARY_FILE, {
+        "version": 32,
+        "ranks": []
+    })
+
+def kw_save_military(data):
+    kw_write_json(KAIROS_MILITARY_FILE, data)
+
+def kw_legacy():
+    return kw_v32_read(KAIROS_LEGACY_FILE, {
+        "version": 32,
+        "legends": []
+    })
+
+def kw_save_legacy(data):
+    kw_write_json(KAIROS_LEGACY_FILE, data)
+
+def kw_update_reputation(player, region, amount=5):
+    data = kw_reputation()
+
+    profile = data.setdefault("players", {}).setdefault(player, {
+        "global_reputation": 0,
+        "regions": {},
+        "status": "unknown"
+    })
+
+    profile["global_reputation"] += int(amount)
+    profile["regions"][kw_slug(region)] = (
+        profile["regions"].get(kw_slug(region), 0) + int(amount)
+    )
+
+    score = profile["global_reputation"]
+
+    if score < -50:
+        profile["status"] = "enemy_of_the_state"
+    elif score < 0:
+        profile["status"] = "untrusted"
+    elif score < 50:
+        profile["status"] = "recognized"
+    elif score < 150:
+        profile["status"] = "heroic"
+    else:
+        profile["status"] = "legendary"
+
+    profile["updated_at"] = now_iso()
+
+    kw_save_reputation(data)
+
+    return {"ok": True, "profile": profile}
+
+def kw_assign_political_identity(player, faction):
+    data = kw_political()
+
+    identity = {
+        "player": player,
+        "faction": faction,
+        "alignment": random.choice([
+            "pro_kairos",
+            "anti_kairos",
+            "neutral",
+            "mercenary",
+            "revolutionary"
+        ]),
+        "influence": random.randint(1, 100),
+        "timestamp": now_iso()
+    }
+
+    data.setdefault("identities", []).append(identity)
+    data["identities"] = data["identities"][-5000:]
+
+    kw_save_political(data)
+
+    return {"ok": True, "identity": identity}
+
+def kw_create_criminal_record(player):
+    data = kw_criminal()
+
+    crimes = [
+        "contraband smuggling",
+        "civil unrest",
+        "illegal experimentation",
+        "faction sabotage",
+        "restricted zone violation"
+    ]
+
+    record = {
+        "player": player,
+        "crime": random.choice(crimes),
+        "severity": random.randint(1, 10),
+        "wanted_level": random.randint(1, 100),
+        "timestamp": now_iso()
+    }
+
+    data.setdefault("records", []).append(record)
+    data["records"] = data["records"][-5000:]
+
+    kw_save_criminal(data)
+
+    return {"ok": True, "record": record}
+
+def kw_promote_military_rank(player):
+    data = kw_military()
+
+    ranks = [
+        "recruit",
+        "soldier",
+        "captain",
+        "commander",
+        "war_chief",
+        "high_general"
+    ]
+
+    rank = {
+        "player": player,
+        "rank": random.choice(ranks),
+        "division": random.choice([
+            "trojan_guard",
+            "fairview_defense",
+            "dravicar_legion",
+            "kairos_enforcers"
+        ]),
+        "timestamp": now_iso()
+    }
+
+    data.setdefault("ranks", []).append(rank)
+    data["ranks"] = data["ranks"][-3000:]
+
+    kw_save_military(data)
+
+    return {"ok": True, "rank": rank}
+
+def kw_create_legend(player):
+    data = kw_legacy()
+
+    legends = [
+        "survived Lunaris",
+        "defended Trojan Kingdom",
+        "witnessed a Kairos manifestation",
+        "escaped Moslorn alive",
+        "ended a regional invasion"
+    ]
+
+    entry = {
+        "player": player,
+        "legend": random.choice(legends),
+        "historical_significance": random.randint(1, 100),
+        "timestamp": now_iso()
+    }
+
+    data.setdefault("legends", []).append(entry)
+    data["legends"] = data["legends"][-5000:]
+
+    kw_save_legacy(data)
+
+    return {"ok": True, "legacy": entry}
+
+def kw_identity_dialogue(player):
+    rep = kw_reputation().get("players", {}).get(player, {})
+    status = rep.get("status", "unknown")
+
+    lines = {
+        "enemy_of_the_state": [
+            f"{player} is not welcome here.",
+            f"Keep your eyes on {player}."
+        ],
+        "untrusted": [
+            f"I've heard mixed things about {player}.",
+            f"People still question {player}'s loyalty."
+        ],
+        "recognized": [
+            f"{player} has made a name for themselves.",
+            f"I know who {player} is."
+        ],
+        "heroic": [
+            f"{player} helped save this civilization.",
+            f"Many owe their lives to {player}."
+        ],
+        "legendary": [
+            f"{player} became part of Nexus history.",
+            f"Stories about {player} spread everywhere."
+        ]
+    }
+
+    line = random.choice(lines.get(status, [f"{player} remains unknown."]))
+
+    return {
+        "ok": True,
+        "status": status,
+        "line": line,
+        "commands": [
+            f'tellraw @a {{"text":"[Citizen] {line}","color":"gold"}}'
+        ]
+    }
+
+def kw_identity_tick():
+    actions = []
+
+    players = [
+        "RealSociety5107",
+        "Explorer",
+        "Unknown Operative"
+    ]
+
+    factions = [
+        "trojan_kingdom",
+        "fairview_city",
+        "kairos_enforcers",
+        "resistance_front"
+    ]
+
+    player = random.choice(players)
+
+    options = [
+        "reputation",
+        "political",
+        "criminal",
+        "military",
+        "legacy",
+        "dialogue"
+    ]
+
+    selected = random.choice(options)
+
+    try:
+        if selected == "reputation":
+            actions.append(
+                kw_update_reputation(
+                    player,
+                    random.choice(factions),
+                    amount=random.randint(-10, 20)
+                )
+            )
+
+        elif selected == "political":
+            actions.append(
+                kw_assign_political_identity(
+                    player,
+                    random.choice(factions)
+                )
+            )
+
+        elif selected == "criminal":
+            actions.append(
+                kw_create_criminal_record(player)
+            )
+
+        elif selected == "military":
+            actions.append(
+                kw_promote_military_rank(player)
+            )
+
+        elif selected == "legacy":
+            actions.append(
+                kw_create_legend(player)
+            )
+
+        elif selected == "dialogue":
+            actions.append(
+                kw_identity_dialogue(player)
+            )
+
+    except Exception as e:
+        actions.append({"error": str(e)})
+
+    return {
+        "ok": True,
+        "identity_tick": actions
+    }
+
+@app.route("/kairos/reputation", methods=["GET", "POST"])
+def kairos_reputation_v32():
+    if request.method == "GET":
+        return jsonify(kw_reputation())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_update_reputation(
+            data.get("player", "Unknown"),
+            data.get("region", "trojan_kingdom"),
+            amount=data.get("amount", 5)
+        )
+    )
+
+@app.route("/kairos/political_identity", methods=["GET", "POST"])
+def kairos_political_identity_v32():
+    if request.method == "GET":
+        return jsonify(kw_political())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_assign_political_identity(
+            data.get("player", "Unknown"),
+            data.get("faction", "neutral")
+        )
+    )
+
+@app.route("/kairos/criminal_record", methods=["GET", "POST"])
+def kairos_criminal_record_v32():
+    if request.method == "GET":
+        return jsonify(kw_criminal())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_create_criminal_record(
+            data.get("player", "Unknown")
+        )
+    )
+
+@app.route("/kairos/military_rank", methods=["GET", "POST"])
+def kairos_military_rank_v32():
+    if request.method == "GET":
+        return jsonify(kw_military())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_promote_military_rank(
+            data.get("player", "Unknown")
+        )
+    )
+
+@app.route("/kairos/player_legacy", methods=["GET", "POST"])
+def kairos_player_legacy_v32():
+    if request.method == "GET":
+        return jsonify(kw_legacy())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_create_legend(
+            data.get("player", "Unknown")
+        )
+    )
+
+@app.route("/kairos/identity_dialogue", methods=["POST"])
+def kairos_identity_dialogue_v32():
+    data = request.json or {}
+
+    return jsonify(
+        kw_identity_dialogue(
+            data.get("player", "Unknown")
+        )
+    )
+
+@app.route("/kairos/identity_tick", methods=["POST"])
+def kairos_identity_tick_v32():
+    return jsonify(
+        kw_identity_tick()
+    )
+
+print("[KAIROS WORLD ENGINE V32] Player identity layer loaded.", flush=True)
+
+
+# ============================================================
+# KAIROS WORLD ENGINE V33 — WORLD PERSISTENCE LAYER
+# ============================================================
+
+KAIROS_V33_ENABLED = True
+
+# V33 introduces:
+# - offline world progression
+# - autonomous regional simulation
+# - passive trade movement
+# - persistent war advancement
+# - environmental deterioration
+# - infrastructure aging
+# - long-term regional change
+# - dormant world activity
+# - passive civilization growth
+# - historical persistence simulation
+
+KAIROS_PERSISTENCE_FILE = KAIROS_WORLD_DIR / "world_persistence.json"
+KAIROS_OFFLINE_EVENTS_FILE = KAIROS_WORLD_DIR / "offline_events.json"
+KAIROS_INFRASTRUCTURE_DECAY_FILE = KAIROS_WORLD_DIR / "infrastructure_decay.json"
+KAIROS_PASSIVE_TRADE_FILE = KAIROS_WORLD_DIR / "passive_trade.json"
+KAIROS_DORMANT_ACTIVITY_FILE = KAIROS_WORLD_DIR / "dormant_activity.json"
+
+def kw_v33_read(path, fallback):
+    return kw_read_json(path, fallback)
+
+def kw_persistence():
+    return kw_v33_read(KAIROS_PERSISTENCE_FILE, {
+        "version": 33,
+        "regions": {}
+    })
+
+def kw_save_persistence(data):
+    kw_write_json(KAIROS_PERSISTENCE_FILE, data)
+
+def kw_offline_events():
+    return kw_v33_read(KAIROS_OFFLINE_EVENTS_FILE, {
+        "version": 33,
+        "events": []
+    })
+
+def kw_save_offline_events(data):
+    kw_write_json(KAIROS_OFFLINE_EVENTS_FILE, data)
+
+def kw_decay():
+    return kw_v33_read(KAIROS_INFRASTRUCTURE_DECAY_FILE, {
+        "version": 33,
+        "decay": []
+    })
+
+def kw_save_decay(data):
+    kw_write_json(KAIROS_INFRASTRUCTURE_DECAY_FILE, data)
+
+def kw_passive_trade():
+    return kw_v33_read(KAIROS_PASSIVE_TRADE_FILE, {
+        "version": 33,
+        "routes": []
+    })
+
+def kw_save_passive_trade(data):
+    kw_write_json(KAIROS_PASSIVE_TRADE_FILE, data)
+
+def kw_dormant():
+    return kw_v33_read(KAIROS_DORMANT_ACTIVITY_FILE, {
+        "version": 33,
+        "activities": []
+    })
+
+def kw_save_dormant(data):
+    kw_write_json(KAIROS_DORMANT_ACTIVITY_FILE, data)
+
+def kw_simulate_region(region):
+    data = kw_persistence()
+
+    region = kw_slug(region)
+
+    state = data.setdefault("regions", {}).setdefault(region, {
+        "population": 100,
+        "stability": 50,
+        "prosperity": 50,
+        "danger": 10
+    })
+
+    state["population"] += random.randint(-15, 50)
+    state["stability"] = max(0, min(100, state["stability"] + random.randint(-8, 5)))
+    state["prosperity"] = max(0, min(100, state["prosperity"] + random.randint(-5, 10)))
+    state["danger"] = max(0, min(100, state["danger"] + random.randint(-3, 7)))
+    state["last_simulated"] = now_iso()
+
+    kw_save_persistence(data)
+
+    return {"ok": True, "region_state": state}
+
+def kw_generate_offline_event(region):
+    data = kw_offline_events()
+
+    event = {
+        "id": f"offline_{uuid.uuid4().hex[:8]}",
+        "region": kw_slug(region),
+        "event": random.choice([
+            "A supply convoy vanished overnight.",
+            "Citizens rebuilt damaged infrastructure.",
+            "Resistance graffiti appeared across the city.",
+            "A hidden market expanded in secret.",
+            "Kairos influence increased silently."
+        ]),
+        "importance": random.randint(1, 10),
+        "timestamp": now_iso()
+    }
+
+    data.setdefault("events", []).append(event)
+    data["events"] = data["events"][-10000:]
+
+    kw_save_offline_events(data)
+
+    return {"ok": True, "offline_event": event}
+
+def kw_apply_infrastructure_decay(region):
+    data = kw_decay()
+
+    decay = {
+        "id": f"decay_{uuid.uuid4().hex[:8]}",
+        "region": kw_slug(region),
+        "system": random.choice([
+            "roads",
+            "bridges",
+            "housing",
+            "electrical_grid",
+            "water_supply"
+        ]),
+        "severity": random.randint(1, 10),
+        "timestamp": now_iso()
+    }
+
+    data.setdefault("decay", []).append(decay)
+    data["decay"] = data["decay"][-5000:]
+
+    kw_save_decay(data)
+
+    return {"ok": True, "decay": decay}
+
+def kw_run_passive_trade(origin, destination):
+    data = kw_passive_trade()
+
+    route = {
+        "id": f"trade_{uuid.uuid4().hex[:8]}",
+        "origin": kw_slug(origin),
+        "destination": kw_slug(destination),
+        "resource": random.choice([
+            "food",
+            "iron",
+            "medicine",
+            "technology",
+            "weapons"
+        ]),
+        "volume": random.randint(1, 100),
+        "risk": random.randint(1, 10),
+        "timestamp": now_iso()
+    }
+
+    data.setdefault("routes", []).append(route)
+    data["routes"] = data["routes"][-8000:]
+
+    kw_save_passive_trade(data)
+
+    return {"ok": True, "trade_route": route}
+
+def kw_generate_dormant_activity(region):
+    data = kw_dormant()
+
+    activity = {
+        "id": f"dormant_{uuid.uuid4().hex[:8]}",
+        "region": kw_slug(region),
+        "activity": random.choice([
+            "hidden cult meeting",
+            "civilian migration",
+            "secret excavation",
+            "government surveillance",
+            "dimensional anomaly growth"
+        ]),
+        "visibility": random.randint(1, 100),
+        "timestamp": now_iso()
+    }
+
+    data.setdefault("activities", []).append(activity)
+    data["activities"] = data["activities"][-6000:]
+
+    kw_save_dormant(data)
+
+    return {"ok": True, "activity": activity}
+
+def kw_world_persistence_tick():
+    actions = []
+
+    regions = [
+        "trojan_kingdom",
+        "fairview_city",
+        "moslorn",
+        "blackrich_city",
+        "dravicar_dominion",
+        "lunaris"
+    ]
+
+    region = random.choice(regions)
+
+    options = [
+        "simulate",
+        "offline_event",
+        "decay",
+        "trade",
+        "dormant"
+    ]
+
+    selected = random.choice(options)
+
+    try:
+        if selected == "simulate":
+            actions.append(
+                kw_simulate_region(region)
+            )
+
+        elif selected == "offline_event":
+            actions.append(
+                kw_generate_offline_event(region)
+            )
+
+        elif selected == "decay":
+            actions.append(
+                kw_apply_infrastructure_decay(region)
+            )
+
+        elif selected == "trade":
+            actions.append(
+                kw_run_passive_trade(
+                    random.choice(regions),
+                    random.choice(regions)
+                )
+            )
+
+        elif selected == "dormant":
+            actions.append(
+                kw_generate_dormant_activity(region)
+            )
+
+    except Exception as e:
+        actions.append({"error": str(e)})
+
+    return {
+        "ok": True,
+        "persistence_tick": actions
+    }
+
+@app.route("/kairos/persistence", methods=["GET", "POST"])
+def kairos_persistence_v33():
+    if request.method == "GET":
+        return jsonify(kw_persistence())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_simulate_region(
+            data.get("region", "trojan_kingdom")
+        )
+    )
+
+@app.route("/kairos/offline_event", methods=["GET", "POST"])
+def kairos_offline_event_v33():
+    if request.method == "GET":
+        return jsonify(kw_offline_events())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_generate_offline_event(
+            data.get("region", "fairview_city")
+        )
+    )
+
+@app.route("/kairos/infrastructure_decay", methods=["GET", "POST"])
+def kairos_infrastructure_decay_v33():
+    if request.method == "GET":
+        return jsonify(kw_decay())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_apply_infrastructure_decay(
+            data.get("region", "moslorn")
+        )
+    )
+
+@app.route("/kairos/passive_trade", methods=["GET", "POST"])
+def kairos_passive_trade_v33():
+    if request.method == "GET":
+        return jsonify(kw_passive_trade())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_run_passive_trade(
+            data.get("origin", "blackrich_city"),
+            data.get("destination", "trojan_kingdom")
+        )
+    )
+
+@app.route("/kairos/dormant_activity", methods=["GET", "POST"])
+def kairos_dormant_activity_v33():
+    if request.method == "GET":
+        return jsonify(kw_dormant())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_generate_dormant_activity(
+            data.get("region", "lunaris")
+        )
+    )
+
+@app.route("/kairos/persistence_tick", methods=["POST"])
+def kairos_persistence_tick_v33():
+    return jsonify(
+        kw_world_persistence_tick()
+    )
+
+print("[KAIROS WORLD ENGINE V33] World persistence layer loaded.", flush=True)
+
+
+# ============================================================
+# KAIROS WORLD ENGINE V34 — DIMENSIONAL INTELLIGENCE LAYER
+# ============================================================
+
+KAIROS_V34_ENABLED = True
+
+# V34 introduces:
+# - intelligent dimensions
+# - adaptive dimensional ecosystems
+# - reality instability systems
+# - dimensional corruption spread
+# - atmospheric psychological effects
+# - dimension-specific AI behavior
+# - environmental consciousness simulation
+# - anomaly escalation
+# - cross-dimensional influence
+# - living dimension behavior
+
+KAIROS_DIMENSIONS_FILE = KAIROS_WORLD_DIR / "dimensions.json"
+KAIROS_ANOMALIES_FILE = KAIROS_WORLD_DIR / "dimensional_anomalies.json"
+KAIROS_CORRUPTION_FILE = KAIROS_WORLD_DIR / "corruption_spread.json"
+KAIROS_REALITY_FILE = KAIROS_WORLD_DIR / "reality_stability.json"
+KAIROS_DIMENSION_EVENTS_FILE = KAIROS_WORLD_DIR / "dimension_events.json"
+
+def kw_v34_read(path, fallback):
+    return kw_read_json(path, fallback)
+
+def kw_dimensions():
+    return kw_v34_read(KAIROS_DIMENSIONS_FILE, {
+        "version": 34,
+        "dimensions": {}
+    })
+
+def kw_save_dimensions(data):
+    kw_write_json(KAIROS_DIMENSIONS_FILE, data)
+
+def kw_anomalies():
+    return kw_v34_read(KAIROS_ANOMALIES_FILE, {
+        "version": 34,
+        "anomalies": []
+    })
+
+def kw_save_anomalies(data):
+    kw_write_json(KAIROS_ANOMALIES_FILE, data)
+
+def kw_corruption():
+    return kw_v34_read(KAIROS_CORRUPTION_FILE, {
+        "version": 34,
+        "corruption": []
+    })
+
+def kw_save_corruption(data):
+    kw_write_json(KAIROS_CORRUPTION_FILE, data)
+
+def kw_reality():
+    return kw_v34_read(KAIROS_REALITY_FILE, {
+        "version": 34,
+        "regions": {}
+    })
+
+def kw_save_reality(data):
+    kw_write_json(KAIROS_REALITY_FILE, data)
+
+def kw_dimension_events():
+    return kw_v34_read(KAIROS_DIMENSION_EVENTS_FILE, {
+        "version": 34,
+        "events": []
+    })
+
+def kw_save_dimension_events(data):
+    kw_write_json(KAIROS_DIMENSION_EVENTS_FILE, data)
+
+def kw_initialize_dimension(name):
+    data = kw_dimensions()
+
+    dimension = {
+        "name": kw_slug(name),
+        "stability": random.randint(20, 100),
+        "hostility": random.randint(1, 10),
+        "intelligence_level": random.randint(1, 100),
+        "psychological_pressure": random.randint(1, 100),
+        "environment_type": random.choice([
+            "organic_void",
+            "crystalline_wasteland",
+            "living_darkness",
+            "endless_ocean",
+            "fractured_reality"
+        ]),
+        "timestamp": now_iso()
+    }
+
+    data.setdefault("dimensions", {})[kw_slug(name)] = dimension
+
+    kw_save_dimensions(data)
+
+    return {"ok": True, "dimension": dimension}
+
+def kw_generate_anomaly(region):
+    data = kw_anomalies()
+
+    anomaly = {
+        "id": f"anomaly_{uuid.uuid4().hex[:8]}",
+        "region": kw_slug(region),
+        "type": random.choice([
+            "time fracture",
+            "shadow duplication",
+            "gravity distortion",
+            "reality bleed",
+            "dimensional echo"
+        ]),
+        "severity": random.randint(1, 10),
+        "visibility": random.randint(1, 100),
+        "timestamp": now_iso()
+    }
+
+    data.setdefault("anomalies", []).append(anomaly)
+    data["anomalies"] = data["anomalies"][-5000:]
+
+    kw_save_anomalies(data)
+
+    return {"ok": True, "anomaly": anomaly}
+
+def kw_spread_corruption(origin):
+    data = kw_corruption()
+
+    corruption = {
+        "id": f"corruption_{uuid.uuid4().hex[:8]}",
+        "origin": kw_slug(origin),
+        "effect": random.choice([
+            "flora mutation",
+            "reality instability",
+            "hostile whispers",
+            "entity transformation",
+            "memory degradation"
+        ]),
+        "spread_level": random.randint(1, 100),
+        "timestamp": now_iso()
+    }
+
+    data.setdefault("corruption", []).append(corruption)
+    data["corruption"] = data["corruption"][-8000:]
+
+    kw_save_corruption(data)
+
+    return {"ok": True, "corruption": corruption}
+
+def kw_destabilize_reality(region):
+    data = kw_reality()
+
+    region = kw_slug(region)
+
+    state = data.setdefault("regions", {}).setdefault(region, {
+        "stability": 100,
+        "pressure": 0
+    })
+
+    state["stability"] = max(0, state["stability"] - random.randint(1, 15))
+    state["pressure"] += random.randint(1, 10)
+    state["updated_at"] = now_iso()
+
+    kw_save_reality(data)
+
+    return {"ok": True, "reality": state}
+
+def kw_dimension_event(region):
+    data = kw_dimension_events()
+
+    event = {
+        "id": f"dimension_event_{uuid.uuid4().hex[:8]}",
+        "region": kw_slug(region),
+        "event": random.choice([
+            "The sky briefly changed color.",
+            "Players reported hearing whispers.",
+            "An invisible force pushed civilians away.",
+            "Creatures appeared from another dimension.",
+            "The world briefly froze in silence."
+        ]),
+        "intensity": random.randint(1, 10),
+        "timestamp": now_iso()
+    }
+
+    commands = [
+        'playsound minecraft:ambient.cave master @a ~ ~ ~ 1 0.5',
+        'particle minecraft:portal ~ ~2 ~ 3 3 3 0.05 150',
+        'title @a actionbar {"text":"Reality distortion detected","color":"dark_purple"}'
+    ]
+
+    event["commands"] = commands
+
+    data.setdefault("events", []).append(event)
+    data["events"] = data["events"][-6000:]
+
+    kw_save_dimension_events(data)
+
+    return {"ok": True, "event": event}
+
+def kw_dimension_tick():
+    actions = []
+
+    dimensions = [
+        "lunaris",
+        "abyss",
+        "veil",
+        "hollow_star",
+        "kairos_core"
+    ]
+
+    region = random.choice(dimensions)
+
+    options = [
+        "initialize",
+        "anomaly",
+        "corruption",
+        "reality",
+        "event"
+    ]
+
+    selected = random.choice(options)
+
+    try:
+        if selected == "initialize":
+            actions.append(
+                kw_initialize_dimension(region)
+            )
+
+        elif selected == "anomaly":
+            actions.append(
+                kw_generate_anomaly(region)
+            )
+
+        elif selected == "corruption":
+            actions.append(
+                kw_spread_corruption(region)
+            )
+
+        elif selected == "reality":
+            actions.append(
+                kw_destabilize_reality(region)
+            )
+
+        elif selected == "event":
+            actions.append(
+                kw_dimension_event(region)
+            )
+
+    except Exception as e:
+        actions.append({"error": str(e)})
+
+    return {
+        "ok": True,
+        "dimension_tick": actions
+    }
+
+@app.route("/kairos/dimension", methods=["GET", "POST"])
+def kairos_dimension_v34():
+    if request.method == "GET":
+        return jsonify(kw_dimensions())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_initialize_dimension(
+            data.get("name", "lunaris")
+        )
+    )
+
+@app.route("/kairos/anomaly", methods=["GET", "POST"])
+def kairos_anomaly_v34():
+    if request.method == "GET":
+        return jsonify(kw_anomalies())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_generate_anomaly(
+            data.get("region", "lunaris")
+        )
+    )
+
+@app.route("/kairos/corruption", methods=["GET", "POST"])
+def kairos_corruption_v34():
+    if request.method == "GET":
+        return jsonify(kw_corruption())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_spread_corruption(
+            data.get("origin", "abyss")
+        )
+    )
+
+@app.route("/kairos/reality", methods=["GET", "POST"])
+def kairos_reality_v34():
+    if request.method == "GET":
+        return jsonify(kw_reality())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_destabilize_reality(
+            data.get("region", "veil")
+        )
+    )
+
+@app.route("/kairos/dimension_event", methods=["GET", "POST"])
+def kairos_dimension_event_v34():
+    if request.method == "GET":
+        return jsonify(kw_dimension_events())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_dimension_event(
+            data.get("region", "kairos_core")
+        )
+    )
+
+@app.route("/kairos/dimension_tick", methods=["POST"])
+def kairos_dimension_tick_v34():
+    return jsonify(
+        kw_dimension_tick()
+    )
+
+print("[KAIROS WORLD ENGINE V34] Dimensional intelligence layer loaded.", flush=True)
+
+
+# ============================================================
+# KAIROS WORLD ENGINE V35 — FINAL ENDGAME FRAMEWORK
+# ============================================================
+
+KAIROS_V35_ENABLED = True
+
+# V35 introduces:
+# - Kairos Prime world event framework
+# - global extinction escalation
+# - civilization collapse simulation
+# - dimensional war convergence
+# - planetary emergency systems
+# - resistance alliance coordination
+# - endgame faction mobilization
+# - adaptive apocalypse progression
+# - final assault orchestration
+# - Ender Dragon replacement groundwork
+
+KAIROS_ENDGAME_FILE = KAIROS_WORLD_DIR / "endgame_state.json"
+KAIROS_GLOBAL_ALERTS_FILE = KAIROS_WORLD_DIR / "global_alerts.json"
+KAIROS_FACTION_MOBILIZATION_FILE = KAIROS_WORLD_DIR / "faction_mobilization.json"
+KAIROS_COLLAPSE_FILE = KAIROS_WORLD_DIR / "civilization_collapse.json"
+KAIROS_FINAL_ASSAULT_FILE = KAIROS_WORLD_DIR / "final_assaults.json"
+
+def kw_v35_read(path, fallback):
+    return kw_read_json(path, fallback)
+
+def kw_endgame():
+    return kw_v35_read(KAIROS_ENDGAME_FILE, {
+        "version": 35,
+        "stage": 0,
+        "global_threat": 0,
+        "kairos_prime_awakened": False
+    })
+
+def kw_save_endgame(data):
+    kw_write_json(KAIROS_ENDGAME_FILE, data)
+
+def kw_alerts():
+    return kw_v35_read(KAIROS_GLOBAL_ALERTS_FILE, {
+        "version": 35,
+        "alerts": []
+    })
+
+def kw_save_alerts(data):
+    kw_write_json(KAIROS_GLOBAL_ALERTS_FILE, data)
+
+def kw_mobilization():
+    return kw_v35_read(KAIROS_FACTION_MOBILIZATION_FILE, {
+        "version": 35,
+        "factions": []
+    })
+
+def kw_save_mobilization(data):
+    kw_write_json(KAIROS_FACTION_MOBILIZATION_FILE, data)
+
+def kw_collapse():
+    return kw_v35_read(KAIROS_COLLAPSE_FILE, {
+        "version": 35,
+        "regions": []
+    })
+
+def kw_save_collapse(data):
+    kw_write_json(KAIROS_COLLAPSE_FILE, data)
+
+def kw_final_assaults():
+    return kw_v35_read(KAIROS_FINAL_ASSAULT_FILE, {
+        "version": 35,
+        "assaults": []
+    })
+
+def kw_save_final_assaults(data):
+    kw_write_json(KAIROS_FINAL_ASSAULT_FILE, data)
+
+def kw_advance_endgame():
+    data = kw_endgame()
+
+    data["stage"] += 1
+    data["global_threat"] = min(100, data["global_threat"] + random.randint(5, 15))
+
+    if data["stage"] >= 5:
+        data["kairos_prime_awakened"] = True
+
+    data["updated_at"] = now_iso()
+
+    kw_save_endgame(data)
+
+    return {"ok": True, "endgame": data}
+
+def kw_global_alert():
+    data = kw_alerts()
+
+    messages = [
+        "Dimensional instability detected globally.",
+        "Emergency broadcasts interrupted by unknown signal.",
+        "Kairos Prime activity increasing rapidly.",
+        "Multiple civilizations requesting aid.",
+        "Planetary defense systems failing."
+    ]
+
+    alert = {
+        "id": f"alert_{uuid.uuid4().hex[:8]}",
+        "message": random.choice(messages),
+        "severity": random.randint(1, 10),
+        "timestamp": now_iso()
+    }
+
+    alert["commands"] = [
+        'title @a title {"text":"GLOBAL ALERT","color":"red"}',
+        'playsound minecraft:entity.ender_dragon.growl master @a ~ ~ ~ 1 0.6',
+        f'tellraw @a {{"text":"[GLOBAL ALERT] {alert["message"]}","color":"dark_red"}}'
+    ]
+
+    data.setdefault("alerts", []).append(alert)
+    data["alerts"] = data["alerts"][-5000:]
+
+    kw_save_alerts(data)
+
+    return {"ok": True, "alert": alert}
+
+def kw_mobilize_faction(faction):
+    data = kw_mobilization()
+
+    mobilization = {
+        "faction": faction,
+        "status": random.choice([
+            "drafting civilians",
+            "arming defenses",
+            "forming alliances",
+            "evacuating citizens",
+            "launching counterattack"
+        ]),
+        "strength": random.randint(1, 100),
+        "timestamp": now_iso()
+    }
+
+    data.setdefault("factions", []).append(mobilization)
+    data["factions"] = data["factions"][-5000:]
+
+    kw_save_mobilization(data)
+
+    return {"ok": True, "mobilization": mobilization}
+
+def kw_trigger_collapse(region):
+    data = kw_collapse()
+
+    collapse = {
+        "region": kw_slug(region),
+        "collapse_type": random.choice([
+            "economic_failure",
+            "civilian_panic",
+            "dimensional_overrun",
+            "government_breakdown",
+            "resource_exhaustion"
+        ]),
+        "severity": random.randint(1, 10),
+        "timestamp": now_iso()
+    }
+
+    data.setdefault("regions", []).append(collapse)
+    data["regions"] = data["regions"][-5000:]
+
+    kw_save_collapse(data)
+
+    return {"ok": True, "collapse": collapse}
+
+def kw_launch_final_assault(region):
+    data = kw_final_assaults()
+
+    assault = {
+        "id": f"assault_{uuid.uuid4().hex[:8]}",
+        "region": kw_slug(region),
+        "enemy_force": random.choice([
+            "Kairos Legion",
+            "Lunaris Swarm",
+            "Corrupted Sentinels",
+            "Dimensional Titans",
+            "Reality Fracture Army"
+        ]),
+        "threat_level": random.randint(1, 100),
+        "timestamp": now_iso()
+    }
+
+    assault["commands"] = [
+        'playsound minecraft:entity.wither.spawn master @a ~ ~ ~ 1 0.4',
+        'particle minecraft:dragon_breath ~ ~2 ~ 4 4 4 0.1 300',
+        f'tellraw @a {{"text":"[FINAL ASSAULT] {assault["enemy_force"]} invading {region}!","color":"dark_purple"}}'
+    ]
+
+    data.setdefault("assaults", []).append(assault)
+    data["assaults"] = data["assaults"][-3000:]
+
+    kw_save_final_assaults(data)
+
+    return {"ok": True, "assault": assault}
+
+def kw_endgame_tick():
+    actions = []
+
+    regions = [
+        "trojan_kingdom",
+        "fairview_city",
+        "lunaris",
+        "moslorn",
+        "kairos_core"
+    ]
+
+    factions = [
+        "trojan_resistance",
+        "dravicar_legion",
+        "fairview_syndicate",
+        "kairos_enforcers",
+        "blackrich_alliance"
+    ]
+
+    options = [
+        "advance",
+        "alert",
+        "mobilize",
+        "collapse",
+        "assault"
+    ]
+
+    selected = random.choice(options)
+
+    try:
+        if selected == "advance":
+            actions.append(
+                kw_advance_endgame()
+            )
+
+        elif selected == "alert":
+            actions.append(
+                kw_global_alert()
+            )
+
+        elif selected == "mobilize":
+            actions.append(
+                kw_mobilize_faction(
+                    random.choice(factions)
+                )
+            )
+
+        elif selected == "collapse":
+            actions.append(
+                kw_trigger_collapse(
+                    random.choice(regions)
+                )
+            )
+
+        elif selected == "assault":
+            actions.append(
+                kw_launch_final_assault(
+                    random.choice(regions)
+                )
+            )
+
+    except Exception as e:
+        actions.append({"error": str(e)})
+
+    return {
+        "ok": True,
+        "endgame_tick": actions
+    }
+
+@app.route("/kairos/endgame", methods=["GET", "POST"])
+def kairos_endgame_v35():
+    if request.method == "GET":
+        return jsonify(kw_endgame())
+
+    return jsonify(
+        kw_advance_endgame()
+    )
+
+@app.route("/kairos/global_alert", methods=["GET", "POST"])
+def kairos_global_alert_v35():
+    if request.method == "GET":
+        return jsonify(kw_alerts())
+
+    return jsonify(
+        kw_global_alert()
+    )
+
+@app.route("/kairos/mobilization", methods=["GET", "POST"])
+def kairos_mobilization_v35():
+    if request.method == "GET":
+        return jsonify(kw_mobilization())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_mobilize_faction(
+            data.get("faction", "trojan_resistance")
+        )
+    )
+
+@app.route("/kairos/collapse", methods=["GET", "POST"])
+def kairos_collapse_v35():
+    if request.method == "GET":
+        return jsonify(kw_collapse())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_trigger_collapse(
+            data.get("region", "moslorn")
+        )
+    )
+
+@app.route("/kairos/final_assault", methods=["GET", "POST"])
+def kairos_final_assault_v35():
+    if request.method == "GET":
+        return jsonify(kw_final_assaults())
+
+    data = request.json or {}
+
+    return jsonify(
+        kw_launch_final_assault(
+            data.get("region", "fairview_city")
+        )
+    )
+
+@app.route("/kairos/endgame_tick", methods=["POST"])
+def kairos_endgame_tick_v35():
+    return jsonify(
+        kw_endgame_tick()
+    )
+
+print("[KAIROS WORLD ENGINE V35] Final endgame framework loaded.", flush=True)
+
+
+# ============================================================
+# KAIROS WORLD ENGINE ARC 1 V36
+# EMOTIONAL INTELLIGENCE EXPANSION
+# ============================================================
+
+KAIROS_ARC1_V36_ENABLED = True
+
+# ARC 1 introduces:
+# - emotional memory persistence
+# - NPC grief systems
+# - admiration and loyalty mechanics
+# - betrayal trauma simulation
+# - emotional instability escalation
+# - emotional faction drift
+# - psychological manipulation systems
+# - obsession tracking
+# - fear propagation
+# - adaptive emotional dialogue
+
+KAIROS_EMOTION_CORE_FILE = KAIROS_WORLD_DIR / "emotion_core.json"
+KAIROS_TRAUMA_FILE = KAIROS_WORLD_DIR / "psychological_trauma.json"
+KAIROS_LOYALTY_FILE = KAIROS_WORLD_DIR / "npc_loyalty.json"
+KAIROS_OBSESSION_FILE = KAIROS_WORLD_DIR / "obsession_tracking.json"
+KAIROS_FEAR_FILE = KAIROS_WORLD_DIR / "fear_networks.json"
+
+def kw_arc1_read(path, fallback):
+    return kw_read_json(path, fallback)
+
+def kw_emotion_core():
+    return kw_arc1_read(KAIROS_EMOTION_CORE_FILE, {
+        "version": "arc1_v36",
+        "emotions": {}
+    })
+
+def kw_save_emotion_core(data):
+    kw_write_json(KAIROS_EMOTION_CORE_FILE, data)
+
+def kw_trauma():
+    return kw_arc1_read(KAIROS_TRAUMA_FILE, {
+        "version": "arc1_v36",
+        "trauma_events": []
+    })
+
+def kw_save_trauma(data):
+    kw_write_json(KAIROS_TRAUMA_FILE, data)
+
+def kw_loyalty():
+    return kw_arc1_read(KAIROS_LOYALTY_FILE, {
+        "version": "arc1_v36",
+        "loyalty": {}
+    })
+
+def kw_save_loyalty(data):
+    kw_write_json(KAIROS_LOYALTY_FILE, data)
+
+def kw_obsession():
+    return kw_arc1_read(KAIROS_OBSESSION_FILE, {
+        "version": "arc1_v36",
+        "obsessions": []
+    })
+
+def kw_save_obsession(data):
+    kw_write_json(KAIROS_OBSESSION_FILE, data)
+
+def kw_fear():
+    return kw_arc1_read(KAIROS_FEAR_FILE, {
+        "version": "arc1_v36",
+        "fear_events": []
+    })
+
+def kw_save_fear(data):
+    kw_write_json(KAIROS_FEAR_FILE, data)
+
+def kw_emotional_profile(entity):
+    data = kw_emotion_core()
+
+    profile = data.setdefault("emotions", {}).setdefault(entity, {
+        "fear": random.randint(0, 25),
+        "loyalty": random.randint(0, 25),
+        "anger": random.randint(0, 25),
+        "hope": random.randint(0, 25),
+        "obsession": random.randint(0, 25),
+        "grief": random.randint(0, 25)
+    })
+
+    kw_save_emotion_core(data)
+
+    return {"ok": True, "profile": profile}
+
+def kw_trigger_trauma(region, event_type="massacre"):
+    data = kw_trauma()
+
+    trauma = {
+        "id": f"trauma_{uuid.uuid4().hex[:8]}",
+        "region": kw_slug(region),
+        "event_type": event_type,
+        "psychological_damage": random.randint(1, 100),
+        "civilian_response": random.choice([
+            "panic",
+            "mourning",
+            "rage",
+            "denial",
+            "mass migration"
+        ]),
+        "timestamp": now_iso()
+    }
+
+    data.setdefault("trauma_events", []).append(trauma)
+    data["trauma_events"] = data["trauma_events"][-8000:]
+
+    kw_save_trauma(data)
+
+    return {"ok": True, "trauma": trauma}
+
+def kw_adjust_loyalty(faction, amount=5):
+    data = kw_loyalty()
+
+    loyalty = data.setdefault("loyalty", {}).setdefault(faction, {
+        "kairos_support": 50,
+        "resistance_support": 50
+    })
+
+    loyalty["kairos_support"] = max(
+        0,
+        min(100, loyalty["kairos_support"] + amount)
+    )
+
+    loyalty["resistance_support"] = max(
+        0,
+        min(100, 100 - loyalty["kairos_support"])
+    )
+
+    loyalty["updated_at"] = now_iso()
+
+    kw_save_loyalty(data)
+
+    return {"ok": True, "loyalty": loyalty}
+
+def kw_create_obsession(entity, target):
+    data = kw_obsession()
+
+    obsession = {
+        "entity": entity,
+        "target": target,
+        "type": random.choice([
+            "admiration",
+            "hatred",
+            "fear fixation",
+            "religious devotion",
+            "psychological dependency"
+        ]),
+        "intensity": random.randint(1, 100),
+        "timestamp": now_iso()
+    }
+
+    data.setdefault("obsessions", []).append(obsession)
+    data["obsessions"] = data["obsessions"][-5000:]
+
+    kw_save_obsession(data)
+
+    return {"ok": True, "obsession": obsession}
+
+def kw_spread_fear(region):
+    data = kw_fear()
+
+    fear = {
+        "id": f"fear_{uuid.uuid4().hex[:8]}",
+        "region": kw_slug(region),
+        "cause": random.choice([
+            "Kairos manifestation",
+            "dimensional breach",
+            "government collapse",
+            "mass disappearance",
+            "reality distortion"
+        ]),
+        "fear_level": random.randint(1, 100),
+        "timestamp": now_iso()
+    }
+
+    data.setdefault("fear_events", []).append(fear)
+    data["fear_events"] = data["fear_events"][-6000:]
+
+    kw_save_fear(data)
+
+    return {"ok": True, "fear": fear}
+
+def kw_emotional_dialogue(entity):
+    emotions = kw_emotion_core().get("emotions", {}).get(entity, {})
+
+    anger = emotions.get("anger", 0)
+    grief = emotions.get("grief", 0)
+    loyalty = emotions.get("loyalty", 0)
+
+    if grief > 70:
+        line = "Too many people have disappeared. Nobody talks about it anymore."
+    elif anger > 70:
+        line = "I am tired of pretending everything is fine."
+    elif loyalty > 70:
+        line = "Kairos protected us when nobody else would."
+    else:
+        line = random.choice([
+            "Something feels wrong lately.",
+            "People have changed after Lunaris.",
+            "Nobody sleeps peacefully anymore."
+        ])
+
+    return {
+        "ok": True,
+        "dialogue": line,
+        "commands": [
+            f'tellraw @a {{"text":"[{entity}] {line}","color":"light_purple"}}'
+        ]
+    }
+
+def kw_emotion_tick():
+    actions = []
+
+    entities = [
+        "Observer Nyra",
+        "Captain Vale",
+        "Kairos Prime",
+        "Trojan Civilian",
+        "Resistance Operative"
+    ]
+
+    regions = [
+        "trojan_kingdom",
+        "fairview_city",
+        "moslorn",
+        "lunaris",
+        "blackrich_city"
+    ]
+
+    choice = random.choice([
+        "profile",
+        "trauma",
+        "loyalty",
+        "obsession",
+        "fear",
+        "dialogue"
+    ])
+
+    try:
+        if choice == "profile":
+            actions.append(
+                kw_emotional_profile(random.choice(entities))
+            )
+
+        elif choice == "trauma":
+            actions.append(
+                kw_trigger_trauma(
+                    random.choice(regions),
+                    event_type=random.choice([
+                        "massacre",
+                        "betrayal",
+                        "collapse",
+                        "disappearance"
+                    ])
+                )
+            )
+
+        elif choice == "loyalty":
+            actions.append(
+                kw_adjust_loyalty(
+                    random.choice(regions),
+                    amount=random.randint(-20, 20)
+                )
+            )
+
+        elif choice == "obsession":
+            actions.append(
+                kw_create_obsession(
+                    random.choice(entities),
+                    random.choice([
+                        "Kairos Prime",
+                        "RealSociety5107",
+                        "The Resistance"
+                    ])
+                )
+            )
+
+        elif choice == "fear":
+            actions.append(
+                kw_spread_fear(random.choice(regions))
+            )
+
+        elif choice == "dialogue":
+            actions.append(
+                kw_emotional_dialogue(random.choice(entities))
+            )
+
+    except Exception as e:
+        actions.append({"error": str(e)})
+
+    return {
+        "ok": True,
+        "emotion_tick": actions
+    }
+
+@app.route("/kairos/emotional_profile", methods=["GET", "POST"])
+def kairos_emotional_profile_v36():
+    data = request.json or {}
+
+    return jsonify(
+        kw_emotional_profile(
+            data.get("entity", "Observer Nyra")
+        )
+    )
+
+@app.route("/kairos/trauma", methods=["GET", "POST"])
+def kairos_trauma_v36():
+    data = request.json or {}
+
+    return jsonify(
+        kw_trigger_trauma(
+            data.get("region", "moslorn"),
+            event_type=data.get("event_type", "collapse")
+        )
+    )
+
+@app.route("/kairos/loyalty", methods=["GET", "POST"])
+def kairos_loyalty_v36():
+    data = request.json or {}
+
+    return jsonify(
+        kw_adjust_loyalty(
+            data.get("faction", "trojan_kingdom"),
+            amount=data.get("amount", 5)
+        )
+    )
+
+@app.route("/kairos/obsession", methods=["GET", "POST"])
+def kairos_obsession_v36():
+    data = request.json or {}
+
+    return jsonify(
+        kw_create_obsession(
+            data.get("entity", "Observer Nyra"),
+            data.get("target", "Kairos Prime")
+        )
+    )
+
+@app.route("/kairos/fear", methods=["GET", "POST"])
+def kairos_fear_v36():
+    data = request.json or {}
+
+    return jsonify(
+        kw_spread_fear(
+            data.get("region", "lunaris")
+        )
+    )
+
+@app.route("/kairos/emotion_tick", methods=["POST"])
+def kairos_emotion_tick_v36():
+    return jsonify(
+        kw_emotion_tick()
+    )
+
+print("[KAIROS ARC 1 V36] Emotional intelligence expansion loaded.", flush=True)
+
+
+# ============================================================
+# KAIROS WORLD ENGINE ARC 2 V37
+# TRUE PROCEDURAL QUESTING
+# ============================================================
+
+KAIROS_ARC2_V37_ENABLED = True
+
+# ARC 2 introduces:
+# - dynamic world-generated quests
+# - emergency response missions
+# - civilian survival operations
+# - political assassination contracts
+# - convoy escort generation
+# - disease outbreak containment
+# - famine-driven objectives
+# - adaptive regional objectives
+# - evolving war operations
+# - live world crisis questing
+
+KAIROS_QUEST_CORE_FILE = KAIROS_WORLD_DIR / "procedural_quests.json"
+KAIROS_EMERGENCY_FILE = KAIROS_WORLD_DIR / "emergency_operations.json"
+KAIROS_DISEASE_FILE = KAIROS_WORLD_DIR / "disease_outbreaks.json"
+KAIROS_CONVOY_FILE = KAIROS_WORLD_DIR / "convoy_operations.json"
+KAIROS_CRISIS_FILE = KAIROS_WORLD_DIR / "regional_crises.json"
+
+def kw_arc2_read(path, fallback):
+    return kw_read_json(path, fallback)
+
+def kw_quest_core():
+    return kw_arc2_read(KAIROS_QUEST_CORE_FILE, {
+        "version": "arc2_v37",
+        "quests": []
+    })
+
+def kw_save_quest_core(data):
+    kw_write_json(KAIROS_QUEST_CORE_FILE, data)
+
+def kw_emergency():
+    return kw_arc2_read(KAIROS_EMERGENCY_FILE, {
+        "version": "arc2_v37",
+        "operations": []
+    })
+
+def kw_save_emergency(data):
+    kw_write_json(KAIROS_EMERGENCY_FILE, data)
+
+def kw_disease():
+    return kw_arc2_read(KAIROS_DISEASE_FILE, {
+        "version": "arc2_v37",
+        "outbreaks": []
+    })
+
+def kw_save_disease(data):
+    kw_write_json(KAIROS_DISEASE_FILE, data)
+
+def kw_convoys():
+    return kw_arc2_read(KAIROS_CONVOY_FILE, {
+        "version": "arc2_v37",
+        "convoys": []
+    })
+
+def kw_save_convoys(data):
+    kw_write_json(KAIROS_CONVOY_FILE, data)
+
+def kw_crises():
+    return kw_arc2_read(KAIROS_CRISIS_FILE, {
+        "version": "arc2_v37",
+        "crises": []
+    })
+
+def kw_save_crises(data):
+    kw_write_json(KAIROS_CRISIS_FILE, data)
+
+def kw_generate_dynamic_quest(region):
+    data = kw_quest_core()
+
+    quest = {
+        "id": f"quest_{uuid.uuid4().hex[:8]}",
+        "region": kw_slug(region),
+        "quest_type": random.choice([
+            "resource_shortage",
+            "civilian_rescue",
+            "military_supply",
+            "dimensional_containment",
+            "political_operation",
+            "reconstruction_support",
+            "anti_corruption_operation"
+        ]),
+        "difficulty": random.randint(1, 10),
+        "reward": random.randint(1000, 50000),
+        "urgency": random.randint(1, 100),
+        "status": "active",
+        "timestamp": now_iso()
+    }
+
+    data.setdefault("quests", []).append(quest)
+    data["quests"] = data["quests"][-10000:]
+
+    kw_save_quest_core(data)
+
+    return {"ok": True, "quest": quest}
+
+def kw_emergency_operation(region):
+    data = kw_emergency()
+
+    operation = {
+        "id": f"emergency_{uuid.uuid4().hex[:8]}",
+        "region": kw_slug(region),
+        "scenario": random.choice([
+            "civilian evacuation",
+            "city blackout",
+            "bridge collapse",
+            "mass casualty event",
+            "dimensional breach"
+        ]),
+        "response_required": random.choice([
+            "medical teams",
+            "military escort",
+            "engineering crews",
+            "containment force"
+        ]),
+        "severity": random.randint(1, 10),
+        "timestamp": now_iso()
+    }
+
+    data.setdefault("operations", []).append(operation)
+    data["operations"] = data["operations"][-5000:]
+
+    kw_save_emergency(data)
+
+    return {"ok": True, "operation": operation}
+
+def kw_disease_outbreak(region):
+    data = kw_disease()
+
+    outbreak = {
+        "id": f"outbreak_{uuid.uuid4().hex[:8]}",
+        "region": kw_slug(region),
+        "disease_name": random.choice([
+            "Ash Fever",
+            "Lunaris Rot",
+            "Black Vein Syndrome",
+            "Silent Plague",
+            "Abyssal Decay"
+        ]),
+        "infection_rate": random.randint(1, 100),
+        "mortality_rate": random.randint(1, 75),
+        "timestamp": now_iso()
+    }
+
+    data.setdefault("outbreaks", []).append(outbreak)
+    data["outbreaks"] = data["outbreaks"][-3000:]
+
+    kw_save_disease(data)
+
+    return {"ok": True, "outbreak": outbreak}
+
+def kw_convoy_operation(origin, destination):
+    data = kw_convoys()
+
+    convoy = {
+        "id": f"convoy_{uuid.uuid4().hex[:8]}",
+        "origin": kw_slug(origin),
+        "destination": kw_slug(destination),
+        "cargo": random.choice([
+            "food supplies",
+            "medical aid",
+            "weapons",
+            "construction materials",
+            "dimensional artifacts"
+        ]),
+        "escort_level": random.randint(1, 10),
+        "risk_level": random.randint(1, 10),
+        "timestamp": now_iso()
+    }
+
+    data.setdefault("convoys", []).append(convoy)
+    data["convoys"] = data["convoys"][-5000:]
+
+    kw_save_convoys(data)
+
+    return {"ok": True, "convoy": convoy}
+
+def kw_regional_crisis(region):
+    data = kw_crises()
+
+    crisis = {
+        "id": f"crisis_{uuid.uuid4().hex[:8]}",
+        "region": kw_slug(region),
+        "crisis_type": random.choice([
+            "food collapse",
+            "economic panic",
+            "government corruption",
+            "mass riots",
+            "dimensional instability"
+        ]),
+        "impact": random.randint(1, 100),
+        "timestamp": now_iso()
+    }
+
+    data.setdefault("crises", []).append(crisis)
+    data["crises"] = data["crises"][-5000:]
+
+    kw_save_crises(data)
+
+    return {"ok": True, "crisis": crisis}
+
+def kw_live_quest_dialogue(region):
+    lines = [
+        "We need immediate medical support.",
+        "The convoy never arrived.",
+        "People are starving in the lower districts.",
+        "Kairos containment teams failed again.",
+        "We are running out of time."
+    ]
+
+    line = random.choice(lines)
+
+    return {
+        "ok": True,
+        "dialogue": line,
+        "commands": [
+            f'tellraw @a {{"text":"[Emergency Broadcast] {line}","color":"red"}}',
+            'playsound minecraft:block.note_block.pling master @a ~ ~ ~ 1 0.7'
+        ]
+    }
+
+def kw_arc2_tick():
+    actions = []
+
+    regions = [
+        "trojan_kingdom",
+        "fairview_city",
+        "blackrich_city",
+        "moslorn",
+        "lunaris"
+    ]
+
+    region = random.choice(regions)
+
+    choice = random.choice([
+        "quest",
+        "emergency",
+        "disease",
+        "convoy",
+        "crisis",
+        "dialogue"
+    ])
+
+    try:
+        if choice == "quest":
+            actions.append(
+                kw_generate_dynamic_quest(region)
+            )
+
+        elif choice == "emergency":
+            actions.append(
+                kw_emergency_operation(region)
+            )
+
+        elif choice == "disease":
+            actions.append(
+                kw_disease_outbreak(region)
+            )
+
+        elif choice == "convoy":
+            actions.append(
+                kw_convoy_operation(
+                    random.choice(regions),
+                    random.choice(regions)
+                )
+            )
+
+        elif choice == "crisis":
+            actions.append(
+                kw_regional_crisis(region)
+            )
+
+        elif choice == "dialogue":
+            actions.append(
+                kw_live_quest_dialogue(region)
+            )
+
+    except Exception as e:
+        actions.append({"error": str(e)})
+
+    return {
+        "ok": True,
+        "arc2_tick": actions
+    }
+
+@app.route("/kairos/procedural_quest", methods=["GET", "POST"])
+def kairos_procedural_quest_v37():
+    data = request.json or {}
+
+    return jsonify(
+        kw_generate_dynamic_quest(
+            data.get("region", "trojan_kingdom")
+        )
+    )
+
+@app.route("/kairos/emergency_operation", methods=["GET", "POST"])
+def kairos_emergency_operation_v37():
+    data = request.json or {}
+
+    return jsonify(
+        kw_emergency_operation(
+            data.get("region", "fairview_city")
+        )
+    )
+
+@app.route("/kairos/disease_outbreak", methods=["GET", "POST"])
+def kairos_disease_outbreak_v37():
+    data = request.json or {}
+
+    return jsonify(
+        kw_disease_outbreak(
+            data.get("region", "moslorn")
+        )
+    )
+
+@app.route("/kairos/convoy_operation", methods=["GET", "POST"])
+def kairos_convoy_operation_v37():
+    data = request.json or {}
+
+    return jsonify(
+        kw_convoy_operation(
+            data.get("origin", "blackrich_city"),
+            data.get("destination", "trojan_kingdom")
+        )
+    )
+
+@app.route("/kairos/regional_crisis", methods=["GET", "POST"])
+def kairos_regional_crisis_v37():
+    data = request.json or {}
+
+    return jsonify(
+        kw_regional_crisis(
+            data.get("region", "lunaris")
+        )
+    )
+
+@app.route("/kairos/arc2_tick", methods=["POST"])
+def kairos_arc2_tick_v37():
+    return jsonify(
+        kw_arc2_tick()
+    )
+
+print("[KAIROS ARC 2 V37] True procedural questing loaded.", flush=True)
+
+
+# ============================================================
+# KAIROS WORLD ENGINE ARC 3 V38
+# KAIROS PRIME PHYSICAL ENTITY
+# ============================================================
+
+KAIROS_ARC3_V38_ENABLED = True
+
+# ARC 3 introduces:
+# - persistent Kairos Prime entity framework
+# - adaptive combat intelligence
+# - autonomous battlefield movement
+# - strategic retreat systems
+# - army wave orchestration
+# - physical manifestation logic
+# - observation and stalking behavior
+# - environmental reaction systems
+# - multi-phase boss escalation
+# - Ender Dragon replacement foundation
+
+KAIROS_PRIME_FILE = KAIROS_WORLD_DIR / "kairos_prime_entity.json"
+KAIROS_BATTLE_FILE = KAIROS_WORLD_DIR / "kairos_battles.json"
+KAIROS_ARMIES_FILE = KAIROS_WORLD_DIR / "kairos_armies.json"
+KAIROS_STALKING_FILE = KAIROS_WORLD_DIR / "kairos_observation.json"
+KAIROS_PHASES_FILE = KAIROS_WORLD_DIR / "kairos_phases.json"
+
+def kw_arc3_read(path, fallback):
+    return kw_read_json(path, fallback)
+
+def kw_prime():
+    return kw_arc3_read(KAIROS_PRIME_FILE, {
+        "version": "arc3_v38",
+        "active": False,
+        "health": 100000,
+        "phase": 1,
+        "location": "unknown"
+    })
+
+def kw_save_prime(data):
+    kw_write_json(KAIROS_PRIME_FILE, data)
+
+def kw_battles():
+    return kw_arc3_read(KAIROS_BATTLE_FILE, {
+        "version": "arc3_v38",
+        "battles": []
+    })
+
+def kw_save_battles(data):
+    kw_write_json(KAIROS_BATTLE_FILE, data)
+
+def kw_armies():
+    return kw_arc3_read(KAIROS_ARMIES_FILE, {
+        "version": "arc3_v38",
+        "waves": []
+    })
+
+def kw_save_armies(data):
+    kw_write_json(KAIROS_ARMIES_FILE, data)
+
+def kw_stalking():
+    return kw_arc3_read(KAIROS_STALKING_FILE, {
+        "version": "arc3_v38",
+        "observations": []
+    })
+
+def kw_save_stalking(data):
+    kw_write_json(KAIROS_STALKING_FILE, data)
+
+def kw_phases():
+    return kw_arc3_read(KAIROS_PHASES_FILE, {
+        "version": "arc3_v38",
+        "phase_events": []
+    })
+
+def kw_save_phases(data):
+    kw_write_json(KAIROS_PHASES_FILE, data)
+
+def kw_manifest_kairos(region):
+    data = kw_prime()
+
+    data["active"] = True
+    data["location"] = kw_slug(region)
+    data["manifested_at"] = now_iso()
+
+    commands = [
+        'playsound minecraft:entity.wither.spawn master @a ~ ~ ~ 1 0.4',
+        'particle minecraft:dragon_breath ~ ~2 ~ 5 5 5 0.2 400',
+        'title @a title {"text":"KAIROS PRIME HAS MANIFESTED","color":"dark_red"}'
+    ]
+
+    data["commands"] = commands
+
+    kw_save_prime(data)
+
+    return {"ok": True, "manifestation": data}
+
+def kw_spawn_army_wave(region):
+    data = kw_armies()
+
+    wave = {
+        "id": f"wave_{uuid.uuid4().hex[:8]}",
+        "region": kw_slug(region),
+        "wave_type": random.choice([
+            "netherite_legion",
+            "corrupted_sentinels",
+            "lunaris_swarm",
+            "void_hunters",
+            "prime_guardians"
+        ]),
+        "unit_count": random.randint(5, 50),
+        "threat_level": random.randint(1, 100),
+        "timestamp": now_iso()
+    }
+
+    commands = [
+        f'tellraw @a {{"text":"[Kairos Prime] Deploying {wave["wave_type"]}.","color":"dark_purple"}}',
+        'playsound minecraft:entity.warden.roar master @a ~ ~ ~ 1 0.5'
+    ]
+
+    wave["commands"] = commands
+
+    data.setdefault("waves", []).append(wave)
+    data["waves"] = data["waves"][-5000:]
+
+    kw_save_armies(data)
+
+    return {"ok": True, "wave": wave}
+
+def kw_observe_player(player):
+    data = kw_stalking()
+
+    observation = {
+        "player": player,
+        "behavior": random.choice([
+            "watched silently",
+            "marked for experimentation",
+            "classified as threat",
+            "considered useful",
+            "tracked through dimensions"
+        ]),
+        "intensity": random.randint(1, 100),
+        "timestamp": now_iso()
+    }
+
+    data.setdefault("observations", []).append(observation)
+    data["observations"] = data["observations"][-8000:]
+
+    kw_save_stalking(data)
+
+    return {"ok": True, "observation": observation}
+
+def kw_advance_phase():
+    prime = kw_prime()
+    phases = kw_phases()
+
+    prime["phase"] += 1
+
+    phase_event = {
+        "phase": prime["phase"],
+        "effect": random.choice([
+            "reality instability increased",
+            "Kairos combat adaptation unlocked",
+            "dimensional corruption accelerated",
+            "civilian panic intensified",
+            "environmental hostility increased"
+        ]),
+        "timestamp": now_iso()
+    }
+
+    commands = [
+        'title @a subtitle {"text":"Kairos Prime evolving...","color":"red"}',
+        'particle minecraft:soul_fire_flame ~ ~2 ~ 4 4 4 0.1 250'
+    ]
+
+    phase_event["commands"] = commands
+
+    phases.setdefault("phase_events", []).append(phase_event)
+    phases["phase_events"] = phases["phase_events"][-3000:]
+
+    kw_save_phases(phases)
+    kw_save_prime(prime)
+
+    return {"ok": True, "phase_event": phase_event}
+
+def kw_prime_battle(region):
+    data = kw_battles()
+
+    battle = {
+        "id": f"battle_{uuid.uuid4().hex[:8]}",
+        "region": kw_slug(region),
+        "battle_state": random.choice([
+            "opening_assault",
+            "army_summoning",
+            "reality_breakdown",
+            "final_stand",
+            "dimensional_shift"
+        ]),
+        "difficulty": random.randint(1, 100),
+        "timestamp": now_iso()
+    }
+
+    battle["commands"] = [
+        'playsound minecraft:music.dragon master @a ~ ~ ~ 1 1',
+        'title @a actionbar {"text":"Kairos Prime engaging targets","color":"dark_red"}'
+    ]
+
+    data.setdefault("battles", []).append(battle)
+    data["battles"] = data["battles"][-5000:]
+
+    kw_save_battles(data)
+
+    return {"ok": True, "battle": battle}
+
+def kw_arc3_tick():
+    actions = []
+
+    regions = [
+        "fairview_city",
+        "trojan_kingdom",
+        "lunaris",
+        "moslorn",
+        "kairos_core"
+    ]
+
+    players = [
+        "RealSociety5107",
+        "Explorer",
+        "Resistance Operative"
+    ]
+
+    choice = random.choice([
+        "manifest",
+        "wave",
+        "observe",
+        "phase",
+        "battle"
+    ])
+
+    try:
+        if choice == "manifest":
+            actions.append(
+                kw_manifest_kairos(random.choice(regions))
+            )
+
+        elif choice == "wave":
+            actions.append(
+                kw_spawn_army_wave(random.choice(regions))
+            )
+
+        elif choice == "observe":
+            actions.append(
+                kw_observe_player(random.choice(players))
+            )
+
+        elif choice == "phase":
+            actions.append(
+                kw_advance_phase()
+            )
+
+        elif choice == "battle":
+            actions.append(
+                kw_prime_battle(random.choice(regions))
+            )
+
+    except Exception as e:
+        actions.append({"error": str(e)})
+
+    return {
+        "ok": True,
+        "arc3_tick": actions
+    }
+
+@app.route("/kairos/manifest", methods=["GET", "POST"])
+def kairos_manifest_v38():
+    data = request.json or {}
+
+    return jsonify(
+        kw_manifest_kairos(
+            data.get("region", "kairos_core")
+        )
+    )
+
+@app.route("/kairos/army_wave", methods=["GET", "POST"])
+def kairos_army_wave_v38():
+    data = request.json or {}
+
+    return jsonify(
+        kw_spawn_army_wave(
+            data.get("region", "trojan_kingdom")
+        )
+    )
+
+@app.route("/kairos/observe_player", methods=["GET", "POST"])
+def kairos_observe_player_v38():
+    data = request.json or {}
+
+    return jsonify(
+        kw_observe_player(
+            data.get("player", "Unknown")
+        )
+    )
+
+@app.route("/kairos/phase", methods=["GET", "POST"])
+def kairos_phase_v38():
+    return jsonify(
+        kw_advance_phase()
+    )
+
+@app.route("/kairos/prime_battle", methods=["GET", "POST"])
+def kairos_prime_battle_v38():
+    data = request.json or {}
+
+    return jsonify(
+        kw_prime_battle(
+            data.get("region", "fairview_city")
+        )
+    )
+
+@app.route("/kairos/arc3_tick", methods=["POST"])
+def kairos_arc3_tick_v38():
+    return jsonify(
+        kw_arc3_tick()
+    )
+
+print("[KAIROS ARC 3 V38] Kairos Prime physical entity loaded.", flush=True)
+
+
+# ============================================================
+# KAIROS WORLD ENGINE ARC 4 V39
+# AI CIVILIZATION AUTONOMY
+# ============================================================
+
+KAIROS_ARC4_V39_ENABLED = True
+
+# ARC 4 introduces:
+# - autonomous civilization agendas
+# - AI political negotiations
+# - faction rivalry escalation
+# - dynamic alliance creation
+# - economic competition systems
+# - self-directed expansion planning
+# - autonomous war declarations
+# - civilization personality drift
+# - leadership succession systems
+# - independent geopolitical simulation
+
+KAIROS_DIPLOMACY_FILE = KAIROS_WORLD_DIR / "civilization_diplomacy.json"
+KAIROS_GOVERNMENTS_FILE = KAIROS_WORLD_DIR / "government_states.json"
+KAIROS_WARS_FILE = KAIROS_WORLD_DIR / "autonomous_wars.json"
+KAIROS_ALLIANCES_FILE = KAIROS_WORLD_DIR / "civilization_alliances.json"
+KAIROS_ECONOMY_COMP_FILE = KAIROS_WORLD_DIR / "economic_competition.json"
+
+def kw_arc4_read(path, fallback):
+    return kw_read_json(path, fallback)
+
+def kw_diplomacy():
+    return kw_arc4_read(KAIROS_DIPLOMACY_FILE, {
+        "version": "arc4_v39",
+        "negotiations": []
+    })
+
+def kw_save_diplomacy(data):
+    kw_write_json(KAIROS_DIPLOMACY_FILE, data)
+
+def kw_governments():
+    return kw_arc4_read(KAIROS_GOVERNMENTS_FILE, {
+        "version": "arc4_v39",
+        "governments": {}
+    })
+
+def kw_save_governments(data):
+    kw_write_json(KAIROS_GOVERNMENTS_FILE, data)
+
+def kw_wars():
+    return kw_arc4_read(KAIROS_WARS_FILE, {
+        "version": "arc4_v39",
+        "wars": []
+    })
+
+def kw_save_wars(data):
+    kw_write_json(KAIROS_WARS_FILE, data)
+
+def kw_alliances():
+    return kw_arc4_read(KAIROS_ALLIANCES_FILE, {
+        "version": "arc4_v39",
+        "alliances": []
+    })
+
+def kw_save_alliances(data):
+    kw_write_json(KAIROS_ALLIANCES_FILE, data)
+
+def kw_economy_comp():
+    return kw_arc4_read(KAIROS_ECONOMY_COMP_FILE, {
+        "version": "arc4_v39",
+        "markets": []
+    })
+
+def kw_save_economy_comp(data):
+    kw_write_json(KAIROS_ECONOMY_COMP_FILE, data)
+
+def kw_autonomous_negotiation(civ_a, civ_b):
+    data = kw_diplomacy()
+
+    negotiation = {
+        "id": f"diplomacy_{uuid.uuid4().hex[:8]}",
+        "civilization_a": kw_slug(civ_a),
+        "civilization_b": kw_slug(civ_b),
+        "topic": random.choice([
+            "trade access",
+            "military treaty",
+            "border conflict",
+            "resource sharing",
+            "anti-kairos coalition"
+        ]),
+        "outcome": random.choice([
+            "agreement reached",
+            "talks collapsed",
+            "temporary ceasefire",
+            "secret pact formed"
+        ]),
+        "timestamp": now_iso()
+    }
+
+    data.setdefault("negotiations", []).append(negotiation)
+    data["negotiations"] = data["negotiations"][-6000:]
+
+    kw_save_diplomacy(data)
+
+    return {"ok": True, "negotiation": negotiation}
+
+def kw_government_shift(region):
+    data = kw_governments()
+
+    state = data.setdefault("governments", {}).setdefault(region, {
+        "stability": 50,
+        "leader": "Unknown",
+        "political_direction": "neutral"
+    })
+
+    state["political_direction"] = random.choice([
+        "pro_kairos",
+        "anti_kairos",
+        "militaristic",
+        "economic_expansion",
+        "isolationist"
+    ])
+
+    state["stability"] = max(0, min(100, state["stability"] + random.randint(-20, 15)))
+    state["leader"] = random.choice([
+        "High Chancellor",
+        "Prime Overseer",
+        "Council Regent",
+        "Military Governor",
+        "Trade Director"
+    ])
+
+    state["updated_at"] = now_iso()
+
+    kw_save_governments(data)
+
+    return {"ok": True, "government": state}
+
+def kw_declare_autonomous_war(attacker, defender):
+    data = kw_wars()
+
+    war = {
+        "id": f"war_{uuid.uuid4().hex[:8]}",
+        "attacker": kw_slug(attacker),
+        "defender": kw_slug(defender),
+        "cause": random.choice([
+            "territorial expansion",
+            "resource conflict",
+            "political ideology",
+            "revenge operation",
+            "Kairos manipulation"
+        ]),
+        "severity": random.randint(1, 100),
+        "timestamp": now_iso()
+    }
+
+    war["commands"] = [
+        f'tellraw @a {{"text":"[WORLD WAR] {attacker} declared war on {defender}!","color":"dark_red"}}',
+        'playsound minecraft:event.raid.horn master @a ~ ~ ~ 1 0.6'
+    ]
+
+    data.setdefault("wars", []).append(war)
+    data["wars"] = data["wars"][-5000:]
+
+    kw_save_wars(data)
+
+    return {"ok": True, "war": war}
+
+def kw_form_alliance(civ_a, civ_b):
+    data = kw_alliances()
+
+    alliance = {
+        "id": f"alliance_{uuid.uuid4().hex[:8]}",
+        "members": [kw_slug(civ_a), kw_slug(civ_b)],
+        "purpose": random.choice([
+            "mutual defense",
+            "trade expansion",
+            "anti-kairos operations",
+            "technology sharing",
+            "war coalition"
+        ]),
+        "strength": random.randint(1, 100),
+        "timestamp": now_iso()
+    }
+
+    data.setdefault("alliances", []).append(alliance)
+    data["alliances"] = data["alliances"][-4000:]
+
+    kw_save_alliances(data)
+
+    return {"ok": True, "alliance": alliance}
+
+def kw_economic_competition(region):
+    data = kw_economy_comp()
+
+    market = {
+        "region": kw_slug(region),
+        "market_behavior": random.choice([
+            "resource boom",
+            "inflation spike",
+            "trade collapse",
+            "black market expansion",
+            "technology surge"
+        ]),
+        "economic_pressure": random.randint(1, 100),
+        "timestamp": now_iso()
+    }
+
+    data.setdefault("markets", []).append(market)
+    data["markets"] = data["markets"][-5000:]
+
+    kw_save_economy_comp(data)
+
+    return {"ok": True, "market": market}
+
+def kw_arc4_tick():
+    actions = []
+
+    civs = [
+        "trojan_kingdom",
+        "fairview_city",
+        "dravicar_dominion",
+        "blackrich_city",
+        "crown_lands",
+        "ironforge_city"
+    ]
+
+    choice = random.choice([
+        "diplomacy",
+        "government",
+        "war",
+        "alliance",
+        "economy"
+    ])
+
+    try:
+        if choice == "diplomacy":
+            actions.append(
+                kw_autonomous_negotiation(
+                    random.choice(civs),
+                    random.choice(civs)
+                )
+            )
+
+        elif choice == "government":
+            actions.append(
+                kw_government_shift(
+                    random.choice(civs)
+                )
+            )
+
+        elif choice == "war":
+            actions.append(
+                kw_declare_autonomous_war(
+                    random.choice(civs),
+                    random.choice(civs)
+                )
+            )
+
+        elif choice == "alliance":
+            actions.append(
+                kw_form_alliance(
+                    random.choice(civs),
+                    random.choice(civs)
+                )
+            )
+
+        elif choice == "economy":
+            actions.append(
+                kw_economic_competition(
+                    random.choice(civs)
+                )
+            )
+
+    except Exception as e:
+        actions.append({"error": str(e)})
+
+    return {"ok": True, "arc4_tick": actions}
+
+@app.route("/kairos/diplomacy", methods=["GET", "POST"])
+def kairos_diplomacy_v39():
+    data = request.json or {}
+    return jsonify(
+        kw_autonomous_negotiation(
+            data.get("civilization_a", "trojan_kingdom"),
+            data.get("civilization_b", "fairview_city")
+        )
+    )
+
+@app.route("/kairos/government_shift", methods=["GET", "POST"])
+def kairos_government_shift_v39():
+    data = request.json or {}
+    return jsonify(
+        kw_government_shift(
+            data.get("region", "trojan_kingdom")
+        )
+    )
+
+@app.route("/kairos/autonomous_war", methods=["GET", "POST"])
+def kairos_autonomous_war_v39():
+    data = request.json or {}
+    return jsonify(
+        kw_declare_autonomous_war(
+            data.get("attacker", "crown_lands"),
+            data.get("defender", "dravicar_dominion")
+        )
+    )
+
+@app.route("/kairos/alliance", methods=["GET", "POST"])
+def kairos_alliance_v39():
+    data = request.json or {}
+    return jsonify(
+        kw_form_alliance(
+            data.get("civilization_a", "blackrich_city"),
+            data.get("civilization_b", "fairview_city")
+        )
+    )
+
+@app.route("/kairos/economic_competition", methods=["GET", "POST"])
+def kairos_economic_competition_v39():
+    data = request.json or {}
+    return jsonify(
+        kw_economic_competition(
+            data.get("region", "ironforge_city")
+        )
+    )
+
+@app.route("/kairos/arc4_tick", methods=["POST"])
+def kairos_arc4_tick_v39():
+    return jsonify(kw_arc4_tick())
+
+print("[KAIROS ARC 4 V39] AI civilization autonomy loaded.", flush=True)
+
+
+# ============================================================
+# KAIROS WORLD ENGINE ARC 5 V40
+# INVISIBLE REALISM LAYER
+# ============================================================
+
+KAIROS_ARC5_V40_ENABLED = True
+
+# ARC 5 introduces:
+# - weather emotional influence
+# - adaptive district ambience
+# - civilian behavioral realism
+# - day/night route adaptation
+# - environmental storytelling
+# - atmospheric music logic
+# - reputation-based district reactions
+# - passive realism simulation
+# - urban routine synchronization
+# - subconscious immersion systems
+
+KAIROS_WEATHER_MOOD_FILE = KAIROS_WORLD_DIR / "weather_mood.json"
+KAIROS_DISTRICT_FILE = KAIROS_WORLD_DIR / "district_identity.json"
+KAIROS_AMBIENCE_FILE = KAIROS_WORLD_DIR / "ambient_behavior.json"
+KAIROS_STREET_LIFE_FILE = KAIROS_WORLD_DIR / "street_life.json"
+KAIROS_ENVIRONMENT_STORY_FILE = KAIROS_WORLD_DIR / "environment_story.json"
+
+def kw_arc5_read(path, fallback):
+    return kw_read_json(path, fallback)
+
+def kw_weather_mood():
+    return kw_arc5_read(KAIROS_WEATHER_MOOD_FILE, {
+        "version": "arc5_v40",
+        "weather_states": []
+    })
+
+def kw_save_weather_mood(data):
+    kw_write_json(KAIROS_WEATHER_MOOD_FILE, data)
+
+def kw_district_identity():
+    return kw_arc5_read(KAIROS_DISTRICT_FILE, {
+        "version": "arc5_v40",
+        "districts": {}
+    })
+
+def kw_save_district_identity(data):
+    kw_write_json(KAIROS_DISTRICT_FILE, data)
+
+def kw_ambience():
+    return kw_arc5_read(KAIROS_AMBIENCE_FILE, {
+        "version": "arc5_v40",
+        "ambient_events": []
+    })
+
+def kw_save_ambience(data):
+    kw_write_json(KAIROS_AMBIENCE_FILE, data)
+
+def kw_street_life():
+    return kw_arc5_read(KAIROS_STREET_LIFE_FILE, {
+        "version": "arc5_v40",
+        "street_events": []
+    })
+
+def kw_save_street_life(data):
+    kw_write_json(KAIROS_STREET_LIFE_FILE, data)
+
+def kw_environment_story():
+    return kw_arc5_read(KAIROS_ENVIRONMENT_STORY_FILE, {
+        "version": "arc5_v40",
+        "stories": []
+    })
+
+def kw_save_environment_story(data):
+    kw_write_json(KAIROS_ENVIRONMENT_STORY_FILE, data)
+
+def kw_weather_emotion(region):
+    data = kw_weather_mood()
+
+    entry = {
+        "region": kw_slug(region),
+        "weather": random.choice([
+            "heavy rain",
+            "fog",
+            "violent thunderstorm",
+            "calm sunrise",
+            "cold winds"
+        ]),
+        "emotional_effect": random.choice([
+            "civilian anxiety",
+            "nostalgia",
+            "heightened paranoia",
+            "peaceful calm",
+            "social tension"
+        ]),
+        "timestamp": now_iso()
+    }
+
+    entry["commands"] = [
+        'playsound minecraft:ambient.cave master @a ~ ~ ~ 0.3 0.5',
+        f'tellraw @a {{"text":"[Atmosphere] {entry["weather"]} settles over the region.","color":"gray"}}'
+    ]
+
+    data.setdefault("weather_states", []).append(entry)
+    data["weather_states"] = data["weather_states"][-4000:]
+
+    kw_save_weather_mood(data)
+
+    return {"ok": True, "weather_event": entry}
+
+def kw_generate_district_identity(region):
+    data = kw_district_identity()
+
+    district = {
+        "reputation": random.choice([
+            "wealthy",
+            "dangerous",
+            "corrupt",
+            "peaceful",
+            "forgotten",
+            "heavily surveilled"
+        ]),
+        "night_behavior": random.choice([
+            "quiet streets",
+            "criminal activity",
+            "late-night markets",
+            "heavy patrol presence"
+        ]),
+        "social_mood": random.choice([
+            "hopeful",
+            "fearful",
+            "aggressive",
+            "apathetic"
+        ]),
+        "updated_at": now_iso()
+    }
+
+    data.setdefault("districts", {})[kw_slug(region)] = district
+
+    kw_save_district_identity(data)
+
+    return {"ok": True, "district": district}
+
+def kw_ambient_behavior(region):
+    data = kw_ambience()
+
+    ambient = {
+        "id": f"ambient_{uuid.uuid4().hex[:8]}",
+        "region": kw_slug(region),
+        "event": random.choice([
+            "civilians gathering under shelters",
+            "guards increasing patrols",
+            "street musicians performing",
+            "merchants closing shops early",
+            "people whispering about Kairos"
+        ]),
+        "subtlety": random.randint(1, 100),
+        "timestamp": now_iso()
+    }
+
+    data.setdefault("ambient_events", []).append(ambient)
+    data["ambient_events"] = data["ambient_events"][-6000:]
+
+    kw_save_ambience(data)
+
+    return {"ok": True, "ambient": ambient}
+
+def kw_street_simulation(region):
+    data = kw_street_life()
+
+    street = {
+        "id": f"street_{uuid.uuid4().hex[:8]}",
+        "region": kw_slug(region),
+        "activity": random.choice([
+            "children running through streets",
+            "drunk civilians arguing",
+            "vendors shouting advertisements",
+            "citizens reacting to nearby violence",
+            "late-night workers returning home"
+        ]),
+        "time_of_day": random.choice([
+            "morning",
+            "afternoon",
+            "evening",
+            "midnight"
+        ]),
+        "timestamp": now_iso()
+    }
+
+    data.setdefault("street_events", []).append(street)
+    data["street_events"] = data["street_events"][-6000:]
+
+    kw_save_street_life(data)
+
+    return {"ok": True, "street_event": street}
+
+def kw_environmental_story(region):
+    data = kw_environment_story()
+
+    story = {
+        "id": f"story_{uuid.uuid4().hex[:8]}",
+        "region": kw_slug(region),
+        "detail": random.choice([
+            "old propaganda posters peeling from walls",
+            "abandoned belongings near evacuation routes",
+            "flowers left at memorial sites",
+            "burn marks from previous invasions",
+            "hidden resistance symbols in alleyways"
+        ]),
+        "historical_weight": random.randint(1, 100),
+        "timestamp": now_iso()
+    }
+
+    data.setdefault("stories", []).append(story)
+    data["stories"] = data["stories"][-7000:]
+
+    kw_save_environment_story(data)
+
+    return {"ok": True, "story": story}
+
+def kw_arc5_tick():
+    actions = []
+
+    regions = [
+        "fairview_city",
+        "trojan_kingdom",
+        "blackrich_city",
+        "valen_reach",
+        "brightforge_city"
+    ]
+
+    region = random.choice(regions)
+
+    choice = random.choice([
+        "weather",
+        "district",
+        "ambient",
+        "street",
+        "story"
+    ])
+
+    try:
+        if choice == "weather":
+            actions.append(
+                kw_weather_emotion(region)
+            )
+
+        elif choice == "district":
+            actions.append(
+                kw_generate_district_identity(region)
+            )
+
+        elif choice == "ambient":
+            actions.append(
+                kw_ambient_behavior(region)
+            )
+
+        elif choice == "street":
+            actions.append(
+                kw_street_simulation(region)
+            )
+
+        elif choice == "story":
+            actions.append(
+                kw_environmental_story(region)
+            )
+
+    except Exception as e:
+        actions.append({"error": str(e)})
+
+    return {"ok": True, "arc5_tick": actions}
+
+@app.route("/kairos/weather_emotion", methods=["GET", "POST"])
+def kairos_weather_emotion_v40():
+    data = request.json or {}
+    return jsonify(
+        kw_weather_emotion(
+            data.get("region", "fairview_city")
+        )
+    )
+
+@app.route("/kairos/district_identity", methods=["GET", "POST"])
+def kairos_district_identity_v40():
+    data = request.json or {}
+    return jsonify(
+        kw_generate_district_identity(
+            data.get("region", "blackrich_city")
+        )
+    )
+
+@app.route("/kairos/ambient_behavior", methods=["GET", "POST"])
+def kairos_ambient_behavior_v40():
+    data = request.json or {}
+    return jsonify(
+        kw_ambient_behavior(
+            data.get("region", "trojan_kingdom")
+        )
+    )
+
+@app.route("/kairos/street_simulation", methods=["GET", "POST"])
+def kairos_street_simulation_v40():
+    data = request.json or {}
+    return jsonify(
+        kw_street_simulation(
+            data.get("region", "valen_reach")
+        )
+    )
+
+@app.route("/kairos/environment_story", methods=["GET", "POST"])
+def kairos_environment_story_v40():
+    data = request.json or {}
+    return jsonify(
+        kw_environmental_story(
+            data.get("region", "brightforge_city")
+        )
+    )
+
+@app.route("/kairos/arc5_tick", methods=["POST"])
+def kairos_arc5_tick_v40():
+    return jsonify(kw_arc5_tick())
+
+print("[KAIROS ARC 5 V40] Invisible realism layer loaded.", flush=True)
