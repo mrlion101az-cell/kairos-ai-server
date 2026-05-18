@@ -23991,8 +23991,8 @@ def _kairos_final_extract_route_payload():
 npc_trigger = parse_npc_trigger(message)
 
 if npc_trigger:
-player_name = npc_trigger["player_name"]
-npc_name = npc_trigger["npc_name"]
+    player_name = npc_trigger["player_name"]
+    npc_name = npc_trigger["npc_name"]
 
 mode = "npc_interaction"
 intent = "npc_dialogue"
