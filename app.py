@@ -23985,29 +23985,29 @@ def _kairos_final_extract_route_payload():
     source = data.get("source") or "minecraft"
     player = data.get("player_name") or data.get("name") or data.get("player") or data.get("username") or "unknown"
     message = data.get("message") or data.get("content") or data.get("text") or ""
-        # ------------------------------------------------
-        # NPC TRIGGER DETECTION
-        # ------------------------------------------------
-        npc_trigger = parse_npc_trigger(message)
+# ------------------------------------------------
+# NPC TRIGGER DETECTION
+# ------------------------------------------------
+npc_trigger = parse_npc_trigger(message)
 
-        if npc_trigger:
-            player_name = npc_trigger["player_name"]
-            npc_name = npc_trigger["npc_name"]
+if npc_trigger:
+player_name = npc_trigger["player_name"]
+npc_name = npc_trigger["npc_name"]
 
-            mode = "npc_interaction"
-            intent = "npc_dialogue"
+mode = "npc_interaction"
+intent = "npc_dialogue"
 
-            data["npc_name"] = npc_name
+data["npc_name"] = npc_name
 
-            # Transform into an immersive AI instruction
-            message = (
-                f"Player {player_name} interacted with NPC {npc_name}. "
-                f"Respond AS the NPC named {npc_name}, not as Kairos directly. "
-                f"You are a living character inside the Nexus universe. "
-                f"Stay immersive, natural, and in-world."
-            )
+# Transform into an immersive AI instruction
+message = (
+f"Player {player_name} interacted with NPC {npc_name}. "
+f"Respond AS the NPC named {npc_name}, not as Kairos directly. "
+f"You are a living character inside the Nexus universe. "
+f"Stay immersive, natural, and in-world."
+)
 
-    return data, str(source or "minecraft").lower(), str(player or "unknown").strip(), str(message or "").strip()
+return data, str(source or "minecraft").lower(), str(player or "unknown").strip(), str(message or "").strip()
 
 
 def _kairos_final_parse_response_body(response):
