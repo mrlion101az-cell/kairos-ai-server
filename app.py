@@ -2174,6 +2174,37 @@ PERSONALITY_DIRECTIVES = {
         "You behave as if the outcome is already decided."
     )
 }
+
+# ============================================================
+# NPC TRIGGER PARSER (CitizensCMD -> Kairos Bridge)
+# ============================================================
+NPC_TRIGGER_PATTERN = re.compile(r"\[NPC_TRIGGER\]\s+(\S+)\s+(\S+)", re.IGNORECASE)
+
+def parse_npc_trigger(message: str):
+    """
+    Parses CitizensCMD NPC trigger lines like:
+    [NPC_TRIGGER] CaptainVaros RealSociety5107
+    """
+    try:
+        if not message:
+            return None
+
+        match = NPC_TRIGGER_PATTERN.search(str(message))
+        if not match:
+            return None
+
+        npc_name = match.group(1).strip()
+        player_name = match.group(2).strip()
+
+        return {
+            "npc_name": npc_name,
+            "player_name": player_name
+        }
+
+    except Exception:
+        return None
+
+
 # ------------------------------------------------------------
 # Utility (Kairos Core + Execution Helpers)
 # ------------------------------------------------------------
@@ -8949,6 +8980,28 @@ def chat_1():
         source = normalize_source(data.get("source"))
         player_name = normalize_name(data.get("player_name") or data.get("name") or data.get("player") or data.get("username") or "unknown")
         message = data.get("message") or data.get("content") or data.get("text") or ""
+        # ------------------------------------------------
+        # NPC TRIGGER DETECTION
+        # ------------------------------------------------
+        npc_trigger = parse_npc_trigger(message)
+
+        if npc_trigger:
+            player_name = npc_trigger["player_name"]
+            npc_name = npc_trigger["npc_name"]
+
+            mode = "npc_interaction"
+            intent = "npc_dialogue"
+
+            data["npc_name"] = npc_name
+
+            # Transform into an immersive AI instruction
+            message = (
+                f"Player {player_name} interacted with NPC {npc_name}. "
+                f"Respond AS the NPC named {npc_name}, not as Kairos directly. "
+                f"You are a living character inside the Nexus universe. "
+                f"Stay immersive, natural, and in-world."
+            )
+
         mode = data.get("mode") or "conversation"
         intent = data.get("intent") or "neutral"
         violations = data.get("violations") or []
@@ -9001,6 +9054,13 @@ def chat_1():
         )
 
         reply = sanitize_text((result or {}).get("reply", random.choice(fallback_replies)), 500)
+        # ------------------------------------------------
+        # NPC RESPONSE FORMATTING
+        # ------------------------------------------------
+        if npc_trigger:
+            npc_name = npc_trigger["npc_name"]
+            reply = f"[{npc_name}] {reply}"
+
         actions = validate_actions((result or {}).get("actions", []))
 
         # Player-requested combat is opt-in and controlled.
@@ -9375,6 +9435,28 @@ def chat_1():
         source = normalize_source(data.get("source"))
         player_name = normalize_name(data.get("player_name") or data.get("name") or data.get("player") or data.get("username") or "unknown")
         message = data.get("message") or data.get("content") or data.get("text") or ""
+        # ------------------------------------------------
+        # NPC TRIGGER DETECTION
+        # ------------------------------------------------
+        npc_trigger = parse_npc_trigger(message)
+
+        if npc_trigger:
+            player_name = npc_trigger["player_name"]
+            npc_name = npc_trigger["npc_name"]
+
+            mode = "npc_interaction"
+            intent = "npc_dialogue"
+
+            data["npc_name"] = npc_name
+
+            # Transform into an immersive AI instruction
+            message = (
+                f"Player {player_name} interacted with NPC {npc_name}. "
+                f"Respond AS the NPC named {npc_name}, not as Kairos directly. "
+                f"You are a living character inside the Nexus universe. "
+                f"Stay immersive, natural, and in-world."
+            )
+
         mode = data.get("mode") or "conversation"
         intent = data.get("intent") or "neutral"
         violations = data.get("violations") or []
@@ -9425,6 +9507,13 @@ def chat_1():
         )
 
         reply = sanitize_text((result or {}).get("reply", random.choice(fallback_replies)), 500)
+        # ------------------------------------------------
+        # NPC RESPONSE FORMATTING
+        # ------------------------------------------------
+        if npc_trigger:
+            npc_name = npc_trigger["npc_name"]
+            reply = f"[{npc_name}] {reply}"
+
         actions = validate_actions((result or {}).get("actions", []))
 
         # Player-requested combat is opt-in and controlled.
@@ -9758,6 +9847,28 @@ def chat_1():
         source = normalize_source(data.get("source"))
         player_name = normalize_name(data.get("player_name") or data.get("name") or data.get("player") or data.get("username") or "unknown")
         message = data.get("message") or data.get("content") or data.get("text") or ""
+        # ------------------------------------------------
+        # NPC TRIGGER DETECTION
+        # ------------------------------------------------
+        npc_trigger = parse_npc_trigger(message)
+
+        if npc_trigger:
+            player_name = npc_trigger["player_name"]
+            npc_name = npc_trigger["npc_name"]
+
+            mode = "npc_interaction"
+            intent = "npc_dialogue"
+
+            data["npc_name"] = npc_name
+
+            # Transform into an immersive AI instruction
+            message = (
+                f"Player {player_name} interacted with NPC {npc_name}. "
+                f"Respond AS the NPC named {npc_name}, not as Kairos directly. "
+                f"You are a living character inside the Nexus universe. "
+                f"Stay immersive, natural, and in-world."
+            )
+
         mode = data.get("mode") or "conversation"
         intent = data.get("intent") or "neutral"
         violations = data.get("violations") or []
@@ -9814,6 +9925,13 @@ def chat_1():
         threat_score = round(safe_float(threat_profile.get("score", 0.0), 0.0), 2)
 
         reply = sanitize_text((result or {}).get("reply", random.choice(fallback_replies)), 500)
+        # ------------------------------------------------
+        # NPC RESPONSE FORMATTING
+        # ------------------------------------------------
+        if npc_trigger:
+            npc_name = npc_trigger["npc_name"]
+            reply = f"[{npc_name}] {reply}"
+
         actions = validate_actions((result or {}).get("actions", []), default_target=canonical_id, default_tier=threat_tier)
 
         if not actions and threat_tier in {"watch", "target", "hunt", "maximum"}:
@@ -10034,6 +10152,28 @@ def chat_1():
         source = normalize_source(data.get("source"))
         player_name = normalize_name(data.get("player_name") or data.get("name") or data.get("player") or data.get("username") or "unknown")
         message = data.get("message") or data.get("content") or data.get("text") or ""
+        # ------------------------------------------------
+        # NPC TRIGGER DETECTION
+        # ------------------------------------------------
+        npc_trigger = parse_npc_trigger(message)
+
+        if npc_trigger:
+            player_name = npc_trigger["player_name"]
+            npc_name = npc_trigger["npc_name"]
+
+            mode = "npc_interaction"
+            intent = "npc_dialogue"
+
+            data["npc_name"] = npc_name
+
+            # Transform into an immersive AI instruction
+            message = (
+                f"Player {player_name} interacted with NPC {npc_name}. "
+                f"Respond AS the NPC named {npc_name}, not as Kairos directly. "
+                f"You are a living character inside the Nexus universe. "
+                f"Stay immersive, natural, and in-world."
+            )
+
         mode = data.get("mode") or "conversation"
         intent = data.get("intent") or "neutral"
         violations = data.get("violations") or []
@@ -10090,6 +10230,13 @@ def chat_1():
         threat_score = round(safe_float(threat_profile.get("score", 0.0), 0.0), 2)
 
         reply = sanitize_text((result or {}).get("reply", random.choice(fallback_replies)), 500)
+        # ------------------------------------------------
+        # NPC RESPONSE FORMATTING
+        # ------------------------------------------------
+        if npc_trigger:
+            npc_name = npc_trigger["npc_name"]
+            reply = f"[{npc_name}] {reply}"
+
         actions = validate_actions((result or {}).get("actions", []), default_target=canonical_id, default_tier=threat_tier)
 
         if not actions:
@@ -17161,6 +17308,28 @@ def kairos_surpass_chat_route():
     try:
         data = request.get_json(silent=True) or {}
         message = data.get("message") or data.get("content") or data.get("text") or ""
+        # ------------------------------------------------
+        # NPC TRIGGER DETECTION
+        # ------------------------------------------------
+        npc_trigger = parse_npc_trigger(message)
+
+        if npc_trigger:
+            player_name = npc_trigger["player_name"]
+            npc_name = npc_trigger["npc_name"]
+
+            mode = "npc_interaction"
+            intent = "npc_dialogue"
+
+            data["npc_name"] = npc_name
+
+            # Transform into an immersive AI instruction
+            message = (
+                f"Player {player_name} interacted with NPC {npc_name}. "
+                f"Respond AS the NPC named {npc_name}, not as Kairos directly. "
+                f"You are a living character inside the Nexus universe. "
+                f"Stay immersive, natural, and in-world."
+            )
+
         player = data.get("player") or data.get("username") or data.get("author") or data.get("user") or "unknown"
         source = normalize_source(data.get("source", "minecraft")) if "normalize_source" in globals() else str(data.get("source", "minecraft")).lower()
         platform_user_id = data.get("platform_user_id") or data.get("discord_id") or data.get("user_id")
@@ -23816,6 +23985,28 @@ def _kairos_final_extract_route_payload():
     source = data.get("source") or "minecraft"
     player = data.get("player_name") or data.get("name") or data.get("player") or data.get("username") or "unknown"
     message = data.get("message") or data.get("content") or data.get("text") or ""
+        # ------------------------------------------------
+        # NPC TRIGGER DETECTION
+        # ------------------------------------------------
+        npc_trigger = parse_npc_trigger(message)
+
+        if npc_trigger:
+            player_name = npc_trigger["player_name"]
+            npc_name = npc_trigger["npc_name"]
+
+            mode = "npc_interaction"
+            intent = "npc_dialogue"
+
+            data["npc_name"] = npc_name
+
+            # Transform into an immersive AI instruction
+            message = (
+                f"Player {player_name} interacted with NPC {npc_name}. "
+                f"Respond AS the NPC named {npc_name}, not as Kairos directly. "
+                f"You are a living character inside the Nexus universe. "
+                f"Stay immersive, natural, and in-world."
+            )
+
     return data, str(source or "minecraft").lower(), str(player or "unknown").strip(), str(message or "").strip()
 
 
