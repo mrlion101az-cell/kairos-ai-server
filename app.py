@@ -40854,34 +40854,6 @@ except Exception as e:
 # ============================================================
 
 # ============================================================
-# V43 TRUE FINAL RUNTIME STARTUP
-# This must be the last executable block in the file.
-# ============================================================
-
-if __name__ == "__main__":
-    try:
-        kairos_v43_log("TRUE EOF startup reached. All overlays/routes loaded before Flask start.")
-    except Exception:
-        print("[KAIROS V43] TRUE EOF startup reached.", flush=True)
-
-    try:
-        start_background_systems()
-    except Exception as e:
-        try:
-            log_exception("start_background_systems failed", e)
-        except Exception:
-            print("[KAIROS ERROR] start_background_systems failed:", e, flush=True)
-
-    try:
-        log("Starting Kairos AI server...")
-    except Exception:
-        print("[KAIROS INFO] Starting Kairos AI server...", flush=True)
-
-    app.run(host="0.0.0.0", port=int(os.getenv("PORT", "10000")), threaded=True)
-
-
-
-# ============================================================
 # FINAL NPC BRIDGE OVERLAY
 # CitizensCMD -> Minecraft chat -> Kairos NPC mind router
 # This overlay is intentionally self-contained and does not edit
@@ -41064,3 +41036,33 @@ except Exception:
 # ============================================================
 # END FINAL NPC BRIDGE OVERLAY
 # ============================================================
+
+# ============================================================
+# V43 TRUE FINAL RUNTIME STARTUP
+# This must be the last executable block in the file.
+# ============================================================
+
+if __name__ == "__main__":
+    try:
+        kairos_v43_log("TRUE EOF startup reached. All overlays/routes loaded before Flask start.")
+    except Exception:
+        print("[KAIROS V43] TRUE EOF startup reached.", flush=True)
+
+    try:
+        start_background_systems()
+    except Exception as e:
+        try:
+            log_exception("start_background_systems failed", e)
+        except Exception:
+            print("[KAIROS ERROR] start_background_systems failed:", e, flush=True)
+
+    try:
+        log("Starting Kairos AI server...")
+    except Exception:
+        print("[KAIROS INFO] Starting Kairos AI server...", flush=True)
+
+    app.run(host="0.0.0.0", port=int(os.getenv("PORT", "10000")), threaded=True)
+
+
+
+
