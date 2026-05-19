@@ -299,9 +299,12 @@ def should_post_message_to_kairos(triggered):
 def post_to_kairos(message, text, triggered):
     payload = {
         "player": message.author.display_name,
+        "player_name": message.author.display_name,
         "username": message.author.display_name,
+        "name": message.author.display_name,
         "message": text,
         "content": text,
+        "text": text,
         "source": "discord",
         "platform": "discord",
         "message_id": str(message.id),
@@ -317,15 +320,36 @@ def post_to_kairos(message, text, triggered):
         "covenant_bridge": True,
     }
 
-    response = requests.post(KAIROS_API_URL, json=payload, timeout=REQUEST_TIMEOUT)
+    last_error = None
 
-    if response.status_code != 200:
-        raise RuntimeError(f"Kairos API HTTP {response.status_code}: {_safe_preview(response.text)}")
+    for attempt in range(3):
+        try:
+            response = requests.post(
+                KAIROS_API_URL,
+                json=payload,
+                timeout=REQUEST_TIMEOUT
+            )
 
-    try:
-        return normalize_kairos_api_payload(response.json())
-    except Exception:
-        return {"reply": ""}
+            if response.status_code >= 500:
+                raise RuntimeError(f"HTTP {response.status_code}")
+
+            raw_text = (response.text or "").strip()
+
+            try:
+                parsed = response.json()
+                return normalize_kairos_api_payload(parsed)
+            except Exception:
+                # Some Kairos overlays occasionally return plain text.
+                if raw_text:
+                    return {"reply": raw_text}
+
+                return {"reply": ""}
+
+        except Exception as exc:
+            last_error = exc
+            time.sleep(0.8)
+
+    raise RuntimeError(f"Kairos API unreachable after retries: {last_error}")
 
 
 async def get_target_channel():
@@ -365,6 +389,13 @@ async def on_ready():
     log("=" * 72)
     log(f"Online as {client.user}")
     log(f"KAIROS_API_URL={KAIROS_API_URL}")
+    try:
+        health_url = KAIROS_API_URL.replace("/chat", "/")
+        r = requests.get(health_url, timeout=8)
+        log(f"Kairos health check HTTP={r.status_code}")
+    except Exception as exc:
+        log(f"WARNING: Kairos health check failed: {exc}")
+
     log(f"CHANNEL_LOCK={DISCORD_CHANNEL_ID if DISCORD_CHANNEL_ID else 'ALL'}")
     log("HTTP endpoint active: POST /mc_to_discord")
     log(f"BLOCK_KAIROS_SYSTEM_MESSAGES={BLOCK_KAIROS_SYSTEM_MESSAGES}")
@@ -412,9 +443,14 @@ async def on_message(message):
 
     except Exception as exc:
         log(f"Discord -> Kairos ERROR: {exc}")
+
+        # Do not spam Discord with endless failsafe messages.
+        # Only notify for direct trigger requests.
         if triggered and SEND_ERROR_MESSAGES_TO_DISCORD:
             try:
-                await message.channel.send("**[Kairos]** ...connection disrupted.")
+                await message.channel.send(
+                    "**[Kairos]** Temporary signal instability detected. Retrying connection paths."
+                )
             except Exception:
                 pass
 
