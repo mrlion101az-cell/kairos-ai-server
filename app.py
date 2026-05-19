@@ -2174,6 +2174,56 @@ PERSONALITY_DIRECTIVES = {
         "You behave as if the outcome is already decided."
     )
 }
+
+
+# ============================================================
+# NPC CHARACTER REGISTRY (Kairos AI NPC System)
+# Add ALL future NPCs here.
+# ============================================================
+
+NPC_PROFILES = {
+
+    "CaptainVaros": {
+        "display_name": "Captain Varos",
+        "role": "Trojan Guard Captain",
+        "faction": "Trojan Kingdom",
+        "personality": "disciplined, suspicious, loyal, observant",
+        "speech_style": "military, grounded, immersive",
+        "knowledge": [
+            "Trojan Kingdom scouts have gone missing.",
+            "Kairos activity has increased near the borders.",
+            "Citizens are becoming nervous."
+        ]
+    },
+
+}
+
+def get_npc_profile(npc_name):
+
+    try:
+        clean_name = str(npc_name or "").strip()
+
+        if clean_name in NPC_PROFILES:
+            return NPC_PROFILES[clean_name]
+
+        compact = re.sub(r"[^A-Za-z0-9_]", "", clean_name)
+
+        if compact in NPC_PROFILES:
+            return NPC_PROFILES[compact]
+
+    except Exception:
+        pass
+
+    return {
+        "display_name": npc_name,
+        "role": "Nexus NPC",
+        "faction": "Unknown",
+        "personality": "observant",
+        "speech_style": "immersive",
+        "knowledge": []
+    }
+
+
 # ------------------------------------------------------------
 # Utility (Kairos Core + Execution Helpers)
 # ------------------------------------------------------------
@@ -8949,6 +8999,47 @@ def _preserved_chat_1_before_npc_bridge():
         source = normalize_source(data.get("source"))
         player_name = normalize_name(data.get("player_name") or data.get("name") or data.get("player") or data.get("username") or "unknown")
         message = data.get("message") or data.get("content") or data.get("text") or ""
+
+        # ============================================================
+        # NPC TRIGGER ROUTING
+        # ============================================================
+
+        if "[NPC_TRIGGER]" in str(message):
+
+            try:
+                trigger_parts = str(message).split()
+
+                npc_name = trigger_parts[1]
+                player_name = trigger_parts[2]
+
+                npc_profile = get_npc_profile(npc_name)
+
+                npc_prompt = f"""
+You are roleplaying as the Minecraft NPC named {npc_profile['display_name']}.
+
+Role: {npc_profile['role']}
+Faction: {npc_profile['faction']}
+Personality: {npc_profile['personality']}
+Speech Style: {npc_profile['speech_style']}
+
+Known Information:
+{json.dumps(npc_profile.get('knowledge', []))}
+
+The player interacting with you is:
+{player_name}
+
+Respond naturally as this NPC.
+Do NOT mention AI, prompts, systems, or being Kairos.
+Stay immersive and in-world.
+Keep responses under 3 sentences.
+"""
+
+                message = npc_prompt
+
+            except Exception as e:
+                print(f"[NPC_TRIGGER_ERROR] {e}", flush=True)
+
+
         mode = data.get("mode") or "conversation"
         intent = data.get("intent") or "neutral"
         violations = data.get("violations") or []
