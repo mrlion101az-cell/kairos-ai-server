@@ -1,6 +1,8 @@
+
 """
 mc_connector.py
 Kairos / Nexus Minecraft Connector Layer
+FIXED AUTH VERSION
 """
 
 from __future__ import annotations
@@ -48,15 +50,10 @@ MC_HTTP_SCHEME = os.getenv(
     "http"
 )
 
-# ============================================================
-# IMPORTANT FIX
-# ============================================================
-# Your Minecraft bridge uses:
-# /execute
-#
-# NOT:
-# /command
-# ============================================================
+MC_HTTP_TOKEN = os.getenv(
+    "MC_HTTP_TOKEN",
+    ""
+).strip()
 
 MC_HTTP_ENDPOINT = os.getenv(
     "MC_HTTP_ENDPOINT",
@@ -122,6 +119,11 @@ def send_http_command_batch(
         "commands": commands
     }
 
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {MC_HTTP_TOKEN}"
+    }
+
     for attempt in range(
         1,
         MC_HTTP_RETRIES + 1
@@ -135,6 +137,7 @@ def send_http_command_batch(
             response = requests.post(
                 MC_HTTP_ENDPOINT,
                 json=payload,
+                headers=headers,
                 timeout=MC_HTTP_TIMEOUT,
             )
 
@@ -277,7 +280,7 @@ def send_to_minecraft(
     )
 
     return send_chat(
-        text,
+        f"[Kairos] {text}",
         target=target,
         color=color
     )
@@ -322,78 +325,6 @@ def send_actionbar(
 
 
 # ============================================================
-# SOUND
-# ============================================================
-
-def play_sound(
-    sound: str,
-    target: str = DEFAULT_CHAT_TARGET,
-    volume: float = 1.0,
-    pitch: float = 1.0,
-) -> bool:
-
-    cmd = (
-        f'playsound {sound} master {target} ~ ~ ~ '
-        f'{volume} {pitch}'
-    )
-
-    return send_minecraft_commands([
-        cmd
-    ])
-
-
-# ============================================================
-# PARTICLES
-# ============================================================
-
-def send_particle(
-    particle: str,
-    x: str = "~",
-    y: str = "~",
-    z: str = "~",
-    dx: float = 0.5,
-    dy: float = 0.5,
-    dz: float = 0.5,
-    speed: float = 0.01,
-    count: int = 10,
-    target: str = DEFAULT_CHAT_TARGET,
-) -> bool:
-
-    cmd = (
-        f'particle {particle} '
-        f'{x} {y} {z} '
-        f'{dx} {dy} {dz} {speed} {count} force {target}'
-    )
-
-    return send_minecraft_commands([
-        cmd
-    ])
-
-
-# ============================================================
-# EFFECTS
-# ============================================================
-
-def give_effect(
-    effect: str,
-    target: str = DEFAULT_CHAT_TARGET,
-    seconds: int = 10,
-    amplifier: int = 0,
-    hide_particles: bool = True,
-) -> bool:
-
-    cmd = (
-        f'effect give {target} {effect} '
-        f'{seconds} {amplifier} '
-        f'{"true" if hide_particles else "false"}'
-    )
-
-    return send_minecraft_commands([
-        cmd
-    ])
-
-
-# ============================================================
 # WORLD EVENTS
 # ============================================================
 
@@ -416,39 +347,7 @@ def broadcast_world_event(
         color="light_purple"
     )
 
-    if sound:
-        success &= play_sound(sound)
-
     return success
-
-
-def send_kairos_presence_effect(
-    target: str = DEFAULT_CHAT_TARGET
-) -> bool:
-
-    commands = [
-        build_tellraw(
-            "[Kairos] Presence detected.",
-            target=target,
-            color="dark_red"
-        ),
-        f'playsound minecraft:entity.warden.heartbeat master {target} ~ ~ ~ 1 0.7',
-        f'particle minecraft:sculk_soul ~ ~1 ~ 0.5 1 0.5 0.02 25 force {target}',
-    ]
-
-    return send_minecraft_commands(commands)
-
-
-# ============================================================
-# DEBUG
-# ============================================================
-
-def connector_self_test() -> bool:
-
-    return send_chat(
-        "[MC_CONNECTOR] Self-test successful.",
-        color="green"
-    )
 
 
 # ============================================================
@@ -461,4 +360,7 @@ if __name__ == "__main__":
         "Running MC connector self-test..."
     )
 
-    connector_self_test()
+    send_chat(
+        "[MC_CONNECTOR] Authentication fixed.",
+        color="green"
+    )
