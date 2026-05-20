@@ -1,45 +1,7 @@
+
 # ============================================================
 # KAIROS MODULAR ORCHESTRATOR
 # app.py
-# ============================================================
-
-"""
-Purpose:
-- Central orchestration layer for the Kairos ecosystem.
-- Receives incoming requests from:
-    - Minecraft
-    - Discord
-    - NPC systems
-    - Future world systems
-- Routes requests safely to subsystem engines.
-
-This file intentionally DOES NOT:
-- generate NPC dialogue directly
-- run war simulations
-- store memory directly
-- manage Discord
-- control Minecraft transport
-
-Those responsibilities now live in dedicated modules.
-
-Architecture:
-Discord Bot
-    ↓
-app.py (THIS FILE)
-    ↓
-Command Bridge
-    ↓
-AI Core
-    ↓
-NPC Engine
-Memory Engine
-MC Connector
-Continuity Engine
-War Engine
-"""
-
-# ============================================================
-# IMPORTS
 # ============================================================
 
 from __future__ import annotations
@@ -61,9 +23,24 @@ except Exception as e:
     print(f"[APP ERROR] command_bridge import failed: {e}", flush=True)
 
 try:
-    from memory_engine import remember_event
-except Exception:
-    remember_event = None
+    from memory_engine import (
+        record_world_event,
+        append_player_memory,
+        ensure_memory_dirs
+    )
+
+    ensure_memory_dirs()
+
+    MEMORY_ENGINE_ONLINE = True
+
+except Exception as e:
+
+    MEMORY_ENGINE_ONLINE = False
+
+    record_world_event = None
+    append_player_memory = None
+
+    print(f"[APP ERROR] memory_engine import failed: {e}", flush=True)
 
 # ============================================================
 # APP SETUP
@@ -97,7 +74,7 @@ def health():
 
         "systems": {
             "command_bridge": process_incoming_message is not None,
-            "memory_engine": remember_event is not None,
+            "memory_engine": MEMORY_ENGINE_ONLINE,
         }
     })
 
@@ -129,14 +106,28 @@ def chat():
         # ====================================================
 
         try:
-            if remember_event:
-                remember_event({
-                    "player": player,
-                    "message": message,
-                    "source": source,
-                    "timestamp": datetime.now(timezone.utc).isoformat()
-                })
+
+            if append_player_memory:
+
+                append_player_memory(
+                    player,
+                    f"{source}: {message}"
+                )
+
+            if record_world_event:
+
+                record_world_event(
+                    "player_message",
+                    message,
+                    location=source,
+                    faction=None,
+                    metadata={
+                        "player": player
+                    }
+                )
+
         except Exception as memory_error:
+
             log(f"Memory Engine Error: {memory_error}")
 
         # ====================================================
@@ -261,7 +252,7 @@ if __name__ == "__main__":
     log("Subsystem Status:")
 
     log(f" - Command Bridge: {'ONLINE' if process_incoming_message else 'OFFLINE'}")
-    log(f" - Memory Engine: {'ONLINE' if remember_event else 'OFFLINE'}")
+    log(f" - Memory Engine: {'ONLINE' if MEMORY_ENGINE_ONLINE else 'OFFLINE'}")
 
     log("=" * 72)
 
@@ -270,3 +261,4 @@ if __name__ == "__main__":
         port=PORT,
         debug=False
     )
+```
