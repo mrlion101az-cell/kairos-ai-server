@@ -1,4 +1,3 @@
-
 # ============================================================
 # KAIROS MODULAR ORCHESTRATOR
 # app.py
@@ -11,10 +10,6 @@ import traceback
 from datetime import datetime, timezone
 
 from flask import Flask, jsonify, request
-
-# ============================================================
-# MODULAR IMPORTS
-# ============================================================
 
 try:
     from command_bridge import process_incoming_message
@@ -42,27 +37,15 @@ except Exception as e:
 
     print(f"[APP ERROR] memory_engine import failed: {e}", flush=True)
 
-# ============================================================
-# APP SETUP
-# ============================================================
-
 app = Flask(__name__)
 
 PORT = int(os.getenv("PORT", "10000"))
 
 KAIROS_VERSION = "kairos_modular_v1"
 
-# ============================================================
-# LOGGING
-# ============================================================
-
 def log(message: str):
     timestamp = datetime.now(timezone.utc).isoformat()
     print(f"[KAIROS APP {timestamp}] {message}", flush=True)
-
-# ============================================================
-# HEALTH ROUTE
-# ============================================================
 
 @app.route("/", methods=["GET"])
 def health():
@@ -71,16 +54,11 @@ def health():
         "ok": True,
         "service": "kairos_modular_orchestrator",
         "version": KAIROS_VERSION,
-
         "systems": {
             "command_bridge": process_incoming_message is not None,
             "memory_engine": MEMORY_ENGINE_ONLINE,
         }
     })
-
-# ============================================================
-# MAIN CHAT ROUTE
-# ============================================================
 
 @app.route("/chat", methods=["POST"])
 def chat():
@@ -91,19 +69,16 @@ def chat():
 
         player = str(data.get("player", "unknown"))
         message = str(data.get("message", "")).strip()
-        source = str(data.get("source", "unknown"))
+        source = str(data.get("source", "minecraft"))
 
         if not message:
+
             return jsonify({
                 "ok": False,
                 "error": "missing_message"
             }), 400
 
         log(f"Incoming message from {source}::{player}")
-
-        # ====================================================
-        # MEMORY RECORDING
-        # ====================================================
 
         try:
 
@@ -130,10 +105,6 @@ def chat():
 
             log(f"Memory Engine Error: {memory_error}")
 
-        # ====================================================
-        # COMMAND BRIDGE ROUTING
-        # ====================================================
-
         if process_incoming_message is None:
 
             return jsonify({
@@ -142,9 +113,13 @@ def chat():
                 "error": "offline"
             }), 503
 
-        response = process_incoming_message(data)
+        response = process_incoming_message(
+            message,
+            fallback_player=player
+        )
 
         if not isinstance(response, dict):
+
             response = {
                 "ok": True,
                 "reply": str(response)
@@ -164,10 +139,6 @@ def chat():
             "error": str(e)
         }), 500
 
-# ============================================================
-# NPC DIRECT ROUTE
-# ============================================================
-
 @app.route("/npc", methods=["POST"])
 def npc_route():
 
@@ -175,7 +146,8 @@ def npc_route():
 
         data = request.get_json(silent=True) or {}
 
-        data["route"] = "npc"
+        player = str(data.get("player", "unknown"))
+        message = str(data.get("message", "")).strip()
 
         if process_incoming_message is None:
 
@@ -185,7 +157,10 @@ def npc_route():
                 "error": "offline"
             }), 503
 
-        response = process_incoming_message(data)
+        response = process_incoming_message(
+            message,
+            fallback_player=player
+        )
 
         return jsonify(response)
 
@@ -199,10 +174,6 @@ def npc_route():
             "error": str(e)
         }), 500
 
-# ============================================================
-# WORLD EVENT ROUTE
-# ============================================================
-
 @app.route("/world_event", methods=["POST"])
 def world_event():
 
@@ -211,6 +182,7 @@ def world_event():
         data = request.get_json(silent=True) or {}
 
         event_type = str(data.get("event_type", "unknown"))
+        description = str(data.get("description", "")).strip()
 
         log(f"World Event Triggered: {event_type}")
 
@@ -222,10 +194,10 @@ def world_event():
                 "error": "offline"
             }), 503
 
-        response = process_incoming_message({
-            "route": "world_event",
-            "event": data
-        })
+        response = process_incoming_message(
+            f"[WORLD_EVENT] {event_type}: {description}",
+            fallback_player="WORLD"
+        )
 
         return jsonify(response)
 
@@ -238,10 +210,6 @@ def world_event():
             "system": "world_event_route",
             "error": str(e)
         }), 500
-
-# ============================================================
-# STARTUP
-# ============================================================
 
 if __name__ == "__main__":
 
