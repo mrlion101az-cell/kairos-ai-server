@@ -1,66 +1,76 @@
-
 """
 mc_connector.py
 Kairos / Nexus Minecraft Connector Layer
-
-Purpose:
-- Centralized Minecraft transport layer
-- ALL Minecraft communication flows through this file
-- Safe isolated HTTP command sender
-- Shared by:
-    - npc_engine.py
-    - command_bridge.py
-    - war_engine.py
-    - continuity_engine.py
-    - app.py
-    - future systems
-
-This file contains:
-- NO Flask routes
-- NO OpenAI generation
-- NO Discord bot logic
-- NO war engine loops
-
-This is the transport nervous system to Minecraft.
 """
 
 from __future__ import annotations
 
 import json
 import os
-import random
 import time
 import traceback
-from typing import Any, Dict, List, Optional
+from typing import Any, List, Optional
 
 try:
     import requests
 except Exception:
-    requests = None  # type: ignore
+    requests = None
 
 
 # ============================================================
 # CONFIG
 # ============================================================
 
-MC_CONNECTOR_DEBUG = os.getenv("MC_CONNECTOR_DEBUG", "true").lower() == "true"
+MC_CONNECTOR_DEBUG = os.getenv(
+    "MC_CONNECTOR_DEBUG",
+    "true"
+).lower() == "true"
 
-MC_HTTP_HOST = os.getenv("MC_HTTP_HOST", "72.5.46.197")
-MC_HTTP_PORT = int(os.getenv("MC_HTTP_PORT", "8123"))
+MC_HTTP_HOST = os.getenv(
+    "MC_HTTP_HOST",
+    "72.5.46.197"
+)
 
-MC_HTTP_TIMEOUT = float(os.getenv("MC_HTTP_TIMEOUT", "10"))
-MC_HTTP_RETRIES = int(os.getenv("MC_HTTP_RETRIES", "3"))
+MC_HTTP_PORT = int(
+    os.getenv("MC_HTTP_PORT", "8123")
+)
 
-MC_HTTP_SCHEME = os.getenv("MC_HTTP_SCHEME", "http")
+MC_HTTP_TIMEOUT = float(
+    os.getenv("MC_HTTP_TIMEOUT", "10")
+)
+
+MC_HTTP_RETRIES = int(
+    os.getenv("MC_HTTP_RETRIES", "3")
+)
+
+MC_HTTP_SCHEME = os.getenv(
+    "MC_HTTP_SCHEME",
+    "http"
+)
+
+# ============================================================
+# IMPORTANT FIX
+# ============================================================
+# Your Minecraft bridge uses:
+# /execute
+#
+# NOT:
+# /command
+# ============================================================
 
 MC_HTTP_ENDPOINT = os.getenv(
     "MC_HTTP_ENDPOINT",
-    f"{MC_HTTP_SCHEME}://{MC_HTTP_HOST}:{MC_HTTP_PORT}/command"
+    f"{MC_HTTP_SCHEME}://{MC_HTTP_HOST}:{MC_HTTP_PORT}/execute"
 )
 
-DEFAULT_CHAT_TARGET = os.getenv("MC_DEFAULT_CHAT_TARGET", "@a")
+DEFAULT_CHAT_TARGET = os.getenv(
+    "MC_DEFAULT_CHAT_TARGET",
+    "@a"
+)
 
-MAX_BATCH_COMMANDS = int(os.getenv("MC_MAX_BATCH_COMMANDS", "50"))
+MAX_BATCH_COMMANDS = int(
+    os.getenv("MC_MAX_BATCH_COMMANDS", "50")
+)
 
 
 # ============================================================
@@ -68,12 +78,25 @@ MAX_BATCH_COMMANDS = int(os.getenv("MC_MAX_BATCH_COMMANDS", "50"))
 # ============================================================
 
 def mc_log(message: str, level: str = "INFO") -> None:
-    if MC_CONNECTOR_DEBUG or level in {"WARN", "ERROR", "FATAL"}:
-        print(f"[MC_CONNECTOR {level}] {message}", flush=True)
+    if MC_CONNECTOR_DEBUG or level in {
+        "WARN",
+        "ERROR",
+        "FATAL"
+    }:
+        print(
+            f"[MC_CONNECTOR {level}] {message}",
+            flush=True
+        )
 
 
-def mc_log_exception(context: str, exc: Exception) -> None:
-    print(f"[MC_CONNECTOR ERROR] {context}: {exc}", flush=True)
+def mc_log_exception(
+    context: str,
+    exc: Exception
+) -> None:
+    print(
+        f"[MC_CONNECTOR ERROR] {context}: {exc}",
+        flush=True
+    )
     traceback.print_exc()
 
 
@@ -81,24 +104,34 @@ def mc_log_exception(context: str, exc: Exception) -> None:
 # HTTP CORE
 # ============================================================
 
-def send_http_command_batch(commands: List[str]) -> bool:
-    """
-    Sends a batch of Minecraft commands to the HTTP bridge.
-    """
+def send_http_command_batch(
+    commands: List[str]
+) -> bool:
 
     if not commands:
         return False
 
     if not requests:
-        mc_log("requests library unavailable", "ERROR")
+        mc_log(
+            "requests library unavailable",
+            "ERROR"
+        )
         return False
 
     payload = {
         "commands": commands
     }
 
-    for attempt in range(1, MC_HTTP_RETRIES + 1):
+    for attempt in range(
+        1,
+        MC_HTTP_RETRIES + 1
+    ):
         try:
+
+            mc_log(
+                f"Sending batch to {MC_HTTP_ENDPOINT}"
+            )
+
             response = requests.post(
                 MC_HTTP_ENDPOINT,
                 json=payload,
@@ -106,7 +139,9 @@ def send_http_command_batch(commands: List[str]) -> bool:
             )
 
             if response.status_code == 200:
-                mc_log(f"MC command batch delivered ({len(commands)} cmds)")
+                mc_log(
+                    f"MC command batch delivered ({len(commands)} cmds)"
+                )
                 return True
 
             mc_log(
@@ -114,8 +149,19 @@ def send_http_command_batch(commands: List[str]) -> bool:
                 "WARN"
             )
 
+            try:
+                mc_log(
+                    f"Bridge response: {response.text}",
+                    "WARN"
+                )
+            except Exception:
+                pass
+
         except Exception as exc:
-            mc_log_exception(f"MC send failed attempt {attempt}", exc)
+            mc_log_exception(
+                f"MC send failed attempt {attempt}",
+                exc
+            )
 
         time.sleep(1.0)
 
@@ -135,19 +181,28 @@ def normalize_command(command: Any) -> str:
     return text
 
 
-def chunk_commands(commands: List[str], chunk_size: int = MAX_BATCH_COMMANDS) -> List[List[str]]:
+def chunk_commands(
+    commands: List[str],
+    chunk_size: int = MAX_BATCH_COMMANDS
+) -> List[List[str]]:
+
     chunks = []
 
-    for i in range(0, len(commands), chunk_size):
-        chunks.append(commands[i:i + chunk_size])
+    for i in range(
+        0,
+        len(commands),
+        chunk_size
+    ):
+        chunks.append(
+            commands[i:i + chunk_size]
+        )
 
     return chunks
 
 
-def send_minecraft_commands(commands: List[Any]) -> bool:
-    """
-    Main low-level command sender.
-    """
+def send_minecraft_commands(
+    commands: List[Any]
+) -> bool:
 
     clean_commands = [
         normalize_command(cmd)
@@ -161,6 +216,7 @@ def send_minecraft_commands(commands: List[Any]) -> bool:
     overall_success = True
 
     for chunk in chunk_commands(clean_commands):
+
         success = send_http_command_batch(chunk)
 
         if not success:
@@ -170,7 +226,7 @@ def send_minecraft_commands(commands: List[Any]) -> bool:
 
 
 # ============================================================
-# TELLRAW / CHAT
+# CHAT / TELLRAW
 # ============================================================
 
 def escape_json_text(text: str) -> str:
@@ -182,6 +238,7 @@ def build_tellraw(
     target: str = DEFAULT_CHAT_TARGET,
     color: str = "white",
 ) -> str:
+
     escaped = escape_json_text(text)
 
     return (
@@ -195,8 +252,16 @@ def send_chat(
     target: str = DEFAULT_CHAT_TARGET,
     color: str = "white",
 ) -> bool:
-    command = build_tellraw(text, target, color)
-    return send_minecraft_commands([command])
+
+    command = build_tellraw(
+        text,
+        target,
+        color
+    )
+
+    return send_minecraft_commands([
+        command
+    ])
 
 
 def send_to_minecraft(
@@ -204,20 +269,22 @@ def send_to_minecraft(
     player_name: Optional[str] = None,
     color: str = "white",
 ) -> bool:
-    """
-    Generic safe reply sender used by npc_engine and app.py.
-    """
 
-    target = player_name if player_name else DEFAULT_CHAT_TARGET
+    target = (
+        player_name
+        if player_name
+        else DEFAULT_CHAT_TARGET
+    )
 
-    if player_name:
-        target = player_name
-
-    return send_chat(text, target=target, color=color)
+    return send_chat(
+        text,
+        target=target,
+        color=color
+    )
 
 
 # ============================================================
-# TITLES / ACTIONBARS
+# TITLES
 # ============================================================
 
 def send_title(
@@ -225,6 +292,7 @@ def send_title(
     subtitle: Optional[str] = None,
     target: str = DEFAULT_CHAT_TARGET,
 ) -> bool:
+
     commands = [
         f'title {target} title {{"text":"{escape_json_text(title)}","color":"gold"}}'
     ]
@@ -242,16 +310,19 @@ def send_actionbar(
     target: str = DEFAULT_CHAT_TARGET,
     color: str = "yellow",
 ) -> bool:
+
     cmd = (
         f'title {target} actionbar '
         f'{{"text":"{escape_json_text(text)}","color":"{color}"}}'
     )
 
-    return send_minecraft_commands([cmd])
+    return send_minecraft_commands([
+        cmd
+    ])
 
 
 # ============================================================
-# SOUND / PARTICLE HELPERS
+# SOUND
 # ============================================================
 
 def play_sound(
@@ -260,13 +331,20 @@ def play_sound(
     volume: float = 1.0,
     pitch: float = 1.0,
 ) -> bool:
+
     cmd = (
         f'playsound {sound} master {target} ~ ~ ~ '
         f'{volume} {pitch}'
     )
 
-    return send_minecraft_commands([cmd])
+    return send_minecraft_commands([
+        cmd
+    ])
 
+
+# ============================================================
+# PARTICLES
+# ============================================================
 
 def send_particle(
     particle: str,
@@ -280,13 +358,16 @@ def send_particle(
     count: int = 10,
     target: str = DEFAULT_CHAT_TARGET,
 ) -> bool:
+
     cmd = (
         f'particle {particle} '
         f'{x} {y} {z} '
         f'{dx} {dy} {dz} {speed} {count} force {target}'
     )
 
-    return send_minecraft_commands([cmd])
+    return send_minecraft_commands([
+        cmd
+    ])
 
 
 # ============================================================
@@ -300,17 +381,20 @@ def give_effect(
     amplifier: int = 0,
     hide_particles: bool = True,
 ) -> bool:
+
     cmd = (
         f'effect give {target} {effect} '
         f'{seconds} {amplifier} '
         f'{"true" if hide_particles else "false"}'
     )
 
-    return send_minecraft_commands([cmd])
+    return send_minecraft_commands([
+        cmd
+    ])
 
 
 # ============================================================
-# WORLD EVENT HELPERS
+# WORLD EVENTS
 # ============================================================
 
 def broadcast_world_event(
@@ -318,10 +402,14 @@ def broadcast_world_event(
     sound: Optional[str] = None,
     title: Optional[str] = None,
 ) -> bool:
+
     success = True
 
     if title:
-        success &= send_title(title, subtitle=message)
+        success &= send_title(
+            title,
+            subtitle=message
+        )
 
     success &= send_chat(
         f"[WORLD EVENT] {message}",
@@ -337,6 +425,7 @@ def broadcast_world_event(
 def send_kairos_presence_effect(
     target: str = DEFAULT_CHAT_TARGET
 ) -> bool:
+
     commands = [
         build_tellraw(
             "[Kairos] Presence detected.",
@@ -351,10 +440,11 @@ def send_kairos_presence_effect(
 
 
 # ============================================================
-# DEBUG / TEST
+# DEBUG
 # ============================================================
 
 def connector_self_test() -> bool:
+
     return send_chat(
         "[MC_CONNECTOR] Self-test successful.",
         color="green"
@@ -366,5 +456,9 @@ def connector_self_test() -> bool:
 # ============================================================
 
 if __name__ == "__main__":
-    print("Running MC connector self-test...")
+
+    print(
+        "Running MC connector self-test..."
+    )
+
     connector_self_test()
