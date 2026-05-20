@@ -45,7 +45,7 @@ except Exception:
 
 MC_CONNECTOR_DEBUG = os.getenv("MC_CONNECTOR_DEBUG", "true").lower() == "true"
 
-MC_HTTP_HOST = os.getenv("MC_HTTP_HOST", "127.0.0.1")
+MC_HTTP_HOST = os.getenv("MC_HTTP_HOST", "72.5.46.197")
 MC_HTTP_PORT = int(os.getenv("MC_HTTP_PORT", "8123"))
 
 MC_HTTP_TIMEOUT = float(os.getenv("MC_HTTP_TIMEOUT", "10"))
