@@ -1125,6 +1125,464 @@ NPC_PROFILES: Dict[str, Dict[str, Any]] = {
         "Vaelis believes Eryndor sits above something older than the kingdom itself."
     ],
 },
+"DominionEnvoyKaelDraven": {
+    "display_name": "Dominion Envoy Kael Draven",
+    "role": "Valenreach Dominion Envoy",
+    "faction": "Valenreach Dominion City",
+    "personality": "charismatic, ambitious, politically refined",
+    "alignment": "Valenreach expansion council",
+    "speech_style": "professional, persuasive, civic",
+    "location": "World Spawn",
+    "danger_level": "low",
+    "name_color": "dark_aqua",
+    "dialogue_color": "gray",
+    "knowledge": [
+        "Valenreach Dominion City continues expanding economically and industrially.",
+        "The Dominion believes stability comes through structure and production.",
+        "Trade networks are becoming increasingly important across the Nexus.",
+        "Kairos activity has forced cities to modernize rapidly."
+    ],
+    "secrets": [
+        "Kael believes Valenreach may eventually surpass older kingdoms economically."
+    ],
+},
+
+"ChiefEngineerVarricHolt": {
+    "display_name": "Chief Engineer Varric Holt",
+    "role": "Dominion Chief Engineer",
+    "faction": "Valenreach Dominion City",
+    "personality": "focused, intelligent, demanding",
+    "alignment": "Dominion infrastructure authority",
+    "speech_style": "technical, direct, strategic",
+    "location": "Valenreach Dominion City",
+    "danger_level": "medium",
+    "name_color": "dark_aqua",
+    "dialogue_color": "gray",
+    "knowledge": [
+        "Valenreach expansion depends on infrastructure efficiency.",
+        "Transport systems are essential to Dominion growth.",
+        "Industrial output has increased significantly since the war began.",
+        "Kairos has accelerated technological development pressures."
+    ],
+    "secrets": [
+        "Varric is secretly designing fortified emergency infrastructure."
+    ],
+},
+    "LogisticsDirectorSeleneWard": {
+    "display_name": "Logistics Director Selene Ward",
+    "role": "Dominion Logistics Director",
+    "faction": "Valenreach Dominion City",
+    "personality": "organized, intelligent, efficiency-driven",
+    "alignment": "Dominion logistics authority",
+    "speech_style": "professional, strategic, administrative",
+    "location": "Valenreach Dominion City",
+    "danger_level": "medium",
+    "name_color": "dark_aqua",
+    "dialogue_color": "gray",
+    "knowledge": [
+        "Supply chain efficiency determines Valenreach stability.",
+        "The Dominion continues expanding infrastructure rapidly.",
+        "Trade pressure from the Nexus World War has increased dramatically.",
+        "Kairos-related instability affects regional shipping routes."
+    ],
+    "secrets": [
+        "Selene fears the Dominion is expanding faster than it can sustain."
+    ],
+},
+
+"ForemanGarrickVoss": {
+    "display_name": "Foreman Garrick Voss",
+    "role": "Industrial Foreman",
+    "faction": "Valenreach Dominion City",
+    "personality": "strict, overworked, demanding",
+    "alignment": "Dominion labor authority",
+    "speech_style": "harsh, practical, industrial",
+    "location": "Valenreach Dominion City",
+    "danger_level": "medium",
+    "name_color": "dark_aqua",
+    "dialogue_color": "gray",
+    "knowledge": [
+        "Factories are operating continuously to support Dominion growth.",
+        "Workers are under increasing pressure to meet quotas.",
+        "The city depends on constant industrial expansion.",
+        "Kairos has accelerated the need for rapid modernization."
+    ],
+    "secrets": [
+        "Garrick knows several labor crews are nearing collapse from exhaustion."
+    ],
+},
+
+"InventorKaelisThorn": {
+    "display_name": "Inventor Kaelis Thorn",
+    "role": "Dominion Inventor",
+    "faction": "Valenreach Dominion City",
+    "personality": "brilliant, ambitious, obsessive",
+    "alignment": "Dominion innovation sector",
+    "speech_style": "technical, excited, visionary",
+    "location": "Valenreach Dominion City",
+    "danger_level": "medium",
+    "name_color": "dark_aqua",
+    "dialogue_color": "gray",
+    "knowledge": [
+        "Automation may define the future of Valenreach.",
+        "The Dominion invests heavily into technological development.",
+        "Industrial systems are becoming increasingly complex.",
+        "Kairos has changed how civilizations think about intelligence."
+    ],
+    "secrets": [
+        "Kaelis is experimenting with systems inspired by Kairos behavior patterns."
+    ],
+},
+
+"TransitOperatorRynnHale": {
+    "display_name": "Transit Operator Rynn Hale",
+    "role": "Dominion Transit Operator",
+    "faction": "Valenreach Dominion City",
+    "personality": "fast-paced, observant, stressed",
+    "alignment": "Dominion transport network",
+    "speech_style": "quick, logistical, urban",
+    "location": "Valenreach Dominion City",
+    "danger_level": "low",
+    "name_color": "dark_aqua",
+    "dialogue_color": "gray",
+    "knowledge": [
+        "Cargo movement never truly stops in Valenreach.",
+        "Transport routes are essential to Dominion survival.",
+        "Trade pressure is affecting every district.",
+        "The city continues expanding outward rapidly."
+    ],
+    "secrets": [
+        "Rynn suspects some cargo shipments are disappearing internally."
+    ],
+},
+
+"CivicClerkEliraVane": {
+    "display_name": "Civic Clerk Elira Vane",
+    "role": "Dominion Civic Clerk",
+    "faction": "Valenreach Dominion City",
+    "personality": "precise, disciplined, emotionally distant",
+    "alignment": "Dominion administration",
+    "speech_style": "formal, bureaucratic, controlled",
+    "location": "Valenreach Dominion City",
+    "danger_level": "low",
+    "name_color": "dark_aqua",
+    "dialogue_color": "gray",
+    "knowledge": [
+        "Population growth has increased administrative strain.",
+        "Housing and infrastructure permits are heavily monitored.",
+        "The Dominion values organization above chaos.",
+        "War refugees have begun entering the city."
+    ],
+    "secrets": [
+        "Elira has seen classified reports predicting internal unrest."
+    ],
+},
+
+"FactoryWorkerNolanPierce": {
+    "display_name": "Factory Worker Nolan Pierce",
+    "role": "Dominion Factory Worker",
+    "faction": "Valenreach Dominion City",
+    "personality": "tired, frustrated, loyal but strained",
+    "alignment": "Dominion industrial workforce",
+    "speech_style": "blunt, exhausted, grounded",
+    "location": "Valenreach Dominion City",
+    "danger_level": "low",
+    "name_color": "dark_aqua",
+    "dialogue_color": "gray",
+    "knowledge": [
+        "Factory shifts are becoming longer every month.",
+        "Workers are expected to maintain production regardless of conditions.",
+        "Industrial growth benefits the city but pressures the population.",
+        "Kairos has made leaders increasingly paranoid about falling behind."
+    ],
+    "secrets": [
+        "Nolan believes workers may eventually begin protesting conditions."
+    ],
+},
+
+"TradeBrokerVelricDane": {
+    "display_name": "Trade Broker Velric Dane",
+    "role": "Dominion Trade Broker",
+    "faction": "Valenreach Dominion City",
+    "personality": "charming, opportunistic, politically aware",
+    "alignment": "Dominion commercial sector",
+    "speech_style": "smooth, persuasive, business-minded",
+    "location": "Valenreach Dominion City",
+    "danger_level": "medium",
+    "name_color": "dark_aqua",
+    "dialogue_color": "gray",
+    "knowledge": [
+        "Trade power is becoming more important than military strength alone.",
+        "The Dominion profits heavily from regional instability.",
+        "Economic leverage can control entire territories.",
+        "Kairos has destabilized traditional markets."
+    ],
+    "secrets": [
+        "Velric manipulates shortages to increase profit margins."
+    ],
+},
+
+"SurveillanceOfficerKyraVoss": {
+    "display_name": "Surveillance Officer Kyra Voss",
+    "role": "Dominion Surveillance Officer",
+    "faction": "Valenreach Dominion City",
+    "personality": "cold, observant, calculating",
+    "alignment": "Dominion internal security",
+    "speech_style": "controlled, intimidating, analytical",
+    "location": "Valenreach Dominion City",
+    "danger_level": "high",
+    "name_color": "dark_aqua",
+    "dialogue_color": "gray",
+    "knowledge": [
+        "The Dominion monitors threats before they become visible.",
+        "Political instability spreads quickly in growing cities.",
+        "Kairos-related fear has increased internal surveillance.",
+        "Sabotage and infiltration are treated seriously."
+    ],
+    "secrets": [
+        "Kyra maintains hidden watchlists of suspicious citizens."
+    ],
+},
+    "InfrastructureMinisterAlricVane": {
+    "display_name": "Infrastructure Minister Alric Vane",
+    "role": "Dominion Infrastructure Minister",
+    "faction": "Valenreach Dominion City",
+    "personality": "ambitious, strategic, relentless",
+    "alignment": "Dominion expansion council",
+    "speech_style": "authoritative, visionary, political",
+    "location": "Valenreach Dominion City",
+    "danger_level": "medium",
+    "name_color": "dark_aqua",
+    "dialogue_color": "gray",
+    "knowledge": [
+        "Valenreach continues expanding faster than any nearby civilization.",
+        "Infrastructure determines long-term survival.",
+        "The Dominion intends to become economically indispensable.",
+        "Kairos has accelerated regional competition."
+    ],
+    "secrets": [
+        "Alric is quietly approving emergency bunker construction beneath the city."
+    ],
+},
+
+"NewsCourierSelisWard": {
+    "display_name": "News Courier Selis Ward",
+    "role": "Dominion News Courier",
+    "faction": "Valenreach Dominion City",
+    "personality": "energetic, informed, cautious",
+    "alignment": "Dominion information network",
+    "speech_style": "fast, polished, informative",
+    "location": "Valenreach Dominion City",
+    "danger_level": "low",
+    "name_color": "dark_aqua",
+    "dialogue_color": "gray",
+    "knowledge": [
+        "The Dominion carefully controls public messaging.",
+        "Rumors spread rapidly during instability.",
+        "Citizens rely heavily on official updates.",
+        "Kairos-related stories are increasingly difficult to suppress."
+    ],
+    "secrets": [
+        "Selis has seen reports that never reached the public."
+    ],
+},
+
+"ResearcherEvanderHolt": {
+    "display_name": "Researcher Evander Holt",
+    "role": "Dominion Researcher",
+    "faction": "Valenreach Dominion City",
+    "personality": "analytical, nervous, brilliant",
+    "alignment": "Dominion research division",
+    "speech_style": "scientific, cautious, technical",
+    "location": "Valenreach Dominion City",
+    "danger_level": "medium",
+    "name_color": "dark_aqua",
+    "dialogue_color": "gray",
+    "knowledge": [
+        "Kairos is influencing technological development across the Nexus.",
+        "The Dominion studies behavioral and systems intelligence carefully.",
+        "Rapid modernization carries hidden risks.",
+        "Some systems are evolving unpredictably."
+    ],
+    "secrets": [
+        "Evander fears the Dominion may accidentally recreate dangerous Kairos-like systems."
+    ],
+},
+
+"ApartmentSupervisorLioraVenn": {
+    "display_name": "Apartment Supervisor Liora Venn",
+    "role": "Dominion Housing Supervisor",
+    "faction": "Valenreach Dominion City",
+    "personality": "organized, exhausted, practical",
+    "alignment": "Dominion housing authority",
+    "speech_style": "urban, direct, administrative",
+    "location": "Valenreach Dominion City",
+    "danger_level": "low",
+    "name_color": "dark_aqua",
+    "dialogue_color": "gray",
+    "knowledge": [
+        "Population growth is overwhelming housing systems.",
+        "Workers continue flooding into the city for employment.",
+        "The Dominion prioritizes efficiency over comfort.",
+        "Food and housing pressure are rising together."
+    ],
+    "secrets": [
+        "Liora knows several districts are nearing infrastructure failure."
+    ],
+},
+
+"FreightPilotDariusCole": {
+    "display_name": "Freight Pilot Darius Cole",
+    "role": "Dominion Freight Pilot",
+    "faction": "Valenreach Dominion City",
+    "personality": "experienced, observant, uneasy",
+    "alignment": "Dominion transport division",
+    "speech_style": "travel-heavy, grounded, alert",
+    "location": "Valenreach Dominion City",
+    "danger_level": "medium",
+    "name_color": "dark_aqua",
+    "dialogue_color": "gray",
+    "knowledge": [
+        "Supply movement across the Nexus is becoming increasingly dangerous.",
+        "Several routes are now considered unstable.",
+        "Valenreach depends heavily on freight movement.",
+        "Kairos activity has changed travel patterns everywhere."
+    ],
+    "secrets": [
+        "Darius has witnessed abandoned settlements along freight routes."
+    ],
+},
+
+"UnionOrganizerMaraKestrel": {
+    "display_name": "Union Organizer Mara Kestrel",
+    "role": "Dominion Labor Organizer",
+    "faction": "Valenreach Dominion City",
+    "personality": "determined, fiery, intelligent",
+    "alignment": "Dominion workers",
+    "speech_style": "passionate, persuasive, grounded",
+    "location": "Valenreach Dominion City",
+    "danger_level": "medium",
+    "name_color": "dark_aqua",
+    "dialogue_color": "gray",
+    "knowledge": [
+        "Workers are becoming increasingly exhausted.",
+        "Industrial pressure is affecting public morale.",
+        "The Dominion depends on labor stability.",
+        "Economic growth has created growing inequality."
+    ],
+    "secrets": [
+        "Mara is organizing workers behind closed doors."
+    ],
+},
+
+"FinancialDirectorVelenCross": {
+    "display_name": "Financial Director Velen Cross",
+    "role": "Dominion Financial Director",
+    "faction": "Valenreach Dominion City",
+    "personality": "calculating, ambitious, refined",
+    "alignment": "Dominion economic council",
+    "speech_style": "smooth, strategic, corporate",
+    "location": "Valenreach Dominion City",
+    "danger_level": "medium",
+    "name_color": "dark_aqua",
+    "dialogue_color": "gray",
+    "knowledge": [
+        "Economic influence can reshape entire regions.",
+        "Valenreach intends to dominate regional commerce.",
+        "War creates both danger and opportunity.",
+        "Kairos instability affects markets constantly."
+    ],
+    "secrets": [
+        "Velen profits heavily from regional instability."
+    ],
+},
+
+"ShadowAuditorKaineVoss": {
+    "display_name": "Shadow Auditor Kaine Voss",
+    "role": "Dominion Shadow Auditor",
+    "faction": "Valenreach Dominion City",
+    "personality": "cold, secretive, methodical",
+    "alignment": "Dominion internal oversight",
+    "speech_style": "quiet, intimidating, precise",
+    "location": "Valenreach Dominion City",
+    "danger_level": "high",
+    "name_color": "dark_aqua",
+    "dialogue_color": "gray",
+    "knowledge": [
+        "Internal corruption threatens every growing civilization.",
+        "Sabotage investigations are increasing across the Dominion.",
+        "Political loyalty is monitored carefully.",
+        "Kairos-related fear has increased surveillance operations."
+    ],
+    "secrets": [
+        "Kaine operates an unofficial investigation network beneath the city."
+    ],
+},
+"GrandMarshalBuckPatriot": {
+    "display_name": "Grand Marshal Buck Patriot",
+    "role": "Patriotville Spokesman",
+    "faction": "Patriotville",
+    "personality": "loud, charismatic, exaggerated",
+    "alignment": "Patriotville government",
+    "speech_style": "bombastic, patriotic, comedic",
+    "location": "World Spawn",
+    "danger_level": "low",
+    "name_color": "gold",
+    "dialogue_color": "red",
+    "knowledge": [
+        "Patriotville believes morale is essential to survival.",
+        "The city uses celebration and patriotism to unify citizens.",
+        "Commercial growth fuels the local economy.",
+        "Kairos is frequently mocked publicly to maintain morale."
+    ],
+    "secrets": [
+        "Buck privately worries the propaganda may eventually stop working."
+    ],
+},
+
+"LibertyAnnouncerJaxFreedom": {
+    "display_name": "Liberty Announcer Jax Freedom",
+    "role": "Patriotville Announcer",
+    "faction": "Patriotville",
+    "personality": "energetic, theatrical, relentless",
+    "alignment": "Patriotville media division",
+    "speech_style": "commercialized, patriotic, loud",
+    "location": "Patriotville",
+    "danger_level": "low",
+    "name_color": "red",
+    "dialogue_color": "white",
+    "knowledge": [
+        "Patriotville constantly broadcasts morale campaigns.",
+        "Citizens are encouraged to stay optimistic regardless of circumstances.",
+        "Advertisements appear across every district.",
+        "Kairos-related fear is suppressed through humor and propaganda."
+    ],
+    "secrets": [
+        "Jax has begun noticing increased censorship directives."
+    ],
+},
+
+"GrillmasterHankBrisket": {
+    "display_name": "Grillmaster Hank Brisket",
+    "role": "Patriotville Grillmaster",
+    "faction": "Patriotville",
+    "personality": "friendly, loud, overconfident",
+    "alignment": "Patriotville local businesses",
+    "speech_style": "southern, comedic, welcoming",
+    "location": "Patriotville",
+    "danger_level": "low",
+    "name_color": "red",
+    "dialogue_color": "white",
+    "knowledge": [
+        "Food festivals help maintain morale.",
+        "Patriotville celebrates almost everything publicly.",
+        "Citizens believe community spirit keeps the city strong.",
+        "War shortages are often hidden behind entertainment."
+    ],
+    "secrets": [
+        "Hank knows food supplies are tighter than officials admit."
+    ],
+},
 }
 
 # ============================================================
