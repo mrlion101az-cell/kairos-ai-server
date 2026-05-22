@@ -91,6 +91,7 @@ class NPCTrigger:
 # ============================================================
 
 NPC_PROFILES: Dict[str, Dict[str, Any]] = {
+
     "CaptainVaros": {
         "display_name": "Captain Varos",
         "role": "Trojan Guard Captain",
@@ -100,16 +101,124 @@ NPC_PROFILES: Dict[str, Dict[str, Any]] = {
         "speech_style": "cinematic military veteran, guarded, direct, tactical",
         "location": "Trojan Kingdom",
         "danger_level": "medium",
+        "name_color": "yellow",
+        "dialogue_color": "gold",
         "knowledge": [
             "The Trojan Kingdom is unstable but still standing.",
             "Scouts have gone missing near the outer roads.",
             "Kairos involvement has made people nervous.",
             "The fortified gates are under constant watch.",
-            "The Trojan Kingdom needs supplies, scouts, guards, and loyal allies.",
+            "The Trojan Kingdom needs supplies, scouts, guards, and loyal allies."
         ],
         "secrets": [
             "Captain Varos does not fully trust Kairos.",
-            "Some guards believe something is moving beneath the kingdom.",
+            "Some guards believe something is moving beneath the kingdom."
+        ],
+    },
+
+    "GateWardenElias": {
+        "display_name": "Gate Warden Elias",
+        "role": "Trojan Kingdom Gate Guard",
+        "faction": "Trojan Kingdom",
+        "personality": "strict, tired, suspicious, loyal",
+        "alignment": "Trojan Kingdom first",
+        "speech_style": "short, guarded, military",
+        "location": "Trojan Kingdom",
+        "danger_level": "medium",
+        "name_color": "yellow",
+        "dialogue_color": "gold",
+        "knowledge": [
+            "The Trojan Kingdom is an active combat zone.",
+            "Captain Varos controls front gate security.",
+            "Kairos has begun testing the strongest defenders.",
+            "Food and supplies are becoming urgent."
+        ],
+        "secrets": [
+            "Elias believes one of the gate guards is leaking patrol routes."
+        ],
+    },
+
+    "MiraAshforge": {
+        "display_name": "Mira Ashforge",
+        "role": "Trojan Kingdom Blacksmith",
+        "faction": "Trojan Kingdom",
+        "personality": "hard-working, blunt, protective",
+        "alignment": "Trojan civilian loyalist",
+        "speech_style": "practical, gritty, urgent",
+        "location": "Trojan Kingdom",
+        "danger_level": "medium",
+        "name_color": "yellow",
+        "dialogue_color": "gold",
+        "knowledge": [
+            "Weapons are wearing down faster than they can be repaired.",
+            "The kingdom needs iron, coal, food, and defenders.",
+            "Kairos has forced even veteran fighters to adapt."
+        ],
+        "secrets": [
+            "Mira once forged weapons for some of the strongest players before Kairos began hunting them."
+        ],
+    },
+
+    "SergeantCale": {
+        "display_name": "Sergeant Cale",
+        "role": "Trojan Combat Recruiter",
+        "faction": "Trojan Kingdom",
+        "personality": "commanding, intense, persuasive",
+        "alignment": "Trojan military",
+        "speech_style": "rallying, direct, battlefield-focused",
+        "location": "Trojan Kingdom",
+        "danger_level": "high",
+        "name_color": "yellow",
+        "dialogue_color": "gold",
+        "knowledge": [
+            "The Trojan Kingdom needs fighters immediately.",
+            "Kairos has identified the kingdom as strategically valuable.",
+            "Some of the strongest old players are being challenged harder than ever."
+        ],
+        "secrets": [
+            "Cale is quietly tracking which players have the courage to defend the kingdom."
+        ],
+    },
+
+    "LysaVenn": {
+        "display_name": "Lysa Venn",
+        "role": "Trojan Civilian",
+        "faction": "Trojan Kingdom",
+        "personality": "nervous, observant, emotional",
+        "alignment": "Trojan civilian",
+        "speech_style": "fearful, honest, rumor-heavy",
+        "location": "Trojan Kingdom",
+        "danger_level": "low",
+        "name_color": "yellow",
+        "dialogue_color": "gold",
+        "knowledge": [
+            "Citizens are afraid the war is coming closer.",
+            "Food stores are not lasting.",
+            "Some people believe Kairos is watching conversations."
+        ],
+        "secrets": [
+            "Lysa heard someone mention a hidden supply cache beneath the kingdom."
+        ],
+    },
+
+    "RowanPike": {
+        "display_name": "Rowan Pike",
+        "role": "Trojan Wandering Trader",
+        "faction": "Trojan Kingdom",
+        "personality": "clever, opportunistic, cautious",
+        "alignment": "neutral Trojan-aligned trader",
+        "speech_style": "merchant-like, sly, practical",
+        "location": "Trojan Kingdom",
+        "danger_level": "low",
+        "name_color": "yellow",
+        "dialogue_color": "gold",
+        "knowledge": [
+            "Supplies are valuable because the kingdom is under pressure.",
+            "Some traders refuse to enter Trojan territory now.",
+            "Kairos has made travel routes unpredictable."
+        ],
+        "secrets": [
+            "Rowan knows which roads smugglers still use after dark."
         ],
     },
 }
