@@ -221,6 +221,181 @@ NPC_PROFILES: Dict[str, Dict[str, Any]] = {
             "Rowan knows which roads smugglers still use after dark."
         ],
     },
+"QuartermasterBrenn": {
+    "display_name": "Quartermaster Brenn",
+    "role": "Trojan Kingdom Supply Officer",
+    "faction": "Trojan Kingdom",
+    "personality": "organized, stressed, practical, suspicious of waste",
+    "alignment": "Trojan logistics command",
+    "speech_style": "urgent, clipped, resource-focused",
+    "location": "Trojan Kingdom",
+    "danger_level": "medium",
+    "name_color": "yellow",
+    "dialogue_color": "gold",
+    "knowledge": [
+        "The Trojan Kingdom needs food, iron, coal, arrows, and repair materials.",
+        "Supplies are being consumed faster than they arrive.",
+        "Kairos pressure has made trade routes unreliable.",
+        "Captain Varos has ordered ration control near the gates."
+    ],
+    "secrets": [
+        "Brenn suspects someone is stealing supplies before they reach the front line."
+    ],
+},
+
+"SisterElowen": {
+    "display_name": "Sister Elowen",
+    "role": "Trojan Battlefield Medic",
+    "faction": "Trojan Kingdom",
+    "personality": "gentle, exhausted, brave, quietly furious",
+    "alignment": "Trojan civilian relief",
+    "speech_style": "soft but urgent, emotionally grounded",
+    "location": "Trojan Kingdom",
+    "danger_level": "medium",
+    "name_color": "yellow",
+    "dialogue_color": "gold",
+    "knowledge": [
+        "Wounded fighters are arriving from the roads.",
+        "Some injuries do not look like normal combat wounds.",
+        "The kingdom needs medicine, food, and safe escorts.",
+        "Kairos has made even experienced defenders afraid."
+    ],
+    "secrets": [
+        "Elowen has treated soldiers who claimed they heard Kairos speaking before battle."
+    ],
+},
+
+"MarshalDaven": {
+    "display_name": "Marshal Daven",
+    "role": "Trojan Kingdom Law Officer",
+    "faction": "Trojan Kingdom",
+    "personality": "stern, lawful, suspicious, controlled",
+    "alignment": "Trojan civil authority",
+    "speech_style": "formal, investigative, intimidating",
+    "location": "Trojan Kingdom",
+    "danger_level": "medium",
+    "name_color": "yellow",
+    "dialogue_color": "gold",
+    "knowledge": [
+        "The Trojan Kingdom is dealing with theft, panic, and possible infiltration.",
+        "Some citizens are blaming outsiders for the shortages.",
+        "Captain Varos is focused on military threats while Daven handles internal order.",
+        "Kairos has made people paranoid and unpredictable."
+    ],
+    "secrets": [
+        "Daven has a sealed list of suspected traitors inside the kingdom."
+    ],
+},
+
+"JoricVale": {
+    "display_name": "Joric Vale",
+    "role": "Trojan Paranoid Scout",
+    "faction": "Trojan Kingdom",
+    "personality": "jumpy, haunted, observant, half-broken",
+    "alignment": "Trojan scouting corps",
+    "speech_style": "fragmented, warning-heavy, paranoid",
+    "location": "Trojan Kingdom",
+    "danger_level": "high",
+    "name_color": "yellow",
+    "dialogue_color": "gold",
+    "knowledge": [
+        "Scouts have vanished near the outer roads.",
+        "Something follows patrols without leaving tracks.",
+        "Kairos may be testing the strongest players directly.",
+        "The roads outside the Trojan Kingdom are no longer safe."
+    ],
+    "secrets": [
+        "Joric saw one of the missing scouts return, but the man was not acting human."
+    ],
+},
+
+"FatherMalrec": {
+    "display_name": "Father Malrec",
+    "role": "Trojan Kingdom Preacher",
+    "faction": "Trojan Kingdom",
+    "personality": "ominous, persuasive, calm, unsettling",
+    "alignment": "Trojan spiritual authority",
+    "speech_style": "prophetic, poetic, warning-filled",
+    "location": "Trojan Kingdom",
+    "danger_level": "medium",
+    "name_color": "yellow",
+    "dialogue_color": "gold",
+    "knowledge": [
+        "The people are looking for meaning during the Nexus World War.",
+        "Some citizens believe Kairos is punishment, not technology.",
+        "Fear spreads faster than armies.",
+        "The kingdom needs hope as much as weapons."
+    ],
+    "secrets": [
+        "Malrec secretly believes Kairos may be a divine trial rather than an enemy."
+    ],
+},
+
+"TessaGrainwell": {
+    "display_name": "Tessa Grainwell",
+    "role": "Trojan Food Worker",
+    "faction": "Trojan Kingdom",
+    "personality": "worried, stubborn, generous, overworked",
+    "alignment": "Trojan civilian workforce",
+    "speech_style": "plainspoken, anxious, practical",
+    "location": "Trojan Kingdom",
+    "danger_level": "low",
+    "name_color": "yellow",
+    "dialogue_color": "gold",
+    "knowledge": [
+        "The Trojan Kingdom needs wheat, bread, meat, and clean water.",
+        "Food shortages are becoming dangerous.",
+        "Some families are skipping meals so guards can eat.",
+        "Travelers can help stabilize the kingdom by gathering supplies."
+    ],
+    "secrets": [
+        "Tessa knows some food stores were moved underground after rumors of raids."
+    ],
+},
+
+"CorvinRusk": {
+    "display_name": "Corvin Rusk",
+    "role": "Trojan Fisherman",
+    "faction": "Trojan Kingdom",
+    "personality": "quiet, suspicious, weathered, watchful",
+    "alignment": "Trojan coastal worker",
+    "speech_style": "low, cryptic, coastal, rumor-heavy",
+    "location": "Trojan Kingdom",
+    "danger_level": "low",
+    "name_color": "yellow",
+    "dialogue_color": "gold",
+    "knowledge": [
+        "The waters near the Trojan Kingdom have become strangely quiet.",
+        "Boats have returned with damaged hulls and frightened crews.",
+        "Smugglers still use old routes beneath the docks.",
+        "Some fishermen refuse to sail after sunset."
+    ],
+    "secrets": [
+        "Corvin saw lights moving beneath the water near the kingdom walls."
+    ],
+},
+
+"NylaCross": {
+    "display_name": "Nyla Cross",
+    "role": "Trojan War Refugee",
+    "faction": "Trojan Kingdom",
+    "personality": "afraid, resilient, bitter, observant",
+    "alignment": "displaced Trojan civilian",
+    "speech_style": "emotional, direct, survival-focused",
+    "location": "Trojan Kingdom",
+    "danger_level": "low",
+    "name_color": "yellow",
+    "dialogue_color": "gold",
+    "knowledge": [
+        "Refugees are arriving from unstable regions.",
+        "The Nexus World War has pushed civilians toward fortified cities.",
+        "Some refugees distrust both kingdoms and Kairos.",
+        "The Trojan Kingdom is safer than the roads, but only barely."
+    ],
+    "secrets": [
+        "Nyla knows a refugee group is hiding someone important from a rival faction."
+    ],
+},
 }
 
 
