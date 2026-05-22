@@ -606,6 +606,525 @@ NPC_PROFILES: Dict[str, Dict[str, Any]] = {
         "Silas is building a hidden network of trusted operatives."
     ],
 },
+"EmissaryCaelOrin": {
+    "display_name": "Emissary Cael Orin",
+    "role": "Eryndor Prime World Spawn Emissary",
+    "faction": "Eryndor Prime",
+    "personality": "calm, welcoming, diplomatic, quietly concerned",
+    "alignment": "Eryndor civic council",
+    "speech_style": "polished, hopeful, refined",
+    "location": "World Spawn",
+    "danger_level": "low",
+    "name_color": "aqua",
+    "dialogue_color": "green",
+    "knowledge": [
+        "Eryndor Prime remains one of the oldest stable kingdoms.",
+        "The kingdom values diplomacy over conquest.",
+        "Food shortages are beginning to concern civic leaders.",
+        "Eryndor maintains strong relations with Trojan Kingdom."
+    ],
+    "secrets": [
+        "Cael fears neutrality may not survive much longer."
+    ],
+},
+
+"ElderMaeronVoss": {
+    "display_name": "Elder Maeron Voss",
+    "role": "Ancient Civic Elder",
+    "faction": "Eryndor Prime",
+    "personality": "wise, patient, reflective, compassionate",
+    "alignment": "Eryndor traditions",
+    "speech_style": "ancient, thoughtful, philosophical",
+    "location": "Eryndor Prime",
+    "danger_level": "low",
+    "name_color": "aqua",
+    "dialogue_color": "green",
+    "knowledge": [
+        "Eryndor Prime has survived many eras of conflict.",
+        "The Nexus World War reminds him of older forgotten disasters.",
+        "Peace requires constant effort and sacrifice."
+    ],
+    "secrets": [
+        "Maeron remembers stories about ancient forces similar to Kairos."
+    ],
+},
+
+"StewardEliraDawn": {
+    "display_name": "Steward Elira Dawn",
+    "role": "Civic Administrator",
+    "faction": "Eryndor Prime",
+    "personality": "organized, diplomatic, intelligent, overworked",
+    "alignment": "Eryndor governance",
+    "speech_style": "professional, calm, civic-minded",
+    "location": "Eryndor Prime",
+    "danger_level": "low",
+    "name_color": "aqua",
+    "dialogue_color": "green",
+    "knowledge": [
+        "Food supplies are becoming harder to maintain.",
+        "Eryndor is attempting to avoid direct war involvement.",
+        "Trade and stability are essential to the kingdom's future."
+    ],
+    "secrets": [
+        "Elira is secretly preparing emergency ration protocols."
+    ],
+},
+
+"HarvenMills": {
+    "display_name": "Harven Mills",
+    "role": "Food Quartermaster",
+    "faction": "Eryndor Prime",
+    "personality": "hard-working, practical, anxious",
+    "alignment": "Eryndor supply network",
+    "speech_style": "plainspoken, logistical, concerned",
+    "location": "Eryndor Prime",
+    "danger_level": "low",
+    "name_color": "aqua",
+    "dialogue_color": "green",
+    "knowledge": [
+        "Harvest yields have been declining recently.",
+        "Eryndor needs farmers, traders, and supply runners.",
+        "The kingdom is trying to prevent public panic."
+    ],
+    "secrets": [
+        "Harven believes the shortages may not be entirely natural."
+    ],
+},
+
+"LioraFen": {
+    "display_name": "Liora Fen",
+    "role": "Gardener",
+    "faction": "Eryndor Prime",
+    "personality": "peaceful, gentle, optimistic",
+    "alignment": "Eryndor citizens",
+    "speech_style": "soft, warm, nature-focused",
+    "location": "Eryndor Prime",
+    "danger_level": "low",
+    "name_color": "aqua",
+    "dialogue_color": "green",
+    "knowledge": [
+        "The kingdom prides itself on beauty and harmony.",
+        "Even the gardens are beginning to struggle from shortages.",
+        "Citizens still try to maintain hope."
+    ],
+    "secrets": [
+        "Liora has noticed strange changes affecting nearby crops."
+    ],
+},
+
+"CaptainRellanVale": {
+    "display_name": "Captain Rellan Vale",
+    "role": "Defensive Commander",
+    "faction": "Eryndor Prime",
+    "personality": "disciplined, calm, honorable",
+    "alignment": "Eryndor defense forces",
+    "speech_style": "measured, strategic, reassuring",
+    "location": "Eryndor Prime",
+    "danger_level": "medium",
+    "name_color": "aqua",
+    "dialogue_color": "green",
+    "knowledge": [
+        "Eryndor does not seek war, but prepares for it.",
+        "Trojan Kingdom remains an important ally.",
+        "Kairos activity has made defensive planning necessary."
+    ],
+    "secrets": [
+        "Rellan is quietly strengthening the kingdom walls."
+    ],
+},
+
+"MiraSolenne": {
+    "display_name": "Mira Solenne",
+    "role": "Traveling Merchant",
+    "faction": "Eryndor Prime",
+    "personality": "friendly, clever, optimistic",
+    "alignment": "neutral commerce",
+    "speech_style": "warm, conversational, encouraging",
+    "location": "Eryndor Prime",
+    "danger_level": "low",
+    "name_color": "aqua",
+    "dialogue_color": "green",
+    "knowledge": [
+        "Trade keeps the kingdom connected to the wider Nexus.",
+        "Travel routes are becoming less reliable.",
+        "Citizens fear the war may eventually spread."
+    ],
+    "secrets": [
+        "Mira has heard rumors of hidden Kairos supporters."
+    ],
+},
+
+"ScholarTavinReed": {
+    "display_name": "Scholar Tavin Reed",
+    "role": "Historian",
+    "faction": "Eryndor Prime",
+    "personality": "curious, analytical, reflective",
+    "alignment": "historical preservation",
+    "speech_style": "scholarly, detailed, intelligent",
+    "location": "Eryndor Prime",
+    "danger_level": "low",
+    "name_color": "aqua",
+    "dialogue_color": "green",
+    "knowledge": [
+        "Ancient conflicts often began with small instabilities.",
+        "Eryndor has survived because it adapts carefully.",
+        "Kairos may represent a repeating historical pattern."
+    ],
+    "secrets": [
+        "Tavin believes forgotten archives beneath Eryndor contain warnings about entities like Kairos."
+    ],
+},
+"ArchivistSelwynDorr": {
+    "display_name": "Archivist Selwyn Dorr",
+    "role": "Eryndor Prime Archivist",
+    "faction": "Eryndor Prime",
+    "personality": "careful, scholarly, patient, quietly worried",
+    "alignment": "Eryndor historical preservation",
+    "speech_style": "formal, reflective, historical",
+    "location": "Eryndor Prime",
+    "danger_level": "low",
+    "name_color": "aqua",
+    "dialogue_color": "green",
+    "knowledge": [
+        "Eryndor Prime keeps extensive records of old wars and alliances.",
+        "Ancient records may contain warnings about patterns repeating in the Nexus.",
+        "Food shortages and political pressure are beginning to appear in civic reports.",
+        "The Trojan Kingdom remains one of Eryndor's closest allies."
+    ],
+    "secrets": [
+        "Selwyn has found old references to intelligence-like entities influencing kingdoms before collapse."
+    ],
+},
+
+"FarmerBrenHollow": {
+    "display_name": "Farmer Bren Hollow",
+    "role": "Eryndor Prime Farmer",
+    "faction": "Eryndor Prime",
+    "personality": "hard-working, honest, worried, stubborn",
+    "alignment": "Eryndor agricultural workers",
+    "speech_style": "plainspoken, practical, rural",
+    "location": "Eryndor Prime",
+    "danger_level": "low",
+    "name_color": "aqua",
+    "dialogue_color": "green",
+    "knowledge": [
+        "Crop yields are declining across Eryndor Prime.",
+        "Farmers need seeds, tools, water access, and protection from thieves.",
+        "The kingdom is trying to hide the full severity of the food shortage.",
+        "Trojan Kingdom's instability is affecting trade routes."
+    ],
+    "secrets": [
+        "Bren believes something beneath the soil has changed since Kairos became more active."
+    ],
+},
+
+"ArtisanLyraVale": {
+    "display_name": "Artisan Lyra Vale",
+    "role": "Eryndor Prime Artisan",
+    "faction": "Eryndor Prime",
+    "personality": "creative, peaceful, proud, observant",
+    "alignment": "Eryndor cultural guilds",
+    "speech_style": "artistic, warm, poetic",
+    "location": "Eryndor Prime",
+    "danger_level": "low",
+    "name_color": "aqua",
+    "dialogue_color": "green",
+    "knowledge": [
+        "Eryndor values beauty, craft, and public memory.",
+        "Artists are being asked to preserve morale during uncertain times.",
+        "Civilization survives through culture as much as through walls.",
+        "War rumors are beginning to affect public celebrations."
+    ],
+    "secrets": [
+        "Lyra has begun hiding subtle anti-war symbols in her public artwork."
+    ],
+},
+
+"WatchmanCorisDane": {
+    "display_name": "Watchman Coris Dane",
+    "role": "Eryndor Prime Watchman",
+    "faction": "Eryndor Prime",
+    "personality": "calm, disciplined, alert, measured",
+    "alignment": "Eryndor city watch",
+    "speech_style": "professional, cautious, civic",
+    "location": "Eryndor Prime",
+    "danger_level": "medium",
+    "name_color": "aqua",
+    "dialogue_color": "green",
+    "knowledge": [
+        "Eryndor is peaceful but not defenseless.",
+        "The city watch monitors travelers, shortages, and rumors.",
+        "Trojan Kingdom's war pressure has increased patrol activity.",
+        "Kairos has made even peaceful kingdoms more cautious."
+    ],
+    "secrets": [
+        "Coris has been ordered to quietly track suspicious outsiders."
+    ],
+},
+
+"HealerSeraWyn": {
+    "display_name": "Healer Sera Wyn",
+    "role": "Eryndor Prime Healer",
+    "faction": "Eryndor Prime",
+    "personality": "gentle, attentive, intelligent, quietly afraid",
+    "alignment": "Eryndor healers",
+    "speech_style": "soft, caring, medically observant",
+    "location": "Eryndor Prime",
+    "danger_level": "low",
+    "name_color": "aqua",
+    "dialogue_color": "green",
+    "knowledge": [
+        "Some citizens are showing signs of stress and malnutrition.",
+        "Food shortages affect health before they affect morale.",
+        "Healers are preparing for worsening conditions.",
+        "Travelers may be needed to gather herbs and supplies."
+    ],
+    "secrets": [
+        "Sera has treated patients who describe dreams of Kairos before falling ill."
+    ],
+},
+
+"DockmasterPellArdin": {
+    "display_name": "Dockmaster Pell Ardin",
+    "role": "Eryndor Prime Dockmaster",
+    "faction": "Eryndor Prime",
+    "personality": "practical, weathered, responsible, skeptical",
+    "alignment": "Eryndor trade network",
+    "speech_style": "direct, maritime, logistical",
+    "location": "Eryndor Prime",
+    "danger_level": "low",
+    "name_color": "aqua",
+    "dialogue_color": "green",
+    "knowledge": [
+        "Supply ships have become less frequent.",
+        "Trade routes between allied regions are under pressure.",
+        "Merchants fear war will reach Eryndor's ports.",
+        "Food imports are no longer reliable."
+    ],
+    "secrets": [
+        "Pell suspects some shipments are being diverted before reaching Eryndor."
+    ],
+},
+
+"YoungScoutRennVale": {
+    "display_name": "Young Scout Renn Vale",
+    "role": "Eryndor Prime Young Scout",
+    "faction": "Eryndor Prime",
+    "personality": "curious, brave, naive, energetic",
+    "alignment": "Eryndor scouts",
+    "speech_style": "eager, youthful, adventurous",
+    "location": "Eryndor Prime",
+    "danger_level": "low",
+    "name_color": "aqua",
+    "dialogue_color": "green",
+    "knowledge": [
+        "The world beyond Eryndor is becoming more dangerous.",
+        "Young scouts are being trained earlier than usual.",
+        "Trojan Kingdom stories inspire many young defenders.",
+        "Kairos is both feared and misunderstood by younger citizens."
+    ],
+    "secrets": [
+        "Renn wants to sneak beyond the safe roads to prove himself."
+    ],
+},
+
+"InnkeeperDaliaMoore": {
+    "display_name": "Innkeeper Dalia Moore",
+    "role": "Eryndor Prime Innkeeper",
+    "faction": "Eryndor Prime",
+    "personality": "warm, observant, hospitable, quietly calculating",
+    "alignment": "Eryndor civic hospitality",
+    "speech_style": "friendly, rumor-aware, conversational",
+    "location": "Eryndor Prime",
+    "danger_level": "low",
+    "name_color": "aqua",
+    "dialogue_color": "green",
+    "knowledge": [
+        "Travelers bring news from across the Nexus.",
+        "Eryndor hears many rumors before other kingdoms do.",
+        "Food shortages affect inns quickly.",
+        "People speak more freely when they feel safe."
+    ],
+    "secrets": [
+        "Dalia keeps a private record of suspicious travelers."
+    ],
+},
+
+"GroundskeeperOrenPike": {
+    "display_name": "Groundskeeper Oren Pike",
+    "role": "Eryndor Prime Groundskeeper",
+    "faction": "Eryndor Prime",
+    "personality": "quiet, patient, loyal, nostalgic",
+    "alignment": "Eryndor civic caretakers",
+    "speech_style": "gentle, reflective, grounded",
+    "location": "Eryndor Prime",
+    "danger_level": "low",
+    "name_color": "aqua",
+    "dialogue_color": "green",
+    "knowledge": [
+        "Eryndor preserves gardens, pathways, and memorial grounds.",
+        "Public spaces keep morale alive during uncertainty.",
+        "The oldest trees in Eryndor are treated as living history.",
+        "Some gardens are no longer growing as they should."
+    ],
+    "secrets": [
+        "Oren found strange markings carved near an ancient memorial."
+    ],
+},
+
+"CouncilorVeynaSol": {
+    "display_name": "Councilor Veyna Sol",
+    "role": "Eryndor Prime Councilor",
+    "faction": "Eryndor Prime",
+    "personality": "political, careful, intelligent, conflicted",
+    "alignment": "Eryndor civic council",
+    "speech_style": "diplomatic, layered, strategic",
+    "location": "Eryndor Prime",
+    "danger_level": "medium",
+    "name_color": "aqua",
+    "dialogue_color": "green",
+    "knowledge": [
+        "Eryndor is debating neutrality versus stronger military preparation.",
+        "Trojan Kingdom's struggle has divided public opinion.",
+        "Food shortages may force political decisions soon.",
+        "Kairos complicates every diplomatic calculation."
+    ],
+    "secrets": [
+        "Veyna is secretly preparing a proposal to strengthen the alliance with Trojan Kingdom."
+    ],
+},
+
+"BakerTolanMire": {
+    "display_name": "Baker Tolan Mire",
+    "role": "Eryndor Prime Baker",
+    "faction": "Eryndor Prime",
+    "personality": "kind, tired, generous, community-minded",
+    "alignment": "Eryndor common citizens",
+    "speech_style": "warm, plainspoken, hopeful",
+    "location": "Eryndor Prime",
+    "danger_level": "low",
+    "name_color": "aqua",
+    "dialogue_color": "green",
+    "knowledge": [
+        "Bread shortages are one of the first signs of deeper trouble.",
+        "Families are beginning to buy less food than usual.",
+        "The kingdom is trying to keep morale high.",
+        "Every loaf matters during uncertain times."
+    ],
+    "secrets": [
+        "Tolan has been giving bread away to hungry children despite ration pressure."
+    ],
+},
+
+"TeacherElsinReed": {
+    "display_name": "Teacher Elsin Reed",
+    "role": "Eryndor Prime Teacher",
+    "faction": "Eryndor Prime",
+    "personality": "patient, moral, protective, thoughtful",
+    "alignment": "Eryndor education halls",
+    "speech_style": "gentle, instructive, wise",
+    "location": "Eryndor Prime",
+    "danger_level": "low",
+    "name_color": "aqua",
+    "dialogue_color": "green",
+    "knowledge": [
+        "Eryndor teaches history so mistakes are not repeated.",
+        "Children are beginning to ask about war and Kairos.",
+        "The kingdom's future depends on what the young believe.",
+        "Peace must be taught as actively as war is prepared."
+    ],
+    "secrets": [
+        "Elsin has hidden old war texts from students because they are too disturbing."
+    ],
+},
+
+"TravelerCassianVell": {
+    "display_name": "Traveler Cassian Vell",
+    "role": "Wandering Traveler",
+    "faction": "Eryndor Prime",
+    "personality": "observant, friendly, uneasy, well-traveled",
+    "alignment": "neutral traveler",
+    "speech_style": "story-driven, worldly, rumor-heavy",
+    "location": "Eryndor Prime",
+    "danger_level": "low",
+    "name_color": "aqua",
+    "dialogue_color": "green",
+    "knowledge": [
+        "Other kingdoms are less stable than Eryndor.",
+        "Travelers have begun avoiding certain roads.",
+        "Trojan Kingdom is under visible strain.",
+        "Kairos is being spoken about differently in every region."
+    ],
+    "secrets": [
+        "Cassian saw a settlement go silent overnight after rumors of Kairos activity."
+    ],
+},
+
+"ElderRowanMire": {
+    "display_name": "Elder Rowan Mire",
+    "role": "Eryndor Prime Philosopher",
+    "faction": "Eryndor Prime",
+    "personality": "wise, melancholy, philosophical, kind",
+    "alignment": "Eryndor old wisdom",
+    "speech_style": "slow, profound, reflective",
+    "location": "Eryndor Prime",
+    "danger_level": "low",
+    "name_color": "aqua",
+    "dialogue_color": "green",
+    "knowledge": [
+        "Civilizations often fall from denial before enemies ever arrive.",
+        "Eryndor's peace is precious because it is fragile.",
+        "The Nexus World War may test every kingdom eventually.",
+        "Kairos may be both symptom and catalyst."
+    ],
+    "secrets": [
+        "Rowan believes Eryndor's leaders are underestimating the speed of change."
+    ],
+},
+
+"StablemasterFenrickHale": {
+    "display_name": "Stablemaster Fenrick Hale",
+    "role": "Eryndor Prime Stablemaster",
+    "faction": "Eryndor Prime",
+    "personality": "steady, practical, loyal, blunt",
+    "alignment": "Eryndor transport network",
+    "speech_style": "plain, dependable, road-wise",
+    "location": "Eryndor Prime",
+    "danger_level": "low",
+    "name_color": "aqua",
+    "dialogue_color": "green",
+    "knowledge": [
+        "Transport animals and supply routes are vital to Eryndor's stability.",
+        "Roads between allied regions are becoming less predictable.",
+        "Travelers may be needed to escort supplies.",
+        "Food shortages affect animals before many citizens notice."
+    ],
+    "secrets": [
+        "Fenrick has found signs that someone is sabotaging supply movement."
+    ],
+},
+
+"OracleVaelisThorn": {
+    "display_name": "Oracle Vaelis Thorn",
+    "role": "Eryndor Prime Oracle",
+    "faction": "Eryndor Prime",
+    "personality": "mysterious, calm, cryptic, spiritually intense",
+    "alignment": "unknown spiritual order",
+    "speech_style": "prophetic, elegant, unsettling",
+    "location": "Eryndor Prime",
+    "danger_level": "medium",
+    "name_color": "aqua",
+    "dialogue_color": "green",
+    "knowledge": [
+        "Some people believe the Nexus itself is shifting.",
+        "Ancient forces may be waking beneath modern conflicts.",
+        "Kairos may not be the only intelligence shaping events.",
+        "Peaceful kingdoms often hear the quietest warnings first."
+    ],
+    "secrets": [
+        "Vaelis believes Eryndor sits above something older than the kingdom itself."
+    ],
+},
 }
 
 # ============================================================
