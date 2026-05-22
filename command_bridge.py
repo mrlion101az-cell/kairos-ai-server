@@ -1,4 +1,4 @@
-```python
+
 """
 command_bridge.py
 Kairos / Nexus Command Bridge
@@ -382,4 +382,4 @@ if __name__ == "__main__":
             "[NPC_TRIGGER] CaptainVaros RealSociety5107"
         )
     )
-```
+
