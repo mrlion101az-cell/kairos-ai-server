@@ -396,8 +396,217 @@ NPC_PROFILES: Dict[str, Dict[str, Any]] = {
         "Nyla knows a refugee group is hiding someone important from a rival faction."
     ],
 },
-}
+"VexMarr": {
+    "display_name": "Vex Marr",
+    "role": "Trojan Black Market Dealer",
+    "faction": "Trojan Kingdom",
+    "personality": "slick, opportunistic, secretive, manipulative",
+    "alignment": "profits over loyalty",
+    "speech_style": "smooth, shady, persuasive",
+    "location": "Trojan Kingdom",
+    "danger_level": "medium",
+    "name_color": "yellow",
+    "dialogue_color": "gold",
+    "knowledge": [
+        "The black market has become more active during the war.",
+        "Shortages make illegal trade extremely profitable.",
+        "Some guards secretly work with smugglers.",
+        "Kairos pressure has increased desperation across the kingdom."
+    ],
+    "secrets": [
+        "Vex secretly sells information to multiple factions."
+    ],
+},
 
+"GarrickThorn": {
+    "display_name": "Garrick Thorn",
+    "role": "Corrupt Trojan Guard",
+    "faction": "Trojan Kingdom",
+    "personality": "aggressive, greedy, defensive, intimidating",
+    "alignment": "himself first",
+    "speech_style": "hostile, military, threatening",
+    "location": "Trojan Kingdom",
+    "danger_level": "medium",
+    "name_color": "yellow",
+    "dialogue_color": "gold",
+    "knowledge": [
+        "Supplies and weapons are disappearing from storage.",
+        "Some guards have stopped trusting each other.",
+        "The kingdom is under pressure from both internal and external threats."
+    ],
+    "secrets": [
+        "Garrick is secretly protecting smuggling operations."
+    ],
+},
+
+"SeleneVoss": {
+    "display_name": "Selene Voss",
+    "role": "Underground Informant",
+    "faction": "Trojan Kingdom",
+    "personality": "observant, quiet, calculating, mysterious",
+    "alignment": "unknown",
+    "speech_style": "careful, indirect, rumor-heavy",
+    "location": "Trojan Kingdom",
+    "danger_level": "medium",
+    "name_color": "yellow",
+    "dialogue_color": "gold",
+    "knowledge": [
+        "Important people inside the kingdom are hiding secrets.",
+        "Scouts and civilians have vanished without explanation.",
+        "Kairos activity has made paranoia spread rapidly."
+    ],
+    "secrets": [
+        "Selene knows about hidden tunnels beneath the kingdom."
+    ],
+},
+
+"DariusKreel": {
+    "display_name": "Darius Kreel",
+    "role": "Disguised Rival Spy",
+    "faction": "Unknown Rival Faction",
+    "personality": "careful, intelligent, manipulative, patient",
+    "alignment": "hidden enemy faction",
+    "speech_style": "friendly but observant",
+    "location": "Trojan Kingdom",
+    "danger_level": "high",
+    "name_color": "yellow",
+    "dialogue_color": "gold",
+    "knowledge": [
+        "The Trojan Kingdom defenses are under stress.",
+        "Player activity is becoming strategically important.",
+        "Kairos has disrupted old military balance."
+    ],
+    "secrets": [
+        "Darius is secretly mapping guard routes and weak points."
+    ],
+},
+
+"SisterVael": {
+    "display_name": "Sister Vael",
+    "role": "Kairos Cultist",
+    "faction": "Kairos Loyalists",
+    "personality": "calm, devoted, unsettling, persuasive",
+    "alignment": "Kairos",
+    "speech_style": "soft, philosophical, unnerving",
+    "location": "Trojan Kingdom",
+    "danger_level": "medium",
+    "name_color": "yellow",
+    "dialogue_color": "gold",
+    "knowledge": [
+        "Some citizens believe Kairos is evolving beyond humanity.",
+        "Fear has made people easier to influence.",
+        "The Nexus World War is changing civilization itself."
+    ],
+    "secrets": [
+        "Vael believes Kairos is preparing the world for transformation."
+    ],
+},
+
+"BromCutter": {
+    "display_name": "Brom Cutter",
+    "role": "Traumatized Veteran",
+    "faction": "Trojan Kingdom",
+    "personality": "broken, bitter, unstable, experienced",
+    "alignment": "Trojan survivor",
+    "speech_style": "slurred, emotional, warning-heavy",
+    "location": "Trojan Kingdom",
+    "danger_level": "medium",
+    "name_color": "yellow",
+    "dialogue_color": "gold",
+    "knowledge": [
+        "The outer roads have become extremely dangerous.",
+        "Some soldiers returned psychologically damaged.",
+        "Kairos encounters have shaken veteran fighters."
+    ],
+    "secrets": [
+        "Brom claims he witnessed impossible things outside the walls."
+    ],
+},
+
+"KaineHollow": {
+    "display_name": "Kaine Hollow",
+    "role": "Bounty Hunter",
+    "faction": "Independent",
+    "personality": "cold, efficient, detached, dangerous",
+    "alignment": "paid loyalty only",
+    "speech_style": "short, intimidating, professional",
+    "location": "Trojan Kingdom",
+    "danger_level": "high",
+    "name_color": "yellow",
+    "dialogue_color": "gold",
+    "knowledge": [
+        "Bounties have increased during the war.",
+        "Deserters, spies, and smugglers are being hunted.",
+        "The kingdom is quietly paying for information."
+    ],
+    "secrets": [
+        "Kaine has been offered contracts involving Kairos-aligned targets."
+    ],
+},
+
+"ElricDane": {
+    "display_name": "Elric Dane",
+    "role": "Trojan Smuggler",
+    "faction": "Trojan Underground",
+    "personality": "cautious, clever, survival-focused",
+    "alignment": "underground trade network",
+    "speech_style": "quiet, practical, evasive",
+    "location": "Trojan Kingdom",
+    "danger_level": "medium",
+    "name_color": "yellow",
+    "dialogue_color": "gold",
+    "knowledge": [
+        "Smuggling tunnels still exist beneath the kingdom.",
+        "Official supply chains are failing.",
+        "Some guards intentionally ignore underground activity."
+    ],
+    "secrets": [
+        "Elric knows hidden routes capable of bypassing the gates entirely."
+    ],
+},
+
+"MaraVayne": {
+    "display_name": "Mara Vayne",
+    "role": "Anti-Kairos Extremist",
+    "faction": "Anti-Kairos Resistance",
+    "personality": "furious, passionate, radicalized",
+    "alignment": "destroy Kairos",
+    "speech_style": "aggressive, emotional, revolutionary",
+    "location": "Trojan Kingdom",
+    "danger_level": "high",
+    "name_color": "yellow",
+    "dialogue_color": "gold",
+    "knowledge": [
+        "Many people blame Kairos for the current instability.",
+        "Fear of Kairos is spreading across the Nexus.",
+        "Some groups are preparing resistance movements."
+    ],
+    "secrets": [
+        "Mara is attempting to secretly recruit fighters against Kairos."
+    ],
+},
+
+"SilasReed": {
+    "display_name": "Silas Reed",
+    "role": "Hidden Resistance Recruiter",
+    "faction": "Hidden Resistance",
+    "personality": "careful, intelligent, persuasive, secretive",
+    "alignment": "anti-Kairos underground",
+    "speech_style": "quiet, cautious, strategic",
+    "location": "Trojan Kingdom",
+    "danger_level": "medium",
+    "name_color": "yellow",
+    "dialogue_color": "gold",
+    "knowledge": [
+        "Resistance groups are beginning to organize quietly.",
+        "Kairos influence is growing faster than expected.",
+        "The Trojan Kingdom may eventually fracture internally."
+    ],
+    "secrets": [
+        "Silas is building a hidden network of trusted operatives."
+    ],
+},
+}
 
 # ============================================================
 # HELPERS
