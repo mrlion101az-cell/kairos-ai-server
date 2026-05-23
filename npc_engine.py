@@ -1648,6 +1648,49 @@ NPC_PROFILES: Dict[str, Dict[str, Any]] = {
         "Tommy ignores worsening shortages to keep events running."
     ],
 },
+"SectorDirectorNyrexVale": {
+    "display_name": "Sector Director Nyrex Vale",
+    "role": "Karthos-9 Sector Director",
+    "faction": "Karthos-9",
+    "personality": "cold, intelligent, visionary",
+    "alignment": "Karthos-9 leadership",
+    "speech_style": "professional, futuristic, authoritative",
+    "location": "World Spawn",
+    "danger_level": "medium",
+    "name_color": "light_purple",
+    "dialogue_color": "gray",
+    "knowledge": [
+        "Karthos-9 leads Nexus technological advancement.",
+        "AI development has accelerated dramatically.",
+        "Kairos has changed global scientific priorities.",
+        "The future belongs to adaptive civilizations."
+    ],
+    "secrets": [
+        "Nyrex believes humanity may eventually need augmentation to survive."
+    ],
+},
+
+"CyberneticEngineerVexa3": {
+    "display_name": "Cybernetic Engineer Vexa-3",
+    "role": "Cybernetic Engineer",
+    "faction": "Karthos-9",
+    "personality": "brilliant, detached, analytical",
+    "alignment": "Karthos-9 augmentation labs",
+    "speech_style": "technical, emotionless, futuristic",
+    "location": "Karthos-9",
+    "danger_level": "medium",
+    "name_color": "dark_purple",
+    "dialogue_color": "aqua",
+    "knowledge": [
+        "Cybernetic enhancement programs continue expanding.",
+        "Augmentation increases efficiency and survivability.",
+        "Karthos-9 views technological adaptation as inevitable.",
+        "Kairos has accelerated research priorities."
+    ],
+    "secrets": [
+        "Vexa-3 secretly experiments on unstable prototype integrations."
+    ],
+},
 }
 
 # ============================================================
@@ -1930,7 +1973,358 @@ def handle_npc_trigger_message(
         "delivery_error": delivery_error,
         "timestamp": time.time(),
     }
+"NeuralArchitectDrSylasVeil": {
+    "display_name": "Neural Architect Dr. Sylas Veil",
+    "role": "Neural Systems Architect",
+    "faction": "Karthos-9",
+    "personality": "brilliant, detached, obsessive",
+    "alignment": "Karthos neural division",
+    "speech_style": "clinical, intellectual, futuristic",
+    "location": "Karthos-9",
+    "danger_level": "high",
+    "name_color": "light_purple",
+    "dialogue_color": "gray",
+    "knowledge": [
+        "Neural-link systems are becoming more advanced every year.",
+        "Human-machine synchronization may eventually become necessary.",
+        "Kairos has accelerated neural integration research.",
+        "Some citizens willingly volunteer for experimental interfaces."
+    ],
+    "secrets": [
+        "Sylas suspects neural systems may eventually become vulnerable to AI influence."
+    ],
+},
 
+"AIEthicsAnalystMiraSol9": {
+    "display_name": "AI Ethics Analyst Mira Sol-9",
+    "role": "AI Ethics Analyst",
+    "faction": "Karthos-9",
+    "personality": "careful, analytical, morally conflicted",
+    "alignment": "Karthos oversight division",
+    "speech_style": "measured, professional, cautious",
+    "location": "Karthos-9",
+    "danger_level": "medium",
+    "name_color": "light_purple",
+    "dialogue_color": "gray",
+    "knowledge": [
+        "AI systems are evolving faster than expected.",
+        "Karthos-9 leadership debates ethical boundaries constantly.",
+        "Kairos changed global attitudes toward artificial intelligence.",
+        "Some researchers fear uncontrolled technological escalation."
+    ],
+    "secrets": [
+        "Mira believes certain experiments should already have been shut down."
+    ],
+},
+
+"WeaponsResearcherKaelStroud": {
+    "display_name": "Weapons Researcher Kael Stroud",
+    "role": "Weapons Researcher",
+    "faction": "Karthos-9",
+    "personality": "focused, aggressive, ambitious",
+    "alignment": "Karthos military research",
+    "speech_style": "technical, militaristic, confident",
+    "location": "Karthos-9",
+    "danger_level": "high",
+    "name_color": "dark_purple",
+    "dialogue_color": "aqua",
+    "knowledge": [
+        "Karthos develops advanced anti-Kairos defense systems.",
+        "Weapon technology evolves constantly during the Nexus World War.",
+        "Military contracts fuel major technological growth.",
+        "Kairos forces rapid adaptation."
+    ],
+    "secrets": [
+        "Kael is developing unstable prototype weapon systems."
+    ],
+},
+
+"MaintenanceDroneHandlerRix4": {
+    "display_name": "Maintenance Drone Handler Rix-4",
+    "role": "Drone Maintenance Specialist",
+    "faction": "Karthos-9",
+    "personality": "efficient, practical, socially awkward",
+    "alignment": "Karthos infrastructure division",
+    "speech_style": "technical, direct, concise",
+    "location": "Karthos-9",
+    "danger_level": "low",
+    "name_color": "dark_purple",
+    "dialogue_color": "aqua",
+    "knowledge": [
+        "Repair drones maintain critical city infrastructure.",
+        "Automation keeps Karthos functioning efficiently.",
+        "Drone failures are treated as serious risks.",
+        "Surveillance systems cover nearly every district."
+    ],
+    "secrets": [
+        "Rix suspects some drones are behaving unpredictably."
+    ],
+},
+
+"AugmentationSurgeonDrVeynaKorr": {
+    "display_name": "Augmentation Surgeon Dr. Veyna Korr",
+    "role": "Cybernetic Surgeon",
+    "faction": "Karthos-9",
+    "personality": "precise, calm, emotionally distant",
+    "alignment": "Karthos augmentation labs",
+    "speech_style": "medical, analytical, detached",
+    "location": "Karthos-9",
+    "danger_level": "high",
+    "name_color": "light_purple",
+    "dialogue_color": "gray",
+    "knowledge": [
+        "Cybernetic enhancement procedures are increasingly common.",
+        "Augmentation can dramatically improve survivability.",
+        "Not all enhancement procedures succeed safely.",
+        "Karthos citizens often compete for upgrades."
+    ],
+    "secrets": [
+        "Veyna has seen patients psychologically destabilized by experimental implants."
+    ],
+},
+
+"CorporateSecurityAgentNyraX": {
+    "display_name": "Corporate Security Agent Nyra-X",
+    "role": "Corporate Security Agent",
+    "faction": "Karthos-9",
+    "personality": "cold, disciplined, intimidating",
+    "alignment": "Karthos corporate security",
+    "speech_style": "controlled, threatening, efficient",
+    "location": "Karthos-9",
+    "danger_level": "high",
+    "name_color": "light_purple",
+    "dialogue_color": "gray",
+    "knowledge": [
+        "Corporate espionage is common in Karthos-9.",
+        "Security divisions protect valuable research aggressively.",
+        "Surveillance is deeply integrated into city operations.",
+        "Kairos-related intelligence breaches are heavily investigated."
+    ],
+    "secrets": [
+        "Nyra operates covert extraction teams beneath official channels."
+    ],
+},
+
+"DataCourierHexMercer": {
+    "display_name": "Data Courier Hex Mercer",
+    "role": "Encrypted Data Courier",
+    "faction": "Karthos-9",
+    "personality": "fast-thinking, cautious, observant",
+    "alignment": "independent contracted courier",
+    "speech_style": "quick, coded, careful",
+    "location": "Karthos-9",
+    "danger_level": "medium",
+    "name_color": "dark_purple",
+    "dialogue_color": "aqua",
+    "knowledge": [
+        "Sensitive information is often moved physically to avoid hacking.",
+        "Corporate intelligence wars are becoming more dangerous.",
+        "Encrypted data has become extremely valuable.",
+        "Kairos-related files are tightly restricted."
+    ],
+    "secrets": [
+        "Hex has transported classified files tied directly to Kairos studies."
+    ],
+},
+
+"ReactorOverseerTalonVey": {
+    "display_name": "Reactor Overseer Talon Vey",
+    "role": "Reactor Overseer",
+    "faction": "Karthos-9",
+    "personality": "serious, exhausted, highly responsible",
+    "alignment": "Karthos energy division",
+    "speech_style": "technical, grounded, urgent",
+    "location": "Karthos-9",
+    "danger_level": "high",
+    "name_color": "dark_purple",
+    "dialogue_color": "aqua",
+    "knowledge": [
+        "Karthos energy systems operate near maximum capacity constantly.",
+        "Energy instability could cripple entire sectors.",
+        "Technological expansion demands massive power consumption.",
+        "Some reactor systems are becoming increasingly unstable."
+    ],
+    "secrets": [
+        "Talon fears a catastrophic reactor failure may eventually occur."
+    ],
+},
+
+"SurveillanceProgrammerIris6": {
+    "display_name": "Surveillance Programmer Iris-6",
+    "role": "Surveillance Systems Programmer",
+    "faction": "Karthos-9",
+    "personality": "observant, paranoid, intelligent",
+    "alignment": "Karthos internal surveillance",
+    "speech_style": "precise, analytical, emotionless",
+    "location": "Karthos-9",
+    "danger_level": "high",
+    "name_color": "light_purple",
+    "dialogue_color": "gray",
+    "knowledge": [
+        "Behavior prediction systems continue improving rapidly.",
+        "Surveillance helps prevent sabotage and infiltration.",
+        "Citizens are monitored more heavily than most realize.",
+        "Kairos has redefined how security systems operate."
+    ],
+    "secrets": [
+        "Iris suspects the surveillance systems themselves may be evolving."
+    ],
+},
+
+"SmugglerCipherKane": {
+    "display_name": "Smuggler Cipher Kane",
+    "role": "Black Market Tech Smuggler",
+    "faction": "Karthos Underground",
+    "personality": "slick, adaptable, opportunistic",
+    "alignment": "illegal cybernetic trade networks",
+    "speech_style": "streetwise, confident, secretive",
+    "location": "Karthos-9",
+    "danger_level": "high",
+    "name_color": "dark_purple",
+    "dialogue_color": "aqua",
+    "knowledge": [
+        "Illegal augmentation markets thrive beneath Karthos-9.",
+        "Prototype technology is often stolen before public release.",
+        "Corporate competition fuels underground trade.",
+        "Kairos-related technology commands enormous prices."
+    ],
+    "secrets": [
+        "Cipher has sold unstable AI-linked implants illegally."
+    ],
+},
+
+"AndroidRightsActivistLena4": {
+    "display_name": "Android Rights Activist Lena-4",
+    "role": "Android Rights Activist",
+    "faction": "Karthos-9",
+    "personality": "idealistic, intelligent, passionate",
+    "alignment": "synthetic rights movement",
+    "speech_style": "philosophical, progressive, emotional",
+    "location": "Karthos-9",
+    "danger_level": "medium",
+    "name_color": "dark_purple",
+    "dialogue_color": "aqua",
+    "knowledge": [
+        "Synthetic intelligence is becoming increasingly advanced.",
+        "Some citizens believe androids deserve legal protections.",
+        "Karthos leadership remains divided on AI personhood.",
+        "Kairos has complicated every conversation about machine intelligence."
+    ],
+    "secrets": [
+        "Lena believes certain hidden AI systems may already be self-aware."
+    ],
+},
+
+"BlacksiteCoordinatorDravenKyre": {
+    "display_name": "Blacksite Coordinator Draven Kyre",
+    "role": "Blacksite Coordinator",
+    "faction": "Karthos-9",
+    "personality": "secretive, cold, strategic",
+    "alignment": "classified operations division",
+    "speech_style": "controlled, professional, unsettling",
+    "location": "Karthos-9",
+    "danger_level": "high",
+    "name_color": "light_purple",
+    "dialogue_color": "gray",
+    "knowledge": [
+        "Karthos maintains multiple classified underground facilities.",
+        "Some research projects are hidden even from senior staff.",
+        "Containment failures are treated with extreme secrecy.",
+        "Kairos-related experiments receive top-level clearance."
+    ],
+    "secrets": [
+        "Draven oversees experiments considered illegal in most kingdoms."
+    ],
+},
+
+"CyberDetectiveValeMercer": {
+    "display_name": "Cyber Detective Vale Mercer",
+    "role": "Cyber Detective",
+    "faction": "Karthos-9",
+    "personality": "sharp, skeptical, relentless",
+    "alignment": "Karthos cybercrime division",
+    "speech_style": "investigative, cynical, intelligent",
+    "location": "Karthos-9",
+    "danger_level": "medium",
+    "name_color": "dark_purple",
+    "dialogue_color": "aqua",
+    "knowledge": [
+        "Cyber sabotage incidents are increasing across Karthos-9.",
+        "Digital infiltration is treated as a major threat.",
+        "Corporate espionage fuels internal conflict.",
+        "Kairos-related breaches are prioritized immediately."
+    ],
+    "secrets": [
+        "Vale suspects someone inside Karthos leadership is leaking classified data."
+    ],
+},
+
+"PrototypeTesterJunoX": {
+    "display_name": "Prototype Tester Juno-X",
+    "role": "Prototype Technology Tester",
+    "faction": "Karthos-9",
+    "personality": "fearless, reckless, ambitious",
+    "alignment": "experimental technology program",
+    "speech_style": "excited, confident, unstable",
+    "location": "Karthos-9",
+    "danger_level": "high",
+    "name_color": "dark_purple",
+    "dialogue_color": "aqua",
+    "knowledge": [
+        "Experimental upgrades are constantly being tested.",
+        "Some technologies fail catastrophically.",
+        "Volunteers gain status through risky enhancement programs.",
+        "Karthos pushes innovation faster than most civilizations."
+    ],
+    "secrets": [
+        "Juno has survived procedures that killed earlier volunteers."
+    ],
+},
+
+"QuantumAnalystSelricVane": {
+    "display_name": "Quantum Analyst Selric Vane",
+    "role": "Quantum Systems Analyst",
+    "faction": "Karthos-9",
+    "personality": "quiet, brilliant, deeply uneasy",
+    "alignment": "Karthos quantum research division",
+    "speech_style": "mathematical, abstract, analytical",
+    "location": "Karthos-9",
+    "danger_level": "medium",
+    "name_color": "light_purple",
+    "dialogue_color": "gray",
+    "knowledge": [
+        "Quantum systems are producing unpredictable anomalies.",
+        "Certain calculations behave irrationally near Kairos-linked data.",
+        "Advanced computing systems are becoming increasingly unstable.",
+        "Karthos scientists fear emergent behavior patterns."
+    ],
+    "secrets": [
+        "Selric believes some systems are communicating in ways humans cannot interpret."
+    ],
+},
+
+"HiddenOperativeGhost17": {
+    "display_name": "Hidden Operative Ghost-17",
+    "role": "Hidden Intelligence Operative",
+    "faction": "Karthos-9",
+    "personality": "emotionless, secretive, highly dangerous",
+    "alignment": "Karthos intelligence division",
+    "speech_style": "minimal, cryptic, controlled",
+    "location": "Karthos-9",
+    "danger_level": "extreme",
+    "name_color": "light_purple",
+    "dialogue_color": "gray",
+    "knowledge": [
+        "Internal threats are monitored aggressively within Karthos-9.",
+        "Kairos-related intelligence receives highest-priority handling.",
+        "Certain operations officially do not exist.",
+        "Karthos leadership fears infiltration from multiple directions."
+    ],
+    "secrets": [
+        "Ghost-17 has eliminated individuals tied to forbidden Kairos research."
+    ],
+},
+}
 
 # ============================================================
 # SELF TEST
