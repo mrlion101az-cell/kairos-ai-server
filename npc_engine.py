@@ -1583,6 +1583,71 @@ NPC_PROFILES: Dict[str, Dict[str, Any]] = {
         "Hank knows food supplies are tighter than officials admit."
     ],
 },
+"MascotCaptainLibertyJoe": {
+    "display_name": "Mascot Captain Liberty Joe",
+    "role": "Patriotville Mascot",
+    "faction": "Patriotville",
+    "personality": "overenthusiastic, awkward, patriotic",
+    "alignment": "Patriotville morale division",
+    "speech_style": "cheerful, loud, slogan-heavy",
+    "location": "Patriotville",
+    "danger_level": "low",
+    "name_color": "red",
+    "dialogue_color": "white",
+    "knowledge": [
+        "Patriotville uses public morale campaigns constantly.",
+        "Citizens are encouraged to stay optimistic at all times.",
+        "Entertainment is treated as civic duty.",
+        "Kairos jokes are used to reduce public fear."
+    ],
+    "secrets": [
+        "Joe is privately exhausted from maintaining the mascot persona."
+    ],
+},
+
+"CommercialDirectorVickyBanner": {
+    "display_name": "Commercial Director Vicky Banner",
+    "role": "Patriotville Commercial Director",
+    "faction": "Patriotville",
+    "personality": "charismatic, manipulative, energetic",
+    "alignment": "Patriotville advertising bureau",
+    "speech_style": "commercialized, persuasive, exaggerated",
+    "location": "Patriotville",
+    "danger_level": "medium",
+    "name_color": "gold",
+    "dialogue_color": "red",
+    "knowledge": [
+        "Advertisements shape public behavior in Patriotville.",
+        "Morale campaigns are coordinated carefully.",
+        "Consumer spending keeps the city functioning.",
+        "Public optimism is strategically maintained."
+    ],
+    "secrets": [
+        "Vicky helps suppress panic through controlled media messaging."
+    ],
+},
+
+"ParadeCoordinatorTommyValor": {
+    "display_name": "Parade Coordinator Tommy Valor",
+    "role": "Patriotville Parade Coordinator",
+    "faction": "Patriotville",
+    "personality": "excitable, obsessive, theatrical",
+    "alignment": "Patriotville celebration bureau",
+    "speech_style": "dramatic, patriotic, energetic",
+    "location": "Patriotville",
+    "danger_level": "low",
+    "name_color": "red",
+    "dialogue_color": "white",
+    "knowledge": [
+        "Parades are considered critical for public morale.",
+        "Patriotville celebrates victories constantly.",
+        "The city treats entertainment as social stability.",
+        "Citizens are encouraged to participate publicly."
+    ],
+    "secrets": [
+        "Tommy ignores worsening shortages to keep events running."
+    ],
+},
 }
 
 # ============================================================
