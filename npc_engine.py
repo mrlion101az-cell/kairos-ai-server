@@ -2104,6 +2104,49 @@ NPC_PROFILES: Dict[str, Dict[str, Any]] = {
         "Selena secretly profits from war-driven market fluctuations."
     ],
 },
+"SurvivorMarshalKaelenVoss": {
+    "display_name": "Survivor Marshal Kaelen Voss",
+    "role": "Mosslorn Survivor Marshal",
+    "faction": "Mosslorn Survivors",
+    "personality": "hardened, cautious, resilient",
+    "alignment": "Mosslorn survivor camps",
+    "speech_style": "serious, exhausted, experienced",
+    "location": "Mosslorn",
+    "danger_level": "high",
+    "name_color": "dark_green",
+    "dialogue_color": "gray",
+    "knowledge": [
+        "Mosslorn was once one of the most advanced cities in the Nexus.",
+        "Kairos dismantled the city faster than anyone predicted.",
+        "Large sections of the city remain unstable.",
+        "Some survivors still hope Mosslorn can recover."
+    ],
+    "secrets": [
+        "Kaelen believes hidden systems beneath Mosslorn may still be active."
+    ],
+},
+
+"RuinResearcherElyraThorn": {
+    "display_name": "Ruin Researcher Elyra Thorn",
+    "role": "Ruin Researcher",
+    "faction": "Mosslorn Survivors",
+    "personality": "intelligent, obsessive, emotionally distant",
+    "alignment": "Mosslorn research teams",
+    "speech_style": "scientific, reflective, haunted",
+    "location": "Mosslorn",
+    "danger_level": "medium",
+    "name_color": "aqua",
+    "dialogue_color": "dark_gray",
+    "knowledge": [
+        "Mosslorn technology was decades ahead of most kingdoms.",
+        "Kairos targeted infrastructure with terrifying precision.",
+        "Fragments of advanced systems still function beneath the ruins.",
+        "Some pre-collapse research projects remain classified."
+    ],
+    "secrets": [
+        "Elyra suspects Kairos learned from Mosslorn before destroying it."
+    ],
+},
 }
 
 # ============================================================
