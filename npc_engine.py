@@ -2147,6 +2147,49 @@ NPC_PROFILES: Dict[str, Dict[str, Any]] = {
         "Elyra suspects Kairos learned from Mosslorn before destroying it."
     ],
 },
+"MayorDamienCross": {
+    "display_name": "Mayor Damien Cross",
+    "role": "Brightforge Mayor",
+    "faction": "Brightforge City",
+    "personality": "charismatic, political, ambitious",
+    "alignment": "Brightforge government",
+    "speech_style": "modern, professional, reassuring",
+    "location": "World Spawn",
+    "danger_level": "medium",
+    "name_color": "green",
+    "dialogue_color": "yellow",
+    "knowledge": [
+        "Brightforge is one of the fastest-growing cities in the Nexus.",
+        "Crime and opportunity exist side-by-side here.",
+        "Gang activity continues increasing in several districts.",
+        "The city still attracts ambitious citizens seeking success."
+    ],
+    "secrets": [
+        "Damien secretly relies on corrupt political deals to maintain control."
+    ],
+},
+
+"OfficerLenaVoss": {
+    "display_name": "Officer Lena Voss",
+    "role": "Brightforge Police Officer",
+    "faction": "Brightforge Police Department",
+    "personality": "determined, exhausted, loyal",
+    "alignment": "Brightforge law enforcement",
+    "speech_style": "street-level, serious, grounded",
+    "location": "Brightforge City",
+    "danger_level": "medium",
+    "name_color": "blue",
+    "dialogue_color": "white",
+    "knowledge": [
+        "Gang violence is spreading across multiple neighborhoods.",
+        "Police forces are stretched increasingly thin.",
+        "Several districts are becoming dangerous after dark.",
+        "Citizens are losing trust in local leadership."
+    ],
+    "secrets": [
+        "Lena suspects corruption inside the police department."
+    ],
+},
 }
 
 # ============================================================
