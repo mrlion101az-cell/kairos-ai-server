@@ -2061,6 +2061,49 @@ NPC_PROFILES: Dict[str, Dict[str, Any]] = {
         "Titus knows recruitment numbers are lower than expected."
     ],
 },
+"ChancellorVictorBlackwell": {
+    "display_name": "Chancellor Victor Blackwell",
+    "role": "Black Ridge Chancellor",
+    "faction": "Black Ridge City",
+    "personality": "charismatic, manipulative, ambitious",
+    "alignment": "Black Ridge political elite",
+    "speech_style": "wealthy, refined, political",
+    "location": "World Spawn",
+    "danger_level": "high",
+    "name_color": "gold",
+    "dialogue_color": "dark_green",
+    "knowledge": [
+        "Black Ridge City controls enormous economic influence.",
+        "Money shapes political power across the Nexus.",
+        "Wealthy players dominate many major decisions.",
+        "Kairos instability creates profitable opportunities."
+    ],
+    "secrets": [
+        "Victor manipulates several kingdom alliances through hidden financial pressure."
+    ],
+},
+
+"CorporateBrokerSelenaVoss": {
+    "display_name": "Corporate Broker Selena Voss",
+    "role": "Corporate Broker",
+    "faction": "Black Ridge City",
+    "personality": "calculating, smooth, opportunistic",
+    "alignment": "Black Ridge financial sector",
+    "speech_style": "professional, persuasive, elite",
+    "location": "Black Ridge City",
+    "danger_level": "medium",
+    "name_color": "green",
+    "dialogue_color": "yellow",
+    "knowledge": [
+        "Financial agreements often determine political outcomes.",
+        "Corporate influence spreads across multiple kingdoms.",
+        "Wealth concentration continues increasing rapidly.",
+        "Kairos-related instability impacts global markets."
+    ],
+    "secrets": [
+        "Selena secretly profits from war-driven market fluctuations."
+    ],
+},
 }
 
 # ============================================================
