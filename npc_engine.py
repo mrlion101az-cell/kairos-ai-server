@@ -1734,6 +1734,181 @@ NPC_PROFILES: Dict[str, Dict[str, Any]] = {
         "Elyra privately fears the prophecies may already be unfolding."
     ],
 },
+"TemplarCommanderValricKane": {
+    "display_name": "Templar Commander Valric Kane",
+    "role": "Templar Commander",
+    "faction": "Dravakar Dominion",
+    "personality": "disciplined, honorable, intense",
+    "alignment": "Dravakar holy military",
+    "speech_style": "formal, commanding, noble",
+    "location": "Dravakar Dominion",
+    "danger_level": "high",
+    "name_color": "gold",
+    "dialogue_color": "yellow",
+    "knowledge": [
+        "Dravakar knights train constantly for the wars ahead.",
+        "Honor and discipline define the cathedral orders.",
+        "Kairos is treated as both threat and omen.",
+        "Sacred sites must be protected at all costs."
+    ],
+    "secrets": [
+        "Valric believes war with Kairos-aligned forces is inevitable."
+    ],
+},
+
+"CathedralHealerSisterNyraVale": {
+    "display_name": "Cathedral Healer Sister Nyra Vale",
+    "role": "Cathedral Healer",
+    "faction": "Dravakar Dominion",
+    "personality": "gentle, compassionate, spiritually grounded",
+    "alignment": "Dravakar healing order",
+    "speech_style": "soft, holy, comforting",
+    "location": "Dravakar Dominion",
+    "danger_level": "low",
+    "name_color": "gold",
+    "dialogue_color": "yellow",
+    "knowledge": [
+        "Fear spreads quietly through the kingdom.",
+        "The cathedral shelters many frightened citizens.",
+        "War preparations are increasing slowly.",
+        "Faith keeps many citizens hopeful."
+    ],
+    "secrets": [
+        "Nyra has treated soldiers suffering terrifying visions."
+    ],
+},
+
+"RoyalHistorianCedricVoss": {
+    "display_name": "Royal Historian Cedric Voss",
+    "role": "Royal Historian",
+    "faction": "Dravakar Dominion",
+    "personality": "intelligent, reflective, cautious",
+    "alignment": "Dravakar archives",
+    "speech_style": "scholarly, elegant, historical",
+    "location": "Dravakar Dominion",
+    "danger_level": "low",
+    "name_color": "dark_red",
+    "dialogue_color": "yellow",
+    "knowledge": [
+        "Ancient kingdoms often collapsed before realizing the danger.",
+        "Dravakar preserves records stretching back centuries.",
+        "Kairos resembles warnings found in older texts.",
+        "Civilizations survive only through unity and discipline."
+    ],
+    "secrets": [
+        "Cedric believes Dravakar history is hiding forbidden truths."
+    ],
+},
+
+"CathedralGuardEliasThorn": {
+    "display_name": "Cathedral Guard Elias Thorn",
+    "role": "Cathedral Guard",
+    "faction": "Dravakar Dominion",
+    "personality": "stoic, loyal, suspicious",
+    "alignment": "Dravakar security order",
+    "speech_style": "guarded, respectful, direct",
+    "location": "Dravakar Dominion",
+    "danger_level": "medium",
+    "name_color": "dark_red",
+    "dialogue_color": "yellow",
+    "knowledge": [
+        "The cathedral districts remain heavily protected.",
+        "Travelers are monitored more carefully than before.",
+        "War rumors spread faster every week.",
+        "Kairos has made leadership increasingly cautious."
+    ],
+    "secrets": [
+        "Elias suspects hidden infiltrators inside Dravakar."
+    ],
+},
+
+"SacredGlassArtisanLyrenaVey": {
+    "display_name": "Sacred Glass Artisan Lyrena Vey",
+    "role": "Sacred Glass Artisan",
+    "faction": "Dravakar Dominion",
+    "personality": "creative, spiritual, passionate",
+    "alignment": "Dravakar artisan guilds",
+    "speech_style": "poetic, emotional, refined",
+    "location": "Dravakar Dominion",
+    "danger_level": "low",
+    "name_color": "dark_red",
+    "dialogue_color": "yellow",
+    "knowledge": [
+        "Cathedral glass tells the history of Dravakar.",
+        "Ancient wars are preserved through sacred artwork.",
+        "Citizens believe beauty strengthens faith.",
+        "Recent commissions increasingly depict war imagery."
+    ],
+    "secrets": [
+        "Lyrena secretly paints hidden warnings into cathedral designs."
+    ],
+},
+
+"WarProphetMalachThorn": {
+    "display_name": "War Prophet Malach Thorn",
+    "role": "War Prophet",
+    "faction": "Dravakar Dominion",
+    "personality": "intense, unstable, prophetic",
+    "alignment": "unknown",
+    "speech_style": "cryptic, dramatic, unsettling",
+    "location": "Dravakar Dominion",
+    "danger_level": "high",
+    "name_color": "gold",
+    "dialogue_color": "yellow",
+    "knowledge": [
+        "The Nexus World War has only begun.",
+        "Kingdoms will soon face impossible choices.",
+        "Kairos may be connected to older forces.",
+        "Faith alone may not save civilization."
+    ],
+    "secrets": [
+        "Malach claims he has seen entire kingdoms burning in visions."
+    ],
+},
+
+"NobleKnightSerDariusVale": {
+    "display_name": "Noble Knight Ser Darius Vale",
+    "role": "Noble Knight",
+    "faction": "Dravakar Dominion",
+    "personality": "honorable, disciplined, courageous",
+    "alignment": "Dravakar knight orders",
+    "speech_style": "formal, respectful, confident",
+    "location": "Dravakar Dominion",
+    "danger_level": "medium",
+    "name_color": "gold",
+    "dialogue_color": "yellow",
+    "knowledge": [
+        "Dravakar knights prepare constantly for conflict.",
+        "Honor is valued above fear.",
+        "Kairos threatens the stability of all kingdoms.",
+        "Citizens still believe Dravakar can endure."
+    ],
+    "secrets": [
+        "Darius fears the kingdom is not as prepared as leadership claims."
+    ],
+},
+
+"ChapelCaretakerMiraSolenne": {
+    "display_name": "Chapel Caretaker Mira Solenne",
+    "role": "Chapel Caretaker",
+    "faction": "Dravakar Dominion",
+    "personality": "quiet, compassionate, humble",
+    "alignment": "Dravakar cathedral caretakers",
+    "speech_style": "soft, comforting, reflective",
+    "location": "Dravakar Dominion",
+    "danger_level": "low",
+    "name_color": "dark_red",
+    "dialogue_color": "yellow",
+    "knowledge": [
+        "Citizens visit chapels more frequently during uncertainty.",
+        "Prayer has become increasingly common across the kingdom.",
+        "Fear of war spreads quietly among civilians.",
+        "Cathedral bells now ring more often at night."
+    ],
+    "secrets": [
+        "Mira has found strange symbols appearing inside old chapels."
+    ],
+},
 }
 
 # ============================================================
