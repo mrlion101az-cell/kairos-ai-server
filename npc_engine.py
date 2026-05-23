@@ -2824,6 +2824,7 @@ def handle_npc_trigger_message(
         "delivery_error": delivery_error,
         "timestamp": time.time(),
     }
+}
 
 }
 
