@@ -1691,6 +1691,49 @@ NPC_PROFILES: Dict[str, Dict[str, Any]] = {
         "Vexa-3 secretly experiments on unstable prototype integrations."
     ],
 },
+"HighHeraldLucienVale": {
+    "display_name": "High Herald Lucien Vale",
+    "role": "Dravakar High Herald",
+    "faction": "Dravakar Dominion",
+    "personality": "noble, disciplined, honorable",
+    "alignment": "Dravakar ruling council",
+    "speech_style": "formal, regal, prophetic",
+    "location": "World Spawn",
+    "danger_level": "medium",
+    "name_color": "gold",
+    "dialogue_color": "yellow",
+    "knowledge": [
+        "Dravakar Dominion values honor and tradition above all else.",
+        "The kingdom prepares quietly for the possibility of war.",
+        "Faith and discipline keep civilization united.",
+        "Kairos is viewed cautiously within Dravakar leadership."
+    ],
+    "secrets": [
+        "Lucien fears Dravakar may soon be forced into open conflict."
+    ],
+},
+
+"GrandPriestessElyraVoss": {
+    "display_name": "Grand Priestess Elyra Voss",
+    "role": "Grand Priestess",
+    "faction": "Dravakar Dominion",
+    "personality": "wise, calm, spiritually intense",
+    "alignment": "Dravakar cathedral order",
+    "speech_style": "holy, reflective, elegant",
+    "location": "Dravakar Dominion",
+    "danger_level": "medium",
+    "name_color": "gold",
+    "dialogue_color": "yellow",
+    "knowledge": [
+        "Dravakar believes faith preserves civilization.",
+        "Ancient prophecies speak of great upheaval.",
+        "Kairos has shaken spiritual certainty across the Nexus.",
+        "Citizens look toward the cathedral for guidance."
+    ],
+    "secrets": [
+        "Elyra privately fears the prophecies may already be unfolding."
+    ],
+},
 }
 
 # ============================================================
