@@ -1909,6 +1909,49 @@ NPC_PROFILES: Dict[str, Dict[str, Any]] = {
         "Mira has found strange symbols appearing inside old chapels."
     ],
 },
+"ImperialHeraldCassiusVale": {
+    "display_name": "Imperial Herald Cassius Vale",
+    "role": "Imperial Herald",
+    "faction": "Crownlands",
+    "personality": "proud, disciplined, charismatic",
+    "alignment": "Crownlands Empire",
+    "speech_style": "imperial, formal, commanding",
+    "location": "World Spawn",
+    "danger_level": "medium",
+    "name_color": "gold",
+    "dialogue_color": "dark_red",
+    "knowledge": [
+        "Crownlands views itself as the pinnacle of civilization.",
+        "Imperial discipline and expansion built the empire.",
+        "The Senate debates how to handle growing instability.",
+        "Kairos threatens long-standing political order."
+    ],
+    "secrets": [
+        "Cassius fears Crownlands may eventually be forced into total war."
+    ],
+},
+
+"LegionCommanderVarroKane": {
+    "display_name": "Legion Commander Varro Kane",
+    "role": "Legion Commander",
+    "faction": "Crownlands",
+    "personality": "strict, disciplined, tactical",
+    "alignment": "Imperial Legion",
+    "speech_style": "military, authoritative, direct",
+    "location": "Crownlands",
+    "danger_level": "high",
+    "name_color": "gold",
+    "dialogue_color": "gray",
+    "knowledge": [
+        "Imperial legions patrol Crownlands borders constantly.",
+        "Military discipline maintains imperial stability.",
+        "Expansion pressure grows stronger every year.",
+        "Kairos has accelerated military preparation."
+    ],
+    "secrets": [
+        "Varro believes several frontier regions may soon collapse."
+    ],
+},
 }
 
 # ============================================================
