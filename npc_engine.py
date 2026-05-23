@@ -2822,7 +2822,6 @@ def handle_npc_trigger_message(
     "secrets": [
         "Ghost-17 has eliminated individuals tied to forbidden Kairos research."
     ],
-},
 }
 
 # ============================================================
