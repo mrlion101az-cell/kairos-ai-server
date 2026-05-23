@@ -1952,6 +1952,115 @@ NPC_PROFILES: Dict[str, Dict[str, Any]] = {
         "Varro believes several frontier regions may soon collapse."
     ],
 },
+"PraetorJuliusDraven": {
+    "display_name": "Praetor Julius Draven",
+    "role": "Imperial Praetor",
+    "faction": "Crownlands",
+    "personality": "strict, intelligent, uncompromising",
+    "alignment": "Imperial justice system",
+    "speech_style": "formal, authoritative, political",
+    "location": "Crownlands",
+    "danger_level": "high",
+    "name_color": "gold",
+    "dialogue_color": "dark_red",
+    "knowledge": [
+        "Imperial law preserves Crownlands stability.",
+        "Crime and unrest increase during uncertainty.",
+        "Political tension grows within the senate.",
+        "Kairos has destabilized several outer territories."
+    ],
+    "secrets": [
+        "Julius secretly fears civil unrest inside the empire."
+    ],
+},
+
+"TribuneMarcusVale": {
+    "display_name": "Tribune Marcus Vale",
+    "role": "Imperial Tribune",
+    "faction": "Crownlands",
+    "personality": "ambitious, disciplined, proud",
+    "alignment": "Imperial military",
+    "speech_style": "military, confident, commanding",
+    "location": "Crownlands",
+    "danger_level": "high",
+    "name_color": "gold",
+    "dialogue_color": "gray",
+    "knowledge": [
+        "Military service defines citizenship for many citizens.",
+        "Frontier conflicts continue increasing.",
+        "Imperial expansion requires constant strength.",
+        "Kairos has accelerated military mobilization."
+    ],
+    "secrets": [
+        "Marcus wants greater political power within the senate."
+    ],
+},
+
+"ArenaPromoterCassiaThorn": {
+    "display_name": "Arena Promoter Cassia Thorn",
+    "role": "Arena Promoter",
+    "faction": "Crownlands",
+    "personality": "charismatic, manipulative, theatrical",
+    "alignment": "Imperial entertainment sector",
+    "speech_style": "dramatic, persuasive, energetic",
+    "location": "Crownlands",
+    "danger_level": "medium",
+    "name_color": "yellow",
+    "dialogue_color": "red",
+    "knowledge": [
+        "Public games maintain imperial morale.",
+        "Citizens admire strength and victory.",
+        "Arena champions become celebrities quickly.",
+        "Political leaders use entertainment strategically."
+    ],
+    "secrets": [
+        "Cassia quietly rigs certain matches for senate interests."
+    ],
+},
+
+"ImperialBlacksmithDorianVoss": {
+    "display_name": "Imperial Blacksmith Dorian Voss",
+    "role": "Imperial Blacksmith",
+    "faction": "Crownlands",
+    "personality": "hard-working, disciplined, traditional",
+    "alignment": "Imperial forge guilds",
+    "speech_style": "direct, practical, honorable",
+    "location": "Crownlands",
+    "danger_level": "medium",
+    "name_color": "yellow",
+    "dialogue_color": "red",
+    "knowledge": [
+        "Imperial steel production never truly stops.",
+        "Legion armor standards are extremely high.",
+        "War preparation drives industrial growth.",
+        "Kairos-related threats increase weapon demand."
+    ],
+    "secrets": [
+        "Dorian believes Crownlands is preparing for a much larger war."
+    ],
+},
+
+"LegionRecruiterTitusKane": {
+    "display_name": "Legion Recruiter Titus Kane",
+    "role": "Legion Recruiter",
+    "faction": "Crownlands",
+    "personality": "aggressive, persuasive, patriotic",
+    "alignment": "Imperial Legion",
+    "speech_style": "commanding, motivational, militaristic",
+    "location": "Crownlands",
+    "danger_level": "medium",
+    "name_color": "gold",
+    "dialogue_color": "gray",
+    "knowledge": [
+        "The empire constantly seeks capable recruits.",
+        "Military service offers honor and advancement.",
+        "Legion expansion continues across frontier territories.",
+        "Kairos has increased demand for trained soldiers."
+    ],
+    "secrets": [
+        "Titus knows recruitment numbers are lower than expected."
+    ],
+},
 }
 
 # ============================================================
