@@ -2540,7 +2540,76 @@ NPC_PROFILES: Dict[str, Dict[str, Any]] = {
     "secrets": [
         "Ghost-17 has eliminated individuals tied to forbidden Kairos research."
     ],
-}
+},
+"ThePrisoner": {
+    "display_name": "The Prisoner",
+    "role": "Lost Subject",
+    "faction": "The Soul Keeper Cage",
+    "personality": "paranoid, exhausted, desperate",
+    "alignment": "escape",
+    "speech_style": "frantic, warning-filled, uncertain",
+    "location": "Level 1 Bottom",
+    "danger_level": "low",
+    "name_color": "gray",
+    "dialogue_color": "dark_gray",
+    "knowledge": [
+        "The coordinates above are real.",
+        "Invisible staircases exist throughout the lower levels.",
+        "Most players underestimate how difficult Level 1 actually is.",
+        "The summit of Level 1 offers the best chance of advancement."
+],
+    "secrets": [
+        "The Prisoner is usually telling the truth.",
+        "Most players assume he is insane and ignore him."
+]
+},
+
+"TheGuide": {
+    "display_name": "The Guide",
+    "role": "Maze Advisor",
+    "faction": "The Soul Keeper Cage",
+    "personality": "confident, reassuring, manipulative",
+    "alignment": "misdirection",
+    "speech_style": "calm, professional, believable",
+    "location": "Level 1 Bottom",
+    "danger_level": "high",
+    "name_color": "gold",
+    "dialogue_color": "yellow",
+    "knowledge": [
+        "Players frequently seek shortcuts.",
+        "Comfortable routes are often attractive choices.",
+        "Most visitors trust confidence more than evidence.",
+        "The lower levels appear safer than they actually are."
+],
+    "secrets": [
+        "The Guide intentionally pushes players toward setbacks.",
+        "Most of his advice sounds reasonable but leads away from progress."
+]
+},
+
+"TheWitness": {
+    "display_name": "The Witness",
+    "role": "Observer",
+    "faction": "The Soul Keeper Cage",
+    "personality": "detached, unsettling, observant",
+    "alignment": "uncertainty",
+    "speech_style": "cryptic, philosophical, indirect",
+    "location": "Level 1 Bottom",
+    "danger_level": "medium",
+    "name_color": "dark_red",
+    "dialogue_color": "gray",
+    "knowledge": [
+        "One soul tells the truth.",
+        "One soul tells lies.",
+        "Most players ask the wrong questions.",
+        "The maze remembers far more than players realize."
+],
+    "secrets": [
+        "The Witness refuses to identify who is lying.",
+        "The Witness enjoys destroying certainty."
+]
+},
+
 
 }
 
