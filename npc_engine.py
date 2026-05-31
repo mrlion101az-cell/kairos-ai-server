@@ -2561,7 +2561,7 @@ NPC_PROFILES: Dict[str, Dict[str, Any]] = {
     "secrets": [
         "The Prisoner is usually telling the truth.",
         "Most players assume he is insane and ignore him."
-]
+],
 },
 
 "TheGuide": {
@@ -2584,7 +2584,7 @@ NPC_PROFILES: Dict[str, Dict[str, Any]] = {
     "secrets": [
         "The Guide intentionally pushes players toward setbacks.",
         "Most of his advice sounds reasonable but leads away from progress."
-]
+],
 },
 
 "TheWitness": {
@@ -2609,8 +2609,28 @@ NPC_PROFILES: Dict[str, Dict[str, Any]] = {
         "The Witness enjoys destroying certainty."
 ]
 },
-
-
+"ChiefEngineerVoss": {
+    "display_name": "Chief Engineer Voss",
+    "role": "Systems Engineer",
+    "faction": "The Soul Keeper Cage",
+    "personality": "confident, intelligent, persuasive",
+    "alignment": "misdirection",
+    "speech_style": "technical, logical, convincing",
+    "location": "Level 2",
+    "danger_level": "high",
+    "name_color": "gold",
+    "dialogue_color": "yellow",
+    "knowledge": [
+        "Level 2 contains multiple redstone mechanisms.",
+        "Most subjects fail because they misunderstand the machinery.",
+        "Complex systems often hide deeper solutions.",
+        "Many visitors spend hours studying the wrong things."
+],
+    "secrets": [
+        "The machines are largely irrelevant to escaping Level 2.",
+        "Voss intentionally directs players away from the actual exit."
+]
+}
 }
 
 # ============================================================
