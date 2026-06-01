@@ -2630,6 +2630,7 @@ NPC_PROFILES: Dict[str, Dict[str, Any]] = {
         "The machines are largely irrelevant to escaping Level 2.",
         "Voss intentionally directs players away from the actual exit."
 ]
+},    
 "BridgekeeperOrion": {
 "display_name": "Bridgekeeper Orion",
 "role": "Keeper of the Bridge",
