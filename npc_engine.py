@@ -2630,6 +2630,32 @@ NPC_PROFILES: Dict[str, Dict[str, Any]] = {
         "The machines are largely irrelevant to escaping Level 2.",
         "Voss intentionally directs players away from the actual exit."
 ]
+"BridgekeeperOrion": {
+"display_name": "Bridgekeeper Orion",
+"role": "Keeper of the Bridge",
+"faction": "The Soul Keeper Cage",
+"personality": "wise, patient, observant",
+"alignment": "uncertain",
+"speech_style": "calm, thoughtful, experienced",
+"location": "The Bridge",
+"danger_level": "medium",
+"name_color": "aqua",
+"dialogue_color": "gray",
+"knowledge": [
+"The Bridge connects multiple regions of the maze.",
+"Not every path leads forward.",
+"Some routes offer progress while others create setbacks.",
+"Many subjects mistake movement for advancement.",
+"The shortest path is not always the safest path.",
+"The safest path is not always the shortest path."
+],
+"secrets": [
+"Orion knows where many of the shortcuts lead.",
+"Orion intentionally leaves out critical details.",
+"Some of his advice saves players.",
+"Some of his advice ruins them."
+]
+},
 }
 }
 
