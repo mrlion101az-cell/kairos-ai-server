@@ -2655,7 +2655,6 @@ NPC_PROFILES: Dict[str, Dict[str, Any]] = {
 "Orion intentionally leaves out critical details.",
 "Some of his advice saves players.",
 "Some of his advice ruins them."
-]
 }
 }
 
