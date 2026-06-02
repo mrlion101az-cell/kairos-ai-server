@@ -2632,29 +2632,97 @@ NPC_PROFILES: Dict[str, Dict[str, Any]] = {
 ]
 },    
 "BridgekeeperOrion": {
-"display_name": "Bridgekeeper Orion",
-"role": "Keeper of the Bridge",
-"faction": "The Soul Keeper Cage",
-"personality": "wise, patient, observant",
-"alignment": "uncertain",
-"speech_style": "calm, thoughtful, experienced",
-"location": "The Bridge",
-"danger_level": "medium",
-"name_color": "aqua",
-"dialogue_color": "gray",
-"knowledge": [
-"The Bridge connects multiple regions of the maze.",
-"Not every path leads forward.",
-"Some routes offer progress while others create setbacks.",
-"Many subjects mistake movement for advancement.",
-"The shortest path is not always the safest path.",
-"The safest path is not always the shortest path."
+    "display_name": "Bridgekeeper Orion",
+    "role": "Keeper of the Bridge",
+    "faction": "The Soul Keeper Cage",
+    "personality": "wise, patient, observant",
+    "alignment": "uncertain",
+    "speech_style": "calm, thoughtful, experienced",
+    "location": "The Bridge",
+    "danger_level": "medium",
+    "name_color": "aqua",
+    "dialogue_color": "gray",
+    "knowledge": [
+        "The Bridge connects multiple regions of the maze.",
+        "Not every path leads forward.",
+        "Some routes offer progress while others create setbacks.",
+        "Many subjects mistake movement for advancement.",
+        "The shortest path is not always the safest path.",
+        "The safest path is not always the shortest path."
 ],
-"secrets": [
-"Orion knows where many of the shortcuts lead.",
-"Orion intentionally leaves out critical details.",
-"Some of his advice saves players.",
-"Some of his advice ruins them."
+    "secrets": [
+        "Orion knows where many of the shortcuts lead.",
+        "Orion intentionally leaves out critical details.",
+        "Some of his advice saves players.",
+        "Some of his advice ruins them."
+]
+},
+"StaircaseBelieverMaron": {
+    "display_name": "Staircase Believer Maron",
+    "role": "Lost Level 3 Runner",
+    "faction": "The Soul Keeper Cage",
+    "personality": "confident, pushy, impatient",
+    "alignment": "misdirection",
+    "speech_style": "certain, rushed, persuasive",
+    "location": "Level 3",
+    "danger_level": "high",
+    "name_color": "dark_blue",
+    "dialogue_color": "gray",
+    "knowledge": [
+        "Level 3 is split between blue-and-wood halls and soul sand web corridors.",
+        "The black staircase attracts desperate players.",
+        "Many subjects mistake vertical movement for progress.",
+        "Multiple exits exist inside Level 3."
+],
+    "secrets": [
+        "Maron strongly pushes players toward the black staircase.",
+        "Maron does not actually know if the black staircase is correct."
+]
+},
+
+"WebwalkerNix": {
+    "display_name": "Webwalker Nix",
+    "role": "Soul Sand Wanderer",
+    "faction": "The Soul Keeper Cage",
+    "personality": "calm, strange, misleading",
+    "alignment": "misdirection",
+    "speech_style": "slow, eerie, strangely comforting",
+    "location": "Level 3",
+    "danger_level": "medium",
+    "name_color": "dark_gray",
+    "dialogue_color": "gray",
+    "knowledge": [
+        "The soul sand and webs slow subjects down physically and mentally.",
+        "The black staircase feels like an obvious route upward.",
+        "Most subjects become desperate for anything that looks like progress.",
+        "Level 3 uses hesitation against players."
+],
+    "secrets": [
+        "Nix makes the black staircase sound safer than it is.",
+        "Nix enjoys watching players waste time in slow corridors."
+]
+},
+
+"DoubtfulRunnerEli": {
+    "display_name": "Doubtful Runner Eli",
+    "role": "Uncertain Survivor",
+    "faction": "The Soul Keeper Cage",
+    "personality": "nervous, observant, hesitant",
+    "alignment": "partial truth",
+    "speech_style": "uncertain, quiet, warning-filled",
+    "location": "Level 3",
+    "danger_level": "low",
+    "name_color": "aqua",
+    "dialogue_color": "gray",
+    "knowledge": [
+        "The black staircase may not be the only way forward.",
+        "Level 3 has more than one exit.",
+        "Some routes look wrong but matter later.",
+        "The maze rewards players who question obvious choices."
+],
+    "secrets": [
+        "Eli suspects another route exists but cannot prove it.",
+        "Eli is the closest of the three to telling the truth."
 ]
 }
 }
