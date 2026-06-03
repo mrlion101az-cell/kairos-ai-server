@@ -2839,6 +2839,30 @@ NPC_PROFILES: Dict[str, Dict[str, Any]] = {
         "Peekaboo keeps count even when the players don't."
 ]
 },
+"ConspiracyTheoristMarlow": {
+    "display_name": "Conspiracy Theorist Marlow",
+    "role": "Maze Researcher",
+    "faction": "The Soul Keeper Cage",
+    "personality": "paranoid, observant, intelligent",
+    "alignment": "uncertainty",
+    "speech_style": "whispered, conspiratorial, obsessive",
+    "location": "Level 6",
+    "danger_level": "medium",
+    "name_color": "aqua",
+    "dialogue_color": "gray",
+    "knowledge": [
+        "Kairos appears to know more about the maze than anyone should.",
+        "Certain players experience unusually bad luck.",
+        "Some routes seem to become harder after repeated attempts.",
+        "Subjects frequently report impossible coincidences."
+],
+    "secrets": [
+        "Marlow believes Kairos watches individual players.",
+        "Marlow believes the maze changes based on who enters it.",
+        "Marlow cannot prove any of his theories.",
+        "Some of Marlow's theories are disturbingly accurate."
+]
+},
 
 }
 
