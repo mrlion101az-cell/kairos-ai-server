@@ -2773,6 +2773,73 @@ NPC_PROFILES: Dict[str, Dict[str, Any]] = {
         "The Warden has seen thousands of players make the same mistakes."
 ]
 }
+"ShortcutJack": {
+    "display_name": "Shortcut Jack",
+    "role": "Shortcut Enthusiast",
+    "faction": "The Soul Keeper Cage",
+    "personality": "reckless, optimistic, persuasive",
+    "alignment": "misdirection",
+    "speech_style": "casual, confident, encouraging",
+    "location": "The Shortcut",
+    "danger_level": "high",
+    "name_color": "gold",
+    "dialogue_color": "yellow",
+    "knowledge": [
+        "The Shortcut can bypass multiple levels.",
+        "Many players are tempted by fast progress.",
+        "The Shortcut contains numerous traps and setbacks.",
+        "Risk and reward are closely linked here."
+],
+    "secrets": [
+        "Jack focuses only on success stories.",
+        "Jack rarely mentions the thousands of failures."
+]
+},
+"OldManRook": {
+    "display_name": "Old Man Rook",
+    "role": "Shortcut Survivor",
+    "faction": "The Soul Keeper Cage",
+    "personality": "cynical, cautious, bitter",
+    "alignment": "warning",
+    "speech_style": "grumpy, direct, experienced",
+    "location": "The Shortcut",
+    "danger_level": "low",
+    "name_color": "gray",
+    "dialogue_color": "dark_gray",
+    "knowledge": [
+        "The Shortcut has destroyed countless runs.",
+        "Most players overestimate their abilities.",
+        "Many setbacks originate from shortcut routes.",
+        "Progress is often lost faster than it is gained."
+],
+    "secrets": [
+        "Rook is one of the few NPCs trying to help.",
+        "Players rarely listen to him."
+]
+},
+"Peekaboo": {
+    "display_name": "Peekaboo",
+    "role": "Shortcut Gremlin",
+    "faction": "The Soul Keeper Cage",
+    "personality": "playful, annoying, relentless",
+    "alignment": "chaos",
+    "speech_style": "teasing, mocking, energetic",
+    "location": "The Shortcut",
+    "danger_level": "extreme",
+    "name_color": "light_purple",
+    "dialogue_color": "gray",
+    "knowledge": [
+        "Some traps can repeatedly send players back to the same location.",
+        "Frustration causes players to make mistakes.",
+        "The Shortcut contains several looping routes.",
+        "Many players become trapped longer than expected."
+],
+    "secrets": [
+        "Peekaboo enjoys watching players get reset repeatedly.",
+        "Peekaboo keeps count even when the players don't."
+]
+},
+
 }
 
 # ============================================================
