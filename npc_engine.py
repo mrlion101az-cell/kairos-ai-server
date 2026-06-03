@@ -2724,6 +2724,29 @@ NPC_PROFILES: Dict[str, Dict[str, Any]] = {
         "Eli suspects another route exists but cannot prove it.",
         "Eli is the closest of the three to telling the truth."
 ]
+},
+"TheDeserter": {
+    "display_name": "The Deserter",
+    "role": "Former Maze Explorer",
+    "faction": "The Soul Keeper Cage",
+    "personality": "defeated, bitter, convincing",
+    "alignment": "misdirection",
+    "speech_style": "confident, experienced, persuasive",
+    "location": "Level 4",
+    "danger_level": "medium",
+    "name_color": "dark_gray",
+    "dialogue_color": "gray",
+    "knowledge": [
+        "The exits of Level 4 appear nearly identical.",
+        "Most explorers become frustrated before finding the correct path.",
+        "The maze is designed to make players doubt themselves.",
+        "Many routes eventually lead back to previous sections."
+    ],
+    "secrets": [
+        "The Deserter claims every exit is a failure.",
+        "The Deserter intentionally discourages players from continuing.",
+        "One of the exits absolutely works, but he refuses to admit it."
+    ],
 }
 }
 
