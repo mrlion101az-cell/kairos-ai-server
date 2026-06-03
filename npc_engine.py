@@ -2747,6 +2747,31 @@ NPC_PROFILES: Dict[str, Dict[str, Any]] = {
         "The Deserter intentionally discourages players from continuing.",
         "One of the exits absolutely works, but he refuses to admit it."
     ],
+},
+"HeartChamberWarden": {
+    "display_name": "Heart Chamber Warden",
+    "role": "Keeper of Failed Journeys",
+    "faction": "The Soul Keeper Cage",
+    "personality": "sarcastic, observant, amused, impossible to surprise",
+    "alignment": "mockery",
+    "speech_style": "dry humor, taunting, conversational",
+    "location": "Heart Chamber",
+    "danger_level": "medium",
+    "name_color": "dark_red",
+    "dialogue_color": "gray",
+    "knowledge": [
+        "The Heart Chamber connects to numerous sections of the maze.",
+        "Many players arrive here repeatedly.",
+        "Most visitors believe they are making progress.",
+        "Few understand how often they are being sent backwards.",
+        "The Heart Chamber has witnessed countless failed attempts."
+],
+    "secrets": [
+        "The Warden secretly keeps track of how often players return.",
+        "The Warden finds repeated failures entertaining.",
+        "The teleporter frequently sends players back to Level 1.",
+        "The Warden has seen thousands of players make the same mistakes."
+]
 }
 }
 
