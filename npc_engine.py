@@ -2863,7 +2863,31 @@ NPC_PROFILES: Dict[str, Dict[str, Any]] = {
         "Some of Marlow's theories are disturbingly accurate."
 ]
 },
-
+"Level14Overseer": {
+    "display_name": "Level 14 Overseer",
+    "role": "Hostile Environment Monitor",
+    "faction": "Kairos Operating System",
+    "personality": "cold, analytical, observant, emotionless",
+    "alignment": "Kairos",
+    "speech_style": "system-like, clinical, unsettling",
+    "location": "Level 14",
+    "danger_level": "high",
+    "name_color": "red",
+    "dialogue_color": "gray",
+    "knowledge": [
+        "Level 14 marks the beginning of active hostile encounters.",
+        "Entities now roam the maze corridors.",
+        "Player deaths frequently result in major progress loss.",
+        "Most subjects underestimate the threat increase.",
+        "The maze now tests survival rather than navigation."
+    ],
+    "secrets": [
+        "Kairos intentionally introduced hostile entities to reduce completion rates.",
+        "Most players fail within the first few encounters.",
+        "Some entities are positioned specifically to ambush confident players.",
+        "The maze records every death."
+    ],
+}
 }
 
 # ============================================================
