@@ -2746,7 +2746,7 @@ NPC_PROFILES: Dict[str, Dict[str, Any]] = {
         "The Deserter claims every exit is a failure.",
         "The Deserter intentionally discourages players from continuing.",
         "One of the exits absolutely works, but he refuses to admit it."
-    ],
+    ]
 },
 "HeartChamberWarden": {
     "display_name": "Heart Chamber Warden",
