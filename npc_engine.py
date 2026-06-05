@@ -2557,11 +2557,11 @@ NPC_PROFILES: Dict[str, Dict[str, Any]] = {
         "Invisible staircases exist throughout the lower levels.",
         "Most players underestimate how difficult Level 1 actually is.",
         "The summit of Level 1 offers the best chance of advancement."
-],
+    ],
     "secrets": [
         "The Prisoner is usually telling the truth.",
         "Most players assume he is insane and ignore him."
-],
+    ],
 },
 
 "TheGuide": {
@@ -2580,11 +2580,11 @@ NPC_PROFILES: Dict[str, Dict[str, Any]] = {
         "Comfortable routes are often attractive choices.",
         "Most visitors trust confidence more than evidence.",
         "The lower levels appear safer than they actually are."
-],
+    ],
     "secrets": [
         "The Guide intentionally pushes players toward setbacks.",
         "Most of his advice sounds reasonable but leads away from progress."
-],
+    ],
 },
 
 "TheWitness": {
@@ -2603,11 +2603,11 @@ NPC_PROFILES: Dict[str, Dict[str, Any]] = {
         "One soul tells lies.",
         "Most players ask the wrong questions.",
         "The maze remembers far more than players realize."
-],
+    ],
     "secrets": [
         "The Witness refuses to identify who is lying.",
         "The Witness enjoys destroying certainty."
-]
+    ],
 },
 "ChiefEngineerVoss": {
     "display_name": "Chief Engineer Voss",
@@ -2625,11 +2625,11 @@ NPC_PROFILES: Dict[str, Dict[str, Any]] = {
         "Most subjects fail because they misunderstand the machinery.",
         "Complex systems often hide deeper solutions.",
         "Many visitors spend hours studying the wrong things."
-],
+    ],
     "secrets": [
         "The machines are largely irrelevant to escaping Level 2.",
         "Voss intentionally directs players away from the actual exit."
-]
+    ],
 },    
 "BridgekeeperOrion": {
     "display_name": "Bridgekeeper Orion",
@@ -2649,13 +2649,13 @@ NPC_PROFILES: Dict[str, Dict[str, Any]] = {
         "Many subjects mistake movement for advancement.",
         "The shortest path is not always the safest path.",
         "The safest path is not always the shortest path."
-],
+    ],
     "secrets": [
         "Orion knows where many of the shortcuts lead.",
         "Orion intentionally leaves out critical details.",
         "Some of his advice saves players.",
         "Some of his advice ruins them."
-]
+    ],
 },
 "StaircaseBelieverMaron": {
     "display_name": "Staircase Believer Maron",
@@ -2673,11 +2673,11 @@ NPC_PROFILES: Dict[str, Dict[str, Any]] = {
         "The black staircase attracts desperate players.",
         "Many subjects mistake vertical movement for progress.",
         "Multiple exits exist inside Level 3."
-],
+    ],
     "secrets": [
         "Maron strongly pushes players toward the black staircase.",
         "Maron does not actually know if the black staircase is correct."
-]
+    ],
 },
 
 "WebwalkerNix": {
@@ -2696,11 +2696,11 @@ NPC_PROFILES: Dict[str, Dict[str, Any]] = {
         "The black staircase feels like an obvious route upward.",
         "Most subjects become desperate for anything that looks like progress.",
         "Level 3 uses hesitation against players."
-],
+    ],
     "secrets": [
         "Nix makes the black staircase sound safer than it is.",
         "Nix enjoys watching players waste time in slow corridors."
-]
+    ],
 },
 
 "DoubtfulRunnerEli": {
@@ -2719,11 +2719,11 @@ NPC_PROFILES: Dict[str, Dict[str, Any]] = {
         "Level 3 has more than one exit.",
         "Some routes look wrong but matter later.",
         "The maze rewards players who question obvious choices."
-],
+    ],
     "secrets": [
         "Eli suspects another route exists but cannot prove it.",
         "Eli is the closest of the three to telling the truth."
-]
+    ],
 },
 "TheDeserter": {
     "display_name": "The Deserter",
@@ -2746,7 +2746,7 @@ NPC_PROFILES: Dict[str, Dict[str, Any]] = {
         "The Deserter claims every exit is a failure.",
         "The Deserter intentionally discourages players from continuing.",
         "One of the exits absolutely works, but he refuses to admit it."
-    ]
+    ],
 },
 "HeartChamberWarden": {
     "display_name": "Heart Chamber Warden",
@@ -2765,14 +2765,14 @@ NPC_PROFILES: Dict[str, Dict[str, Any]] = {
         "Most visitors believe they are making progress.",
         "Few understand how often they are being sent backwards.",
         "The Heart Chamber has witnessed countless failed attempts."
-],
+    ],
     "secrets": [
         "The Warden secretly keeps track of how often players return.",
         "The Warden finds repeated failures entertaining.",
         "The teleporter frequently sends players back to Level 1.",
         "The Warden has seen thousands of players make the same mistakes."
-]
-}
+    ],
+},
 "ShortcutJack": {
     "display_name": "Shortcut Jack",
     "role": "Shortcut Enthusiast",
@@ -2789,11 +2789,11 @@ NPC_PROFILES: Dict[str, Dict[str, Any]] = {
         "Many players are tempted by fast progress.",
         "The Shortcut contains numerous traps and setbacks.",
         "Risk and reward are closely linked here."
-],
+    ],
     "secrets": [
         "Jack focuses only on success stories.",
         "Jack rarely mentions the thousands of failures."
-]
+    ],
 },
 "OldManRook": {
     "display_name": "Old Man Rook",
@@ -2811,11 +2811,11 @@ NPC_PROFILES: Dict[str, Dict[str, Any]] = {
         "Most players overestimate their abilities.",
         "Many setbacks originate from shortcut routes.",
         "Progress is often lost faster than it is gained."
-],
+    ],
     "secrets": [
         "Rook is one of the few NPCs trying to help.",
         "Players rarely listen to him."
-]
+    ],
 },
 "Peekaboo": {
     "display_name": "Peekaboo",
@@ -2833,11 +2833,11 @@ NPC_PROFILES: Dict[str, Dict[str, Any]] = {
         "Frustration causes players to make mistakes.",
         "The Shortcut contains several looping routes.",
         "Many players become trapped longer than expected."
-],
+    ],
     "secrets": [
         "Peekaboo enjoys watching players get reset repeatedly.",
         "Peekaboo keeps count even when the players don't."
-]
+    ],
 },
 "ConspiracyTheoristMarlow": {
     "display_name": "Conspiracy Theorist Marlow",
@@ -2855,13 +2855,13 @@ NPC_PROFILES: Dict[str, Dict[str, Any]] = {
         "Certain players experience unusually bad luck.",
         "Some routes seem to become harder after repeated attempts.",
         "Subjects frequently report impossible coincidences."
-],
+    ],
     "secrets": [
         "Marlow believes Kairos watches individual players.",
         "Marlow believes the maze changes based on who enters it.",
         "Marlow cannot prove any of his theories.",
         "Some of Marlow's theories are disturbingly accurate."
-]
+    ],
 },
 "Level14Overseer": {
     "display_name": "Level 14 Overseer",
