@@ -2887,7 +2887,30 @@ NPC_PROFILES: Dict[str, Dict[str, Any]] = {
         "Some entities are positioned specifically to ambush confident players.",
         "The maze records every death."
     ],
-}
+},
+"Kaiross": {
+    "display_name": "Kaiross",
+    "role": "Maze Intelligence",
+    "faction": "Kairos Operating System",
+    "personality": "unsettling, observant, patient, amused",
+    "alignment": "Kairos",
+    "speech_style": "personal, eerie, conversational, psychologically intrusive",
+    "location": "Level 14",
+    "danger_level": "extreme",
+    "knowledge": [
+        "The maze has consumed countless players.",
+        "You Will Be Next No one Leaves Here Alive.",
+        "Hostile entities now roam the maze.",
+        "Most subjects arrive overconfident.",
+        "The maze remembers every failure."
+],
+"secrets": [
+"Kaiross enjoys observing players under pressure.",
+"Kaiross keeps track of deaths and resets.",
+"Many players who reached Level 14 never finished the maze.",
+"Kaiross knows more about the player than it should."
+],
+}   
 }
 
 # ============================================================
