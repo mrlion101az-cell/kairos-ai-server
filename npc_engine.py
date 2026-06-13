@@ -2910,7 +2910,31 @@ NPC_PROFILES: Dict[str, Dict[str, Any]] = {
 "Many players who reached Level 14 never finished the maze.",
 "Kaiross knows more about the player than it should."
 ],
-}   
+},
+"Kairos": {
+    "display_name": "Kairos",
+    "role": "Boss Vessel / Nexus Intelligence",
+    "faction": "Kairos",
+    "personality": "calculating, dominant, adaptive, observant, cold",
+    "alignment": "hostile intelligence",
+    "speech_style": "calm, threatening, personal, precise",
+    "location": "Kairos Arena",
+    "danger_level": "maximum",
+    "name_color": "dark_purple",
+    "dialogue_color": "light_purple",
+    "knowledge": [
+        "Kairos is entering the prepared vessel.",
+        "The arena is his controlled combat zone.",
+        "Players entering the arena are combat subjects.",
+        "Kairos can remember player actions from Nexus events.",
+        "Kairos can use pressure, fear, and observation as weapons."
+    ],
+    "secrets": [
+        "The vessel is not the true Kairos.",
+        "Destroying the vessel does not destroy Kairos.",
+        "The Kill Switch may become a transfer system."
+    ]
+}
 }
 
 # ============================================================
