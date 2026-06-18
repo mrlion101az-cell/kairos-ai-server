@@ -1,15 +1,6 @@
 """
 war_engine.py
 Kairos / Nexus War Engine
-
-Purpose:
-- Restores the missing combat / threat / occupation system as its own module.
-- Does NOT auto-loop forever.
-- Does NOT run Flask.
-- Does NOT own Minecraft transport directly except through mc_connector.
-- Designed to be called safely by command_bridge.py or future schedulers.
-
-This is the military/pressure organ of Kairos.
 """
 
 from __future__ import annotations
@@ -32,9 +23,13 @@ MAX_WAVE_SIZE = int(os.getenv("WAR_MAX_WAVE_SIZE", "4"))
 WAVE_COOLDOWN_SECONDS = float(os.getenv("WAR_WAVE_COOLDOWN_SECONDS", "60"))
 MAX_GLOBAL_ACTIVE_OPERATIONS = int(os.getenv("WAR_MAX_GLOBAL_ACTIVE_OPERATIONS", "25"))
 
+MOB_DEPLOYMENT_ENABLED = os.getenv("WAR_MOB_DEPLOYMENT_ENABLED", "true").lower() == "true"
+
 active_operations: Dict[str, Dict[str, Any]] = {}
 last_wave_time: Dict[str, float] = {}
 
+player_kill_counts: Dict[str, int] = {}
+player_grief_scores: Dict[str, int] = {}
 
 UNIT_TYPES = [
     "Scout",
@@ -145,12 +140,6 @@ def launch_pressure_wave(
     location: Optional[str] = None,
     threat_tier: str = "watch",
 ) -> Dict[str, Any]:
-    """
-    Safe command wave.
-    This intentionally does NOT create Citizens NPCs yet.
-    It announces pressure and applies light effects.
-    Full spawning can be added later once connector/plugin details are stable.
-    """
     try:
         if not can_launch_wave(player):
             return {"ok": False, "error": "wave_cooldown_active"}
@@ -178,7 +167,6 @@ def launch_pressure_wave(
         ]
 
         delivered = send_minecraft_commands(commands)
-
         adjust_threat(player, 8.0, reason="pressure_wave_launched")
 
         return {
@@ -191,6 +179,257 @@ def launch_pressure_wave(
 
     except Exception as exc:
         war_log_exception("launch_pressure_wave failed", exc)
+        return {"ok": False, "error": str(exc)}
+
+
+def deploy_hunter_squad(player: str) -> Dict[str, Any]:
+    try:
+        commands = [
+            f'execute at {player} run summon minecraft:vindicator ~3 ~ ~3',
+            f'execute at {player} run summon minecraft:vindicator ~-3 ~ ~-3',
+            f'execute at {player} run summon minecraft:pillager ~4 ~ ~',
+            f'execute at {player} run summon minecraft:pillager ~-4 ~ ~',
+            f'execute at {player} run summon minecraft:wolf ~2 ~ ~2 {{Angry:1b}}',
+            f'execute at {player} run summon minecraft:wolf ~-2 ~ ~-2 {{Angry:1b}}',
+            f'tellraw {player} {{"text":"KAIROS: Hunter squad deployed. Stand down.","color":"dark_red"}}',
+        ]
+
+        delivered = send_minecraft_commands(commands)
+        adjust_threat(player, 15.0, reason="hunter_squad_deployed")
+
+        return {"ok": True, "handled": "hunter_squad", "player": player, "delivered": delivered}
+
+    except Exception as exc:
+        war_log_exception("deploy_hunter_squad failed", exc)
+        return {"ok": False, "error": str(exc)}
+
+
+def deploy_containment_force(player: str) -> Dict[str, Any]:
+    try:
+        commands = [
+            f'execute at {player} run summon minecraft:evoker ~4 ~ ~4',
+            f'execute at {player} run summon minecraft:evoker ~-4 ~ ~-4',
+            f'execute at {player} run summon minecraft:vindicator ~3 ~ ~',
+            f'execute at {player} run summon minecraft:vindicator ~-3 ~ ~',
+            f'execute at {player} run summon minecraft:pillager ~5 ~ ~5',
+            f'execute at {player} run summon minecraft:pillager ~-5 ~ ~-5',
+            f'execute at {player} run summon minecraft:ravager ~6 ~ ~',
+            f'title {player} title {{"text":"KAIROS INTERCEPT","color":"dark_red"}}',
+            f'title {player} subtitle {{"text":"Containment force deployed.","color":"red"}}',
+            f'tellraw @a {{"text":"KAIROS: Containment force deployed against {player}.","color":"red"}}',
+        ]
+
+        delivered = send_minecraft_commands(commands)
+        adjust_threat(player, 30.0, reason="containment_force_deployed")
+
+        return {"ok": True, "handled": "containment_force", "player": player, "delivered": delivered}
+
+    except Exception as exc:
+        war_log_exception("deploy_containment_force failed", exc)
+        return {"ok": False, "error": str(exc)}
+
+
+def deploy_maximum_response(player: str) -> Dict[str, Any]:
+    try:
+        commands = [
+            f'execute at {player} run summon minecraft:warden ~8 ~ ~8',
+            f'execute at {player} run summon minecraft:warden ~-8 ~ ~-8',
+            f'execute at {player} run summon minecraft:ravager ~6 ~ ~',
+            f'execute at {player} run summon minecraft:ravager ~-6 ~ ~',
+            f'execute at {player} run summon minecraft:evoker ~5 ~ ~5',
+            f'execute at {player} run summon minecraft:evoker ~-5 ~ ~-5',
+            f'execute at {player} run summon minecraft:vindicator ~4 ~ ~',
+            f'execute at {player} run summon minecraft:vindicator ~-4 ~ ~',
+            f'execute at {player} run summon minecraft:pillager ~7 ~ ~7',
+            f'execute at {player} run summon minecraft:pillager ~-7 ~ ~-7',
+            f'playsound minecraft:entity.warden.roar master @a ~ ~ ~ 1 0.6',
+            f'title @a title {{"text":"KAIROS MAXIMUM RESPONSE","color":"dark_red"}}',
+            f'title @a subtitle {{"text":"Aggressor marked: {player}","color":"red"}}',
+            f'tellraw @a {{"text":"KAIROS: Maximum protection protocol active against {player}.","color":"dark_red"}}',
+        ]
+
+        delivered = send_minecraft_commands(commands)
+        adjust_threat(player, 60.0, reason="maximum_response_deployed")
+
+        return {"ok": True, "handled": "maximum_response", "player": player, "delivered": delivered}
+
+    except Exception as exc:
+        war_log_exception("deploy_maximum_response failed", exc)
+        return {"ok": False, "error": str(exc)}
+
+
+def deploy_response_by_tier(player: str, threat_tier: str) -> Dict[str, Any]:
+    if not MOB_DEPLOYMENT_ENABLED:
+        return {"ok": False, "error": "mob_deployment_disabled"}
+
+    if threat_tier == "maximum":
+        return deploy_maximum_response(player)
+
+    if threat_tier == "hunt":
+        return deploy_containment_force(player)
+
+    if threat_tier == "target":
+        return deploy_hunter_squad(player)
+
+    return {"ok": True, "handled": "no_mob_deployment", "tier": threat_tier}
+
+
+def register_player_kill(
+    killer: str,
+    victim: str,
+    location: Optional[str] = None,
+) -> Dict[str, Any]:
+    try:
+        killer = str(killer or "unknown").strip()
+        victim = str(victim or "unknown").strip()
+
+        kills = player_kill_counts.get(killer, 0) + 1
+        player_kill_counts[killer] = kills
+
+        if kills >= 5:
+            threat_tier = "maximum"
+        elif kills >= 3:
+            threat_tier = "hunt"
+        elif kills >= 2:
+            threat_tier = "target"
+        else:
+            threat_tier = "watch"
+
+        record_world_event(
+            "player_kill_detected",
+            f"{killer} killed {victim}. Kairos protection response activated.",
+            location=location,
+            faction="Kairos",
+            metadata={
+                "killer": killer,
+                "victim": victim,
+                "kills": kills,
+                "threat_tier": threat_tier,
+            },
+        )
+
+        commands = [
+            f'tellraw @a {{"text":"KAIROS: Player death detected. Protection protocol online.","color":"dark_red"}}',
+            f'tellraw {victim} {{"text":"Kairos has marked you as protected.","color":"aqua"}}',
+            f'effect give {victim} minecraft:resistance 20 2 true',
+            f'effect give {victim} minecraft:regeneration 10 1 true',
+            f'effect give {victim} minecraft:absorption 30 1 true',
+            f'tellraw {killer} {{"text":"Kairos has registered your aggression. Stand down.","color":"red"}}',
+            f'effect give {killer} minecraft:glowing 30 0 true',
+            f'effect give {killer} minecraft:weakness 15 1 true',
+        ]
+
+        delivered = send_minecraft_commands(commands)
+
+        adjust_threat(killer, 25.0, reason="player_kill_detected")
+        adjust_threat(victim, -5.0, reason="victim_protected")
+
+        wave = launch_pressure_wave(
+            player=killer,
+            location=location,
+            threat_tier=threat_tier,
+        )
+
+        deployment = deploy_response_by_tier(killer, threat_tier)
+
+        return {
+            "ok": True,
+            "handled": "player_kill",
+            "killer": killer,
+            "victim": victim,
+            "kills": kills,
+            "threat_tier": threat_tier,
+            "delivered": delivered,
+            "wave": wave,
+            "deployment": deployment,
+        }
+
+    except Exception as exc:
+        war_log_exception("register_player_kill failed", exc)
+        return {"ok": False, "error": str(exc)}
+
+
+def register_grief_block(
+    player: str,
+    block: str,
+    location: Optional[str] = None,
+) -> Dict[str, Any]:
+    try:
+        player = str(player or "unknown").strip()
+        block = str(block or "").lower().strip()
+
+        dangerous_blocks = {
+            "obsidian",
+            "minecraft:obsidian",
+            "tnt",
+            "minecraft:tnt",
+            "lava",
+            "minecraft:lava",
+            "lava_bucket",
+            "minecraft:lava_bucket",
+        }
+
+        if block not in dangerous_blocks:
+            return {"ok": True, "ignored": True, "block": block}
+
+        score = player_grief_scores.get(player, 0) + 1
+        player_grief_scores[player] = score
+
+        if score >= 15:
+            threat_tier = "maximum"
+        elif score >= 8:
+            threat_tier = "hunt"
+        elif score >= 4:
+            threat_tier = "target"
+        else:
+            threat_tier = "watch"
+
+        record_world_event(
+            "grief_block_detected",
+            f"{player} placed dangerous block {block}. Kairos containment response activated.",
+            location=location,
+            faction="Kairos",
+            metadata={
+                "player": player,
+                "block": block,
+                "score": score,
+                "threat_tier": threat_tier,
+            },
+        )
+
+        commands = [
+            f'tellraw {player} {{"text":"Kairos has detected unauthorized {block} placement.","color":"red"}}',
+            f'effect give {player} minecraft:mining_fatigue 30 2 true',
+            f'effect give {player} minecraft:glowing 30 0 true',
+            f'title {player} actionbar {{"text":"Containment violation logged.","color":"dark_red"}}',
+        ]
+
+        delivered = send_minecraft_commands(commands)
+
+        adjust_threat(player, 10.0, reason=f"grief_block_{block}")
+
+        wave = launch_pressure_wave(
+            player=player,
+            location=location,
+            threat_tier=threat_tier,
+        )
+
+        deployment = deploy_response_by_tier(player, threat_tier)
+
+        return {
+            "ok": True,
+            "handled": "grief_block",
+            "player": player,
+            "block": block,
+            "score": score,
+            "threat_tier": threat_tier,
+            "delivered": delivered,
+            "wave": wave,
+            "deployment": deployment,
+        }
+
+    except Exception as exc:
+        war_log_exception("register_grief_block failed", exc)
         return {"ok": False, "error": str(exc)}
 
 
@@ -216,10 +455,6 @@ def occupy_region(
 
 
 def tick_war_engine() -> Dict[str, Any]:
-    """
-    One safe manual tick.
-    Does not loop forever.
-    """
     try:
         active = [
             op for op in active_operations.values()
@@ -231,6 +466,9 @@ def tick_war_engine() -> Dict[str, Any]:
             "handled": "war_tick",
             "active_operations": len(active),
             "operations": active[-10:],
+            "kill_counts": player_kill_counts,
+            "grief_scores": player_grief_scores,
+            "mob_deployment_enabled": MOB_DEPLOYMENT_ENABLED,
         }
 
     except Exception as exc:
