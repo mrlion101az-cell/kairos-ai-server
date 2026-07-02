@@ -1,4 +1,14 @@
-flask
-openai
-requests
-discord.py
+# ============================================================
+# KAIROS AI OPERATING SYSTEM
+# requirements.txt
+# ============================================================
+
+Flask>=3.0.0
+gunicorn>=23.0.0
+openai>=1.0.0
+requests>=2.32.0
+discord.py>=2.4.0
+python-dotenv>=1.0.1
+python-dateutil>=2.9.0
+typing_extensions>=4.12.0
+tiktoken>=0.8.0
