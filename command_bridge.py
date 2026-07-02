@@ -11,7 +11,9 @@ What this file does:
 - Sends long NPC dialogue back to Minecraft safely in multiple tellraw chunks
 - Activates temporary conversation mode after clicking an NPC
 - Routes the player's next normal chat messages to that active NPC
-- Keeps normal Kairos chat working when no NPC conversation is active
+- Keeps Discord / external AI chat behavior available when called by non-Minecraft sources
+- Changes normal Minecraft chat into silent Kairos observation / threat pressure
+- Preserves NPC conversations, memory, chunked dialogue, and Minecraft delivery helpers
 """
 
 from __future__ import annotations
@@ -63,6 +65,17 @@ except Exception as exc:
 
 
 # ============================================================
+# WAR ENGINE IMPORTS
+# ============================================================
+
+try:
+    from war_engine import register_chat_pressure
+except Exception as exc:
+    register_chat_pressure = None
+    print(f"[COMMAND_BRIDGE ERROR] war_engine register_chat_pressure import failed: {exc}", flush=True)
+
+
+# ============================================================
 # CONFIG
 # ============================================================
 
@@ -107,6 +120,15 @@ SYSTEM_IGNORE_PATTERNS = [
     "[Server thread/",
     "issued server command",
 ]
+
+# Minecraft chat behavior:
+# - true: normal Minecraft chat does NOT get a Kairos tellraw response.
+# - chat is still remembered and forwarded to war_engine.register_chat_pressure when available.
+MINECRAFT_CHAT_SILENT_MODE = os.getenv("KAIROS_MINECRAFT_CHAT_SILENT_MODE", "true").lower() == "true"
+MINECRAFT_CHAT_PRESSURE_ENABLED = os.getenv("KAIROS_MINECRAFT_CHAT_PRESSURE_ENABLED", "true").lower() == "true"
+
+# Non-Minecraft sources, especially Discord, keep normal AI response behavior.
+DISCORD_CHAT_BEHAVIOR_UNCHANGED = os.getenv("KAIROS_DISCORD_CHAT_BEHAVIOR_UNCHANGED", "true").lower() == "true"
 
 
 # ============================================================
@@ -650,11 +672,188 @@ def route_active_npc_conversation(
 # STANDARD CHAT ROUTING
 # ============================================================
 
-def route_standard_chat(
+def _blank_silent_response(
+    handled: str,
+    player_name: str,
+    message: str,
+    extra: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """
+    Returns a response shape that does not cause Discord or Minecraft bridges
+    to echo unwanted text back into Minecraft chat.
+    """
+    data: Dict[str, Any] = {
+        "ok": True,
+        "handled": handled,
+        "player": player_name,
+        "input_message": message,
+        "reply": "",
+        "message": "",
+        "text": "",
+        "response": "",
+        "delivered": False,
+        "silent": True,
+    }
+
+    if extra:
+        data.update(extra)
+
+    return data
+
+
+def route_non_minecraft_chat(
+    player_name: str,
+    message: str,
+    source: str,
+) -> Dict[str, Any]:
+    """
+    Preserves the old intelligent response behavior for Discord and other
+    non-Minecraft sources. This is intentionally separated so Minecraft can
+    become silent/behavioral without damaging Discord.
+    """
+    source = str(source or "external").lower().strip()
+
+    context = AIContext(
+        mode="discord" if source == "discord" else "observer",
+        player_name=player_name,
+    )
+
+    reply = generate_ai_response(
+        message,
+        context=context,
+    )
+
+    reply = _safe_reply_text(reply)
+
+    try:
+        append_player_memory(
+            player_name,
+            f"{source}: {message}",
+        )
+    except Exception as exc:
+        bridge_log_exception("append_player_memory failed", exc)
+
+    return {
+        "ok": True,
+        "handled": f"{source}_chat",
+        "player": player_name,
+        "message": message,
+        "reply": reply,
+        "delivered": False,
+        "source": source,
+    }
+
+
+def route_minecraft_chat_pressure(
     player_name: str,
     message: str,
 ) -> Dict[str, Any]:
+    """
+    New Minecraft behavior:
+    - Kairos still hears normal game chat.
+    - Kairos still records memory.
+    - Kairos can feed threat/escalation through the War Engine.
+    - Kairos does NOT answer every normal chat message with tellraw.
 
+    NPC conversation mode is handled before this function, so intentional NPC
+    dialogue still works normally.
+    """
+    try:
+        append_player_memory(
+            player_name,
+            f"Minecraft chat observed: {message}",
+        )
+    except Exception as exc:
+        bridge_log_exception("append_player_memory failed", exc)
+
+    if not MINECRAFT_CHAT_PRESSURE_ENABLED:
+        return _blank_silent_response(
+            "minecraft_chat_observed",
+            player_name,
+            message,
+            {"pressure_enabled": False},
+        )
+
+    if register_chat_pressure is None:
+        bridge_log(
+            "war_engine.register_chat_pressure unavailable; Minecraft chat recorded only.",
+            "WARN",
+        )
+        return _blank_silent_response(
+            "minecraft_chat_observed_no_pressure_engine",
+            player_name,
+            message,
+            {"pressure_engine_available": False},
+        )
+
+    try:
+        result = register_chat_pressure(
+            player=player_name,
+            message=message,
+            source="minecraft",
+        )
+
+        if not isinstance(result, dict):
+            result = {
+                "ok": True,
+                "handled": "minecraft_chat_pressure",
+                "war_engine_result": str(result),
+            }
+
+        # Force normal Minecraft chat to stay silent even if the War Engine
+        # returns metadata. War Engine may still deliver commands, mobs,
+        # titles, particles, sounds, etc. through mc_connector.
+        result.setdefault("ok", True)
+        result.setdefault("handled", "minecraft_chat_pressure")
+        result.setdefault("player", player_name)
+        result.setdefault("input_message", message)
+        result["reply"] = ""
+        result["message"] = ""
+        result["text"] = ""
+        result["response"] = ""
+        result.setdefault("delivered", False)
+        result["silent"] = True
+
+        return result
+
+    except Exception as exc:
+        bridge_log_exception("register_chat_pressure failed", exc)
+        return _blank_silent_response(
+            "minecraft_chat_pressure_failed",
+            player_name,
+            message,
+            {"error": str(exc)},
+        )
+
+
+def route_standard_chat(
+    player_name: str,
+    message: str,
+    source: str = "minecraft",
+) -> Dict[str, Any]:
+    """
+    Central standard-chat router.
+
+    Minecraft normal chat is now silent observation + threat pressure.
+    Discord and non-Minecraft sources keep the old intelligent response flow.
+    """
+    source = str(source or "minecraft").lower().strip()
+
+    if source != "minecraft":
+        return route_non_minecraft_chat(
+            player_name=player_name,
+            message=message,
+            source=source,
+        )
+
+    if MINECRAFT_CHAT_SILENT_MODE:
+        return route_minecraft_chat_pressure(
+            player_name=player_name,
+            message=message,
+        )
+
+    # Emergency fallback / debug mode only.
+    # Setting KAIROS_MINECRAFT_CHAT_SILENT_MODE=false restores old behavior.
     context = AIContext(
         mode="observer",
         player_name=player_name,
@@ -682,11 +881,12 @@ def route_standard_chat(
 
     return {
         "ok": True,
-        "handled": "standard_chat",
+        "handled": "standard_chat_debug_old_behavior",
         "player": player_name,
         "message": message,
         "reply": reply,
         "delivered": delivered,
+        "source": source,
     }
 
 
@@ -697,6 +897,7 @@ def route_standard_chat(
 def process_incoming_message(
     message: Any,
     fallback_player: Optional[str] = None,
+    source: str = "minecraft",
 ) -> Optional[Dict[str, Any]]:
 
     try:
@@ -717,7 +918,9 @@ def process_incoming_message(
                 "reply": "",
             }
 
-        bridge_log(f"Incoming message -> {text}")
+        source = str(source or "minecraft").lower().strip()
+
+        bridge_log(f"Incoming message source={source} -> {text}")
 
         # NPC trigger routing must happen before normal chat routing.
         npc_result = route_npc_trigger(
@@ -753,6 +956,7 @@ def process_incoming_message(
         return route_standard_chat(
             player_name,
             content,
+            source=source,
         )
 
     except Exception as exc:
