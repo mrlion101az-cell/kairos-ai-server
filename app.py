@@ -74,6 +74,22 @@ except Exception as e:
 
 
 # ============================================================
+# INVENTORY BRIDGE IMPORT
+# ============================================================
+
+try:
+    from inventory_bridge import (
+        record_inventory_snapshot,
+        inventory_bridge_status,
+    )
+    INVENTORY_BRIDGE_ONLINE = True
+except Exception as e:
+    INVENTORY_BRIDGE_ONLINE = False
+    record_inventory_snapshot = None
+    inventory_bridge_status = None
+    print(f"[APP ERROR] inventory_bridge import failed: {e}", flush=True)
+
+# ============================================================
 # APP CONFIG
 # ============================================================
 
@@ -270,6 +286,9 @@ def systems():
         },
         "memory_engine": {
             "online": MEMORY_ENGINE_ONLINE,
+        },
+        "inventory_bridge": {
+            "online": INVENTORY_BRIDGE_ONLINE,
         },
     })
 
@@ -651,6 +670,26 @@ def director_tick():
             "error": str(e),
             "reply": "",
         }), 200
+
+
+
+# ============================================================
+# INVENTORY ROUTE
+# ============================================================
+
+@app.route("/inventory_event", methods=["POST"])
+def inventory_event():
+    try:
+        if record_inventory_snapshot is None:
+            return jsonify({"ok": False, "error": "inventory_bridge_offline"}), 200
+        data=request.get_json(silent=True)
+        if not isinstance(data,dict):
+            data={}
+        player=str(data.get("player") or data.get("username") or data.get("name") or "").strip()
+        return jsonify(record_inventory_snapshot(player_name=player,payload=data,source="minecraft")),200
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"ok":False,"error":str(e)}),200
 
 
 # ============================================================
