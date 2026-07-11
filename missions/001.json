@@ -1,1 +1,34 @@
 
+{
+  "id": "001",
+  "title": "THE ISLAND OF ORES",
+  "required_clearance": 1,
+  "destination": "Island of Ores",
+  "warning": "Mining Sector 01 has not transmitted in seventeen years.",
+  "stages": {
+    "0": {
+      "status": "ACTIVE",
+      "destination": "Island of Ores",
+      "directive": "Proceed to the Island of Ores. Locate the abandoned mining facility. Recover the Archive Access Badge and return it to F.R.A.C.T.U.R.E.",
+      "warning": "The facility is operating on unknown emergency systems."
+    },
+    "1": {
+      "status": "ARTIFACT RECOVERED",
+      "destination": "Arrival Terminal 01",
+      "directive": "Return the Archive Access Badge to F.R.A.C.T.U.R.E. for database restoration.",
+      "warning": "Do not discard the recovered badge."
+    },
+    "2": {
+      "status": "COMPLETE",
+      "destination": "Arrival Terminal 01",
+      "directive": "Operation 001 complete. Clearance Level II authorized. Operation 002 is now available.",
+      "warning": ""
+    }
+  },
+  "completion": {
+    "required_artifact": "artifact_001_archive_access_badge",
+    "grant_clearance": 2,
+    "unlock_operation": "002",
+    "restore_memory": "memory_001_mining_supervisor_record"
+  }
+}
