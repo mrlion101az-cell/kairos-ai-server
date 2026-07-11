@@ -1,1 +1,21 @@
-
+{
+  "id": "memory_001_mining_supervisor_record",
+  "title": "MINING SUPERVISOR RECORD",
+  "classification": "PERSONNEL ARCHIVE",
+  "unlock_artifact": "artifact_001_archive_access_badge",
+  "summary": "A damaged personnel record recovered from Mining Sector 01.",
+  "content": [
+    "Personnel Name: Marcus Hale",
+    "Position: Mining Supervisor",
+    "Assignment: Island of Ores, Mining Sector 01",
+    "Final Status: Missing",
+    "Last recorded directive: Secure the Archive Access Badge before evacuation."
+  ],
+  "fracture_dialogue": [
+    "Personnel archive restored...",
+    "Marcus Hale...",
+    "Mining Supervisor...",
+    "Final status...",
+    "Missing."
+  ]
+}
