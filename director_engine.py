@@ -32,6 +32,8 @@ Primary public APIs:
 - direct_player_kill(killer, victim, location=None, metadata=None)
 - direct_grief_block(player, block, location=None, metadata=None)
 - direct_region_pressure(region, player=None, faction='Kairos', metadata=None)
+- direct_terminal_request(terminal_name, player, location=None, metadata=None)
+- direct_artifact_submission(player, artifact_id, terminal_name='Fracture', location=None, metadata=None)
 - tick_director(location=None, faction=None)
 
 Safe behavior:
@@ -137,6 +139,18 @@ except Exception as exc:  # pragma: no cover
     send_minecraft_commands = None  # type: ignore
     print(f"[DIRECTOR_ENGINE WARN] mc_connector import failed: {exc}", flush=True)
 
+try:
+    from fracture_terminal import (
+        build_terminal_context,
+        scoreboard_sync_commands,
+        submit_artifact,
+    )
+except Exception as exc:  # pragma: no cover
+    build_terminal_context = None  # type: ignore
+    scoreboard_sync_commands = None  # type: ignore
+    submit_artifact = None  # type: ignore
+    print(f"[DIRECTOR_ENGINE WARN] fracture_terminal import failed: {exc}", flush=True)
+
 
 # ============================================================
 # CONFIG
@@ -178,6 +192,11 @@ DIRECTOR_GRIEF_LANGUAGE_SCORE = float(os.getenv("DIRECTOR_GRIEF_LANGUAGE_SCORE",
 DIRECTOR_COORDINATE_LANGUAGE_SCORE = float(os.getenv("DIRECTOR_COORDINATE_LANGUAGE_SCORE", "2.5"))
 DIRECTOR_BASE_LANGUAGE_SCORE = float(os.getenv("DIRECTOR_BASE_LANGUAGE_SCORE", "2.0"))
 DIRECTOR_EVENT_LANGUAGE_SCORE = float(os.getenv("DIRECTOR_EVENT_LANGUAGE_SCORE", "2.0"))
+
+# Terminal/NPC routing. These events are deterministic and never delegated to War Engine.
+DIRECTOR_TERMINAL_ENABLED = os.getenv("DIRECTOR_TERMINAL_ENABLED", "true").lower() == "true"
+DIRECTOR_TERMINAL_SYNC_SCOREBOARDS = os.getenv("DIRECTOR_TERMINAL_SYNC_SCOREBOARDS", "true").lower() == "true"
+DIRECTOR_TERMINAL_SUPPORTED = {"fracture", "f.r.a.c.t.u.r.e."}
 
 
 # ============================================================
@@ -653,6 +672,17 @@ def deterministic_action(context: DirectorContext, analysis: Dict[str, Any], sco
     if source == "discord" and DIRECTOR_DISCORD_UNTOUCHED:
         return "ignore", "discord_untouched", 1.0, True
 
+    # Terminal and artifact requests are deterministic story-system events.
+    # They must never create War Engine pressure or mob responses.
+    if event_type == "terminal_request":
+        return "terminal_request", "fracture_terminal_request", 1.0, False
+
+    if event_type == "artifact_submission":
+        return "artifact_submission", "fracture_artifact_submission", 1.0, False
+
+    if event_type == "npc_interaction":
+        return "observe", "npc_interaction_recorded", 1.0, True
+
     if event_type == "player_kill":
         if tier in {"hunt", "maximum"}:
             return "deploy_custom_units", "player_kill_high_threat", 0.85, False
@@ -751,6 +781,76 @@ def execute_decision(context: DirectorContext, decision: DirectorDecision) -> Di
 
         if action in {"ignore", "observe"}:
             decision.execution = {"ok": True, "handled": action}
+            return decision
+
+        if action == "terminal_request":
+            npc_name = str(context.target or context.metadata.get("npc_name") or "fracture").strip()
+            normalized = npc_name.lower().replace("_", "").replace("-", "")
+            supported = {name.replace(".", "").replace("_", "").replace("-", "") for name in DIRECTOR_TERMINAL_SUPPORTED}
+
+            if not DIRECTOR_TERMINAL_ENABLED:
+                decision.execution = {"ok": False, "error": "terminal_system_disabled"}
+                return decision
+
+            if normalized not in supported:
+                decision.execution = {"ok": False, "error": "unsupported_terminal", "terminal": npc_name}
+                return decision
+
+            if not build_terminal_context:
+                decision.execution = {"ok": False, "error": "fracture_terminal_unavailable"}
+                return decision
+
+            incoming = dict(context.metadata or {})
+            terminal_context = build_terminal_context(
+                player,
+                incoming_context=incoming,
+                increment_visit=bool(incoming.get("increment_visit", True)),
+            )
+
+            commands: List[str] = []
+            if DIRECTOR_TERMINAL_SYNC_SCOREBOARDS and scoreboard_sync_commands:
+                commands = scoreboard_sync_commands(player, terminal_context)
+                if commands and send_minecraft_commands:
+                    try:
+                        send_minecraft_commands(commands)
+                    except Exception as exc:
+                        director_log_exception("terminal scoreboard sync failed", exc)
+
+            decision.delegated_to = "fracture_terminal.build_terminal_context"
+            decision.execution = {
+                "ok": True,
+                "handled": "terminal_request",
+                "terminal": npc_name,
+                "player": player,
+                "terminal_context": terminal_context,
+                "commands": commands,
+            }
+            return decision
+
+        if action == "artifact_submission":
+            if not DIRECTOR_TERMINAL_ENABLED:
+                decision.execution = {"ok": False, "error": "terminal_system_disabled"}
+                return decision
+
+            if not submit_artifact:
+                decision.execution = {"ok": False, "error": "fracture_artifact_engine_unavailable"}
+                return decision
+
+            artifact_id = str(context.metadata.get("artifact_id") or context.message or "").strip()
+            if not artifact_id:
+                decision.execution = {"ok": False, "error": "missing_artifact_id"}
+                return decision
+
+            result = submit_artifact(player, artifact_id)
+            commands = list(result.get("commands") or []) if isinstance(result, dict) else []
+            if commands and send_minecraft_commands:
+                try:
+                    send_minecraft_commands(commands)
+                except Exception as exc:
+                    director_log_exception("artifact scoreboard sync failed", exc)
+
+            decision.delegated_to = "fracture_terminal.submit_artifact"
+            decision.execution = result if isinstance(result, dict) else {"ok": False, "error": "invalid_artifact_result"}
             return decision
 
         if action == "increase_threat":
@@ -907,7 +1007,24 @@ def direct_event(context: DirectorContext, execute: bool = True) -> Dict[str, An
             return decision.to_dict()
 
         player = context.player or "WORLD"
-        analysis = analyze_text_importance(context.message or context.metadata.get("description", ""))
+
+        # Terminal and artifact interactions are story/progression requests, not threats.
+        # They bypass text threat scoring so clicking F.R.A.C.T.U.R.E. never spawns mobs.
+        is_terminal_event = context.event_type in {"terminal_request", "artifact_submission", "npc_interaction"}
+        if is_terminal_event:
+            analysis = {
+                "intent": "terminal" if context.event_type != "npc_interaction" else "npc",
+                "score": 0.0,
+                "reasons": [context.event_type],
+                "kairos_hits": 0,
+                "combat_hits": 0,
+                "grief_hits": 0,
+                "base_hits": 0,
+                "event_hits": 0,
+                "coordinates_detected": False,
+            }
+        else:
+            analysis = analyze_text_importance(context.message or context.metadata.get("description", ""))
 
         base_importance = _safe_float(analysis.get("score"), 0.0)
 
@@ -922,10 +1039,12 @@ def direct_event(context: DirectorContext, execute: bool = True) -> Dict[str, An
             base_importance += 10.0
 
         stats = _update_stats_from_analysis(player, context.event_type, analysis)
-        score, tier = _adjust_director_score(player, base_importance, reason=f"director_event:{context.event_type}")
-
-        # Pull world threat too.
-        score, tier = _combined_threat(player)
+        if is_terminal_event:
+            score, tier = _combined_threat(player)
+        else:
+            score, tier = _adjust_director_score(player, base_importance, reason=f"director_event:{context.event_type}")
+            # Pull world threat too.
+            score, tier = _combined_threat(player)
 
         # Telemetry enrichment if available.
         telemetry: Dict[str, Any] = {}
@@ -950,7 +1069,7 @@ def direct_event(context: DirectorContext, execute: bool = True) -> Dict[str, An
             except Exception:
                 pass
 
-        ai_plan = ai_director_plan(context, analysis, score, tier)
+        ai_plan = {} if is_terminal_event else ai_director_plan(context, analysis, score, tier)
         action, reason, confidence, silent = choose_final_action(context, analysis, score, tier, ai_plan)
 
         # Cooldowns stop action spam. Observe is always allowed.
@@ -1163,6 +1282,54 @@ def direct_region_pressure(
     )
 
 
+def direct_terminal_request(
+    terminal_name: str,
+    player: str,
+    location: Optional[str] = None,
+    metadata: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """
+    Route a deterministic terminal request through the Director.
+
+    This is the preferred API for F.R.A.C.T.U.R.E. and future facility terminals.
+    It never delegates to the War Engine and never produces mob pressure.
+    """
+    return direct_event(
+        DirectorContext(
+            source="minecraft",
+            event_type="terminal_request",
+            player=player,
+            target=terminal_name,
+            message=f"{player} requested terminal access from {terminal_name}.",
+            location=location,
+            metadata={"npc_name": terminal_name, "terminal_type": terminal_name, **(metadata or {})},
+        ),
+        execute=True,
+    )
+
+
+def direct_artifact_submission(
+    player: str,
+    artifact_id: str,
+    terminal_name: str = "Fracture",
+    location: Optional[str] = None,
+    metadata: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """Submit an artifact to F.R.A.C.T.U.R.E. through the permanent progression system."""
+    return direct_event(
+        DirectorContext(
+            source="minecraft",
+            event_type="artifact_submission",
+            player=player,
+            target=terminal_name,
+            message=artifact_id,
+            location=location,
+            metadata={"npc_name": terminal_name, "artifact_id": artifact_id, **(metadata or {})},
+        ),
+        execute=True,
+    )
+
+
 def direct_npc_event(
     npc_name: str,
     player: str,
@@ -1170,8 +1337,18 @@ def direct_npc_event(
     location: Optional[str] = None,
     metadata: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    # NPC conversations should still be handled by npc_engine/command_bridge.
-    # Director only records/observes NPC significance.
+    normalized = str(npc_name or "").lower().replace(".", "").replace("_", "").replace("-", "")
+    supported = {name.replace(".", "").replace("_", "").replace("-", "") for name in DIRECTOR_TERMINAL_SUPPORTED}
+    if normalized in supported:
+        return direct_terminal_request(
+            terminal_name=npc_name,
+            player=player,
+            location=location,
+            metadata=metadata,
+        )
+
+    # Ordinary NPC conversations remain handled by npc_engine/command_bridge.
+    # Director records their significance without invoking the War Engine.
     return direct_event(
         DirectorContext(
             source="minecraft",
@@ -1254,6 +1431,9 @@ def get_director_status() -> Dict[str, Any]:
         "minecraft_silent": DIRECTOR_MINECRAFT_SILENT,
         "discord_untouched": DIRECTOR_DISCORD_UNTOUCHED,
         "ai_planner_enabled": DIRECTOR_AI_PLANNER_ENABLED,
+        "terminal_enabled": DIRECTOR_TERMINAL_ENABLED,
+        "terminal_scoreboard_sync": DIRECTOR_TERMINAL_SYNC_SCOREBOARDS,
+        "fracture_terminal_available": bool(build_terminal_context and submit_artifact),
         "tracked_players": len(director_scores),
         "recent_decisions": director_recent_decisions[-20:],
         "scores": director_scores,
