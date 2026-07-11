@@ -401,6 +401,26 @@ def push_npc_dialogue_to_minecraft(
         return False
 
 
+def push_result_commands(result: Dict[str, Any]) -> bool:
+    """Executes deterministic Minecraft commands returned by subsystem engines."""
+    commands = result.get("commands") if isinstance(result, dict) else None
+    if not commands:
+        return False
+    if not isinstance(commands, list):
+        bridge_log("Subsystem commands ignored because payload was not a list", "WARN")
+        return False
+    safe_commands = [str(command).strip().lstrip("/") for command in commands if str(command).strip()]
+    if not safe_commands or not send_minecraft_commands:
+        return False
+    try:
+        success = bool(send_minecraft_commands(safe_commands))
+        bridge_log(f"Subsystem commands delivered={success} count={len(safe_commands)}")
+        return success
+    except Exception as exc:
+        bridge_log_exception("push_result_commands failed", exc)
+        return False
+
+
 def push_system_notice_to_player(player_name: str, text: str) -> bool:
     """
     Small utility for notices like conversation ended.
@@ -530,6 +550,8 @@ def route_npc_trigger(
             "reply": str(result or ""),
         }
 
+    commands_delivered = push_result_commands(result)
+
     reply = _safe_reply_text(
         result.get("reply")
         or result.get("message")
@@ -562,6 +584,7 @@ def route_npc_trigger(
     result["text"] = reply
     result["response"] = reply
     result["delivered"] = delivered
+    result["commands_delivered"] = commands_delivered
     result["chunked"] = True
     result["conversation_activated"] = True
 
@@ -630,6 +653,8 @@ def route_active_npc_conversation(
             "reply": str(result or ""),
         }
 
+    commands_delivered = push_result_commands(result)
+
     reply = _safe_reply_text(
         result.get("reply")
         or result.get("message")
@@ -663,6 +688,7 @@ def route_active_npc_conversation(
     result["text"] = reply
     result["response"] = reply
     result["delivered"] = delivered
+    result["commands_delivered"] = commands_delivered
     result["chunked"] = True
 
     return result
