@@ -51,6 +51,14 @@ NPC_TRIGGER_PATTERN = re.compile(
 
 _client = OpenAI(api_key=OPENAI_API_KEY) if (OpenAI and OPENAI_API_KEY) else None
 
+try:
+    from fracture_terminal import build_terminal_context, scoreboard_sync_commands
+except Exception as exc:
+    build_terminal_context = None
+    scoreboard_sync_commands = None
+    print(f"[NPC_ENGINE ERROR] fracture_terminal import failed: {exc}", flush=True)
+
+
 
 # ============================================================
 # LOGGING
@@ -658,11 +666,25 @@ def handle_npc_trigger_message(
         f"Trigger detected npc={trigger.npc_name} player={player_name} profile_type={profile.profile_type}"
     )
 
+    effective_context = dict(context or {})
+    terminal_commands = []
+    if profile.profile_type == "fracture" and build_terminal_context is not None:
+        try:
+            effective_context = build_terminal_context(
+                player_name,
+                incoming_context=effective_context,
+                increment_visit=not bool(effective_context.get("conversation_mode")),
+            )
+            if scoreboard_sync_commands is not None:
+                terminal_commands = scoreboard_sync_commands(player_name, effective_context)
+        except Exception as exc:
+            npc_log_exception("Fracture terminal context failed", exc)
+
     reply = generate_npc_reply(
         trigger.npc_name,
         player_name,
         raw_message=trigger.raw_message,
-        context=context or {},
+        context=effective_context,
     )
 
     delivered = False
@@ -687,6 +709,8 @@ def handle_npc_trigger_message(
         "delivered": delivered,
         "delivery_error": delivery_error,
         "profile": asdict(profile),
+        "context": effective_context,
+        "commands": terminal_commands,
         "timestamp": time.time(),
     }
 
