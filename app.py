@@ -1,658 +1,1177 @@
-# ============================================================
-# KAIROS MODULAR ORCHESTRATOR
-# app.py
-# ============================================================
 """
-Kairos / Nexus Modular Orchestrator
+command_bridge.py
+Kairos / Nexus Command Bridge
+PERMANENT NPC + F.R.A.C.T.U.R.E. TERMINAL ROUTING
 
-Purpose:
-- Flask HTTP gateway for Kairos.
-- Keeps app.py thin and safe.
-- Imports Command Bridge for NPC / Discord / fallback routing.
-- Imports Director Engine for Minecraft chat and world-event decisions.
-- Preserves memory logging and old behavior as fallback.
-- Does NOT directly run background loops.
+What this file does:
+- Receives Minecraft chat from app.py
+- Detects Citizens/CitizensCMD NPC triggers:
+    NPC_TRIGGER Fracture RealSociety5107
+- Routes NPC triggers into npc_engine.py
+- Sends long NPC dialogue back to Minecraft safely in multiple tellraw chunks
+- Activates temporary conversation mode after clicking an NPC
+- Routes the player's next normal chat messages to that active NPC
+- Keeps Discord / external AI chat behavior available when called by non-Minecraft sources
+- Changes normal Minecraft chat into silent Kairos observation / threat pressure
+- Preserves NPC conversations, memory, chunked dialogue, and Minecraft delivery helpers
 """
 
 from __future__ import annotations
 
+import json
 import os
+import re
+import textwrap
+import time
 import traceback
-from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
-from flask import Flask, jsonify, request
+from ai_core import AIContext, generate_ai_response
 
-
-# ============================================================
-# COMMAND BRIDGE IMPORT
-# ============================================================
-
-try:
-    from command_bridge import process_incoming_message
-except Exception as e:
-    process_incoming_message = None
-    print(f"[APP ERROR] command_bridge import failed: {e}", flush=True)
-
+from memory_engine import (
+    append_player_memory,
+    record_npc_interaction,
+    record_system_error,
+)
 
 # ============================================================
-# DIRECTOR ENGINE IMPORT
+# NPC ENGINE IMPORTS
 # ============================================================
 
 try:
-    from director_engine import (
-        direct_minecraft_chat,
-        direct_world_event,
-        direct_player_kill,
-        direct_grief_block,
-        tick_director,
+    from npc_engine import handle_npc_trigger_message
+except Exception as exc:
+    handle_npc_trigger_message = None
+    print(f"[COMMAND_BRIDGE ERROR] npc_engine import failed: {exc}", flush=True)
+
+
+# ============================================================
+# MINECRAFT CONNECTOR IMPORTS
+# ============================================================
+
+try:
+    from mc_connector import (
+        send_to_minecraft,
+        send_minecraft_commands,
+        send_actionbar,
+        broadcast_world_event,
     )
-    DIRECTOR_ENGINE_ONLINE = True
-except Exception as e:
-    direct_minecraft_chat = None
-    direct_world_event = None
-    direct_player_kill = None
-    direct_grief_block = None
-    tick_director = None
-    DIRECTOR_ENGINE_ONLINE = False
-    print(f"[APP ERROR] director_engine import failed: {e}", flush=True)
+except Exception as exc:
+    send_to_minecraft = None
+    send_minecraft_commands = None
+    send_actionbar = None
+    broadcast_world_event = None
+    print(f"[COMMAND_BRIDGE ERROR] mc_connector import failed: {exc}", flush=True)
 
 
 # ============================================================
-# MEMORY ENGINE IMPORT
+# WAR ENGINE IMPORTS
 # ============================================================
 
 try:
-    from memory_engine import record_world_event, append_player_memory, ensure_memory_dirs
-    ensure_memory_dirs()
-    MEMORY_ENGINE_ONLINE = True
-except Exception as e:
-    MEMORY_ENGINE_ONLINE = False
-    record_world_event = None
-    append_player_memory = None
-    print(f"[APP ERROR] memory_engine import failed: {e}", flush=True)
+    from war_engine import register_chat_pressure
+except Exception as exc:
+    register_chat_pressure = None
+    print(f"[COMMAND_BRIDGE ERROR] war_engine register_chat_pressure import failed: {exc}", flush=True)
 
 
 # ============================================================
-# APP CONFIG
+# DIRECTOR / TERMINAL IMPORTS
 # ============================================================
 
-app = Flask(__name__)
+try:
+    from director_engine import direct_npc_event, direct_terminal_request
+except Exception as exc:
+    direct_npc_event = None
+    direct_terminal_request = None
+    print(f"[COMMAND_BRIDGE ERROR] director_engine import failed: {exc}", flush=True)
 
-PORT = int(os.getenv("PORT", "10000"))
-KAIROS_VERSION = os.getenv("KAIROS_VERSION", "kairos_modular_v2_director")
 
-# Controls whether Minecraft chat enters Director first.
-APP_USE_DIRECTOR_FOR_MINECRAFT_CHAT = os.getenv(
-    "APP_USE_DIRECTOR_FOR_MINECRAFT_CHAT",
-    "true",
-).lower() == "true"
+# ============================================================
+# CONFIG
+# ============================================================
 
-# Controls whether world_event enters Director first.
-APP_USE_DIRECTOR_FOR_WORLD_EVENTS = os.getenv(
-    "APP_USE_DIRECTOR_FOR_WORLD_EVENTS",
-    "true",
-).lower() == "true"
+COMMAND_BRIDGE_DEBUG = os.getenv("COMMAND_BRIDGE_DEBUG", "true").lower() == "true"
+COMMAND_BRIDGE_SEND_TO_MC = os.getenv("COMMAND_BRIDGE_SEND_TO_MC", "true").lower() == "true"
 
-# Discord must remain unchanged unless explicitly changed later.
-APP_DISCORD_USES_COMMAND_BRIDGE = os.getenv(
-    "APP_DISCORD_USES_COMMAND_BRIDGE",
-    "true",
-).lower() == "true"
+NPC_DIALOGUE_CHUNK_SIZE = int(os.getenv("NPC_DIALOGUE_CHUNK_SIZE", "230"))
+NPC_DIALOGUE_MAX_CHUNKS = int(os.getenv("NPC_DIALOGUE_MAX_CHUNKS", "8"))
+NPC_DIALOGUE_COLOR = os.getenv("NPC_DIALOGUE_COLOR", "gold")
+NPC_DIALOGUE_HEADER_COLOR = os.getenv("NPC_DIALOGUE_HEADER_COLOR", "yellow")
+
+# Conversation mode:
+# After a player clicks an NPC, that NPC listens to that player's normal chat
+# until timeout or exit phrase.
+NPC_CONVERSATION_TIMEOUT = int(os.getenv("NPC_CONVERSATION_TIMEOUT", "120"))
+NPC_CONVERSATION_EXIT_WORDS = {
+    "bye",
+    "goodbye",
+    "exit",
+    "leave",
+    "stop talking",
+    "end conversation",
+    "nevermind",
+    "never mind",
+}
+
+# Temporary live state.
+# This resets whenever Render restarts, which is fine for conversation mode.
+ACTIVE_NPC_CONVERSATIONS: Dict[str, Dict[str, Any]] = {}
+
+CHAT_PREFIX_PATTERN = re.compile(r"^\[(.*?)\]\s*(.*)$")
+
+# Supports BOTH:
+# NPC_TRIGGER Fracture RealSociety5107
+# [NPC_TRIGGER] CaptainVaros RealSociety5107
+NPC_TRIGGER_PATTERN = re.compile(
+    r"^\[?NPC_TRIGGER\]?\s+([A-Za-z0-9_\-]+)(?:\s+(.+))?$",
+    re.IGNORECASE,
+)
+
+SYSTEM_IGNORE_PATTERNS = [
+    "[Server thread/",
+    "issued server command",
+]
+
+# Minecraft chat behavior:
+# - true: normal Minecraft chat does NOT get a Kairos tellraw response.
+# - chat is still remembered and forwarded to war_engine.register_chat_pressure when available.
+MINECRAFT_CHAT_SILENT_MODE = os.getenv("KAIROS_MINECRAFT_CHAT_SILENT_MODE", "true").lower() == "true"
+MINECRAFT_CHAT_PRESSURE_ENABLED = os.getenv("KAIROS_MINECRAFT_CHAT_PRESSURE_ENABLED", "true").lower() == "true"
+
+# Non-Minecraft sources, especially Discord, keep normal AI response behavior.
+DISCORD_CHAT_BEHAVIOR_UNCHANGED = os.getenv("KAIROS_DISCORD_CHAT_BEHAVIOR_UNCHANGED", "true").lower() == "true"
+
+# Terminal NPCs are deterministic story interfaces. They route through Director
+# before the dialogue engine so missions, clearance, artifacts, and memory state
+# are loaded without touching the War Engine.
+TERMINAL_NPC_NAMES = {
+    item.strip().lower().replace(".", "").replace("_", "").replace("-", "")
+    for item in os.getenv("KAIROS_TERMINAL_NPCS", "Fracture,F.R.A.C.T.U.R.E.").split(",")
+    if item.strip()
+}
 
 
 # ============================================================
 # LOGGING
 # ============================================================
 
-def log(message: str) -> None:
-    timestamp = datetime.now(timezone.utc).isoformat()
-    print(f"[KAIROS APP {timestamp}] {message}", flush=True)
+def bridge_log(message: str, level: str = "INFO") -> None:
+    if COMMAND_BRIDGE_DEBUG or level in {"WARN", "ERROR", "FATAL"}:
+        print(f"[COMMAND_BRIDGE {level}] {message}", flush=True)
+
+
+def bridge_log_exception(context: str, exc: Exception) -> None:
+    print(f"[COMMAND_BRIDGE ERROR] {context}: {exc}", flush=True)
+    traceback.print_exc()
+
+    try:
+        record_system_error(context, str(exc))
+    except Exception:
+        pass
 
 
 # ============================================================
-# PAYLOAD HELPERS
+# GENERAL HELPERS
 # ============================================================
 
-def extract_payload(data: Optional[Dict[str, Any]]):
-    data = data or {}
-
-    player = str(
-        data.get("player")
-        or data.get("username")
-        or data.get("name")
-        or data.get("sender")
-        or data.get("user")
-        or "unknown"
-    ).strip()
-
-    message = str(
-        data.get("message")
-        or data.get("content")
-        or data.get("text")
-        or data.get("chat")
-        or data.get("msg")
-        or ""
-    ).strip()
-
-    source = str(
-        data.get("source")
-        or data.get("platform")
-        or "minecraft"
-    ).strip().lower()
-
-    return player, message, source
+def normalize_message(message: Any) -> str:
+    return str(message or "").strip()
 
 
-def normalize_response(response: Any, player: str, source: str) -> Dict[str, Any]:
-    if not isinstance(response, dict):
-        response = {
-            "ok": True,
-            "reply": str(response or ""),
+def should_ignore_message(message: str) -> bool:
+    text = str(message or "").lower()
+
+    for item in SYSTEM_IGNORE_PATTERNS:
+        if item.lower() in text:
+            return True
+
+    return False
+
+
+def parse_basic_chat(message: str) -> Dict[str, Any]:
+    result = {
+        "raw": message,
+        "player": None,
+        "content": message,
+        "source": "minecraft",
+    }
+
+    match = CHAT_PREFIX_PATTERN.match(message)
+
+    if match:
+        result["player"] = match.group(1).strip()
+        result["content"] = match.group(2).strip()
+
+    return result
+
+
+def _safe_reply_text(value: Any) -> str:
+    text = str(value or "").strip()
+
+    # Minecraft tellraw can handle escaped JSON, but raw control characters and huge
+    # unbroken lines can still cause trouble through bridge plugins.
+    text = text.replace("\r", "\n")
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    text = re.sub(r"[ \t]+", " ", text)
+
+    return text.strip()
+
+
+def _minecraft_json_text(text: str, color: str = "white") -> str:
+    return json.dumps(
+        {
+            "text": str(text),
+            "color": color,
+        },
+        ensure_ascii=False,
+    )
+
+
+def _tellraw_command(target: str, text: str, color: str = "white") -> str:
+    target = str(target or "@a").strip()
+    return f"tellraw {target} {_minecraft_json_text(text, color=color)}"
+
+
+def split_dialogue_into_chunks(
+    text: str,
+    chunk_size: int = NPC_DIALOGUE_CHUNK_SIZE,
+) -> List[str]:
+    """
+    Splits long NPC dialogue into Minecraft-safe chunks while preserving readability.
+    """
+    text = _safe_reply_text(text)
+
+    if not text:
+        return []
+
+    paragraphs = [p.strip() for p in text.split("\n") if p.strip()]
+    chunks: List[str] = []
+
+    for paragraph in paragraphs:
+        if len(paragraph) <= chunk_size:
+            chunks.append(paragraph)
+            continue
+
+        wrapped = textwrap.wrap(
+            paragraph,
+            width=chunk_size,
+            break_long_words=False,
+            break_on_hyphens=False,
+        )
+
+        chunks.extend(wrapped)
+
+    if not chunks:
+        chunks = textwrap.wrap(
+            text,
+            width=chunk_size,
+            break_long_words=False,
+            break_on_hyphens=False,
+        )
+
+    if len(chunks) > NPC_DIALOGUE_MAX_CHUNKS:
+        chunks = chunks[:NPC_DIALOGUE_MAX_CHUNKS]
+        chunks[-1] = chunks[-1].rstrip() + " ..."
+
+    return chunks
+
+
+def _is_exit_phrase(message: str) -> bool:
+    clean = str(message or "").strip().lower()
+    return clean in NPC_CONVERSATION_EXIT_WORDS
+
+
+# ============================================================
+# ACTIVE NPC CONVERSATION STATE
+# ============================================================
+
+def activate_npc_conversation(player_name: str, npc_name: str) -> None:
+    player_name = str(player_name or "unknown").strip()
+    npc_name = str(npc_name or "UnknownNPC").strip()
+
+    if not player_name or player_name == "unknown":
+        return
+
+    ACTIVE_NPC_CONVERSATIONS[player_name] = {
+        "npc": npc_name,
+        "timestamp": time.time(),
+    }
+
+    bridge_log(f"NPC conversation activated -> player={player_name} npc={npc_name}")
+
+
+def clear_npc_conversation(player_name: str) -> Optional[str]:
+    player_name = str(player_name or "").strip()
+
+    convo = ACTIVE_NPC_CONVERSATIONS.pop(player_name, None)
+
+    if convo:
+        npc_name = convo.get("npc", "NPC")
+        bridge_log(f"NPC conversation cleared -> player={player_name} npc={npc_name}")
+        return str(npc_name)
+
+    return None
+
+
+def get_active_npc(player_name: str) -> Optional[str]:
+    player_name = str(player_name or "").strip()
+
+    convo = ACTIVE_NPC_CONVERSATIONS.get(player_name)
+
+    if not convo:
+        return None
+
+    if time.time() - float(convo.get("timestamp", 0)) > NPC_CONVERSATION_TIMEOUT:
+        clear_npc_conversation(player_name)
+        return None
+
+    return str(convo.get("npc") or "").strip() or None
+
+
+# ============================================================
+# MINECRAFT DELIVERY
+# ============================================================
+
+def _push_to_minecraft(reply: str, player_name: Optional[str]) -> bool:
+    """
+    Normal single-message Kairos chat delivery.
+    """
+    reply = _safe_reply_text(reply)
+
+    if not reply:
+        return False
+
+    if not COMMAND_BRIDGE_SEND_TO_MC:
+        bridge_log("Minecraft push disabled", "WARN")
+        return False
+
+    if not send_to_minecraft:
+        bridge_log("send_to_minecraft unavailable", "ERROR")
+        return False
+
+    try:
+        return bool(send_to_minecraft(reply, player_name))
+
+    except Exception as exc:
+        bridge_log_exception("send_to_minecraft failed", exc)
+        return False
+
+
+def push_npc_dialogue_to_minecraft(
+    npc_name: str,
+    reply: str,
+    player_name: Optional[str],
+) -> bool:
+    """
+    Sends long NPC dialogue as multiple tellraw commands instead of one giant command.
+    This preserves cinematic long-form NPC dialogue without breaking Minecraft tellraw.
+    """
+    if not COMMAND_BRIDGE_SEND_TO_MC:
+        bridge_log("Minecraft NPC push disabled", "WARN")
+        return False
+
+    if not send_minecraft_commands:
+        bridge_log("send_minecraft_commands unavailable", "ERROR")
+        return False
+
+    npc_name = str(npc_name or "NPC").strip()
+    player_name = str(player_name or "@a").strip()
+    reply = _safe_reply_text(reply)
+
+    if not reply:
+        return False
+
+    # Avoid double labels like "[Kairos] Captain Varos:"
+    display_reply = reply
+    display_reply = re.sub(r"^\[?Kairos\]?\s*", "", display_reply, flags=re.IGNORECASE).strip()
+
+    chunks = split_dialogue_into_chunks(display_reply)
+
+    if not chunks:
+        return False
+
+    commands: List[str] = []
+
+    commands.append(
+        _tellraw_command(
+            player_name,
+            f"--- {npc_name} ---",
+            color=NPC_DIALOGUE_HEADER_COLOR,
+        )
+    )
+
+    for chunk in chunks:
+        commands.append(
+            _tellraw_command(
+                player_name,
+                chunk,
+                color=NPC_DIALOGUE_COLOR,
+            )
+        )
+
+    try:
+        success = bool(send_minecraft_commands(commands))
+        bridge_log(
+            f"NPC dialogue delivered={success} npc={npc_name} player={player_name} chunks={len(chunks)}"
+        )
+        return success
+
+    except Exception as exc:
+        bridge_log_exception("push_npc_dialogue_to_minecraft failed", exc)
+        return False
+
+
+def push_result_commands(result: Dict[str, Any]) -> bool:
+    """Executes deterministic Minecraft commands returned by subsystem engines."""
+    commands = result.get("commands") if isinstance(result, dict) else None
+    if not commands:
+        return False
+    if not isinstance(commands, list):
+        bridge_log("Subsystem commands ignored because payload was not a list", "WARN")
+        return False
+    safe_commands = [str(command).strip().lstrip("/") for command in commands if str(command).strip()]
+    if not safe_commands or not send_minecraft_commands:
+        return False
+    try:
+        success = bool(send_minecraft_commands(safe_commands))
+        bridge_log(f"Subsystem commands delivered={success} count={len(safe_commands)}")
+        return success
+    except Exception as exc:
+        bridge_log_exception("push_result_commands failed", exc)
+        return False
+
+
+def push_system_notice_to_player(player_name: str, text: str) -> bool:
+    """
+    Small utility for notices like conversation ended.
+    """
+    try:
+        if send_minecraft_commands:
+            return bool(
+                send_minecraft_commands(
+                    [
+                        _tellraw_command(
+                            player_name,
+                            text,
+                            color="gray",
+                        )
+                    ]
+                )
+            )
+    except Exception as exc:
+        bridge_log_exception("push_system_notice_to_player failed", exc)
+
+    return False
+
+
+# ============================================================
+# NPC TRIGGER PARSING
+# ============================================================
+
+def parse_npc_trigger(
+    message: Any,
+    fallback_player: Optional[str] = None,
+) -> Optional[Dict[str, str]]:
+    text = normalize_message(message)
+
+    match = NPC_TRIGGER_PATTERN.match(text)
+
+    if not match:
+        return None
+
+    npc_name = str(match.group(1) or "").strip()
+    player_name = str(match.group(2) or "").strip()
+
+    # Citizens placeholders / bad fallback values.
+    if player_name in {"", "<p>", "<player>", "%player%", "{player}", "player", "unknown"}:
+        player_name = fallback_player or "traveler"
+
+    return {
+        "npc_name": npc_name,
+        "player": player_name,
+        "raw": text,
+    }
+
+
+def is_npc_trigger(message: Any) -> bool:
+    return parse_npc_trigger(message) is not None
+
+
+def normalize_trigger_for_npc_engine(
+    message: str,
+    fallback_player: Optional[str] = None,
+) -> str:
+    """
+    npc_engine.py uses bracketed triggers.
+    This guarantees compatibility with either trigger style.
+    """
+    parsed = parse_npc_trigger(message, fallback_player=fallback_player)
+
+    if not parsed:
+        return str(message or "")
+
+    return f"[NPC_TRIGGER] {parsed['npc_name']} {parsed['player']}"
+
+
+# ============================================================
+# DIRECTOR / TERMINAL HELPERS
+# ============================================================
+
+def _normalized_npc_identity(value: Any) -> str:
+    return re.sub(r"[^a-z0-9]", "", str(value or "").lower())
+
+
+def _is_terminal_npc(npc_name: str) -> bool:
+    return _normalized_npc_identity(npc_name) in TERMINAL_NPC_NAMES
+
+
+def _director_terminal_context(
+    npc_name: str,
+    player_name: str,
+    *,
+    increment_visit: bool,
+    conversation_message: str = "",
+) -> Dict[str, Any]:
+    """
+    Ask Director/Fracture for deterministic player progression context.
+
+    Returns an empty dict if the optional terminal subsystem is unavailable.
+    This keeps ordinary NPC conversations and server startup fail-soft.
+    """
+    if not direct_terminal_request:
+        bridge_log("direct_terminal_request unavailable", "WARN")
+        return {}
+
+    try:
+        director_result = direct_terminal_request(
+            terminal_name=npc_name,
+            player=player_name,
+            metadata={
+                "increment_visit": increment_visit,
+                "conversation_message": conversation_message,
+                "source": "command_bridge",
+            },
+        )
+
+        if not isinstance(director_result, dict):
+            bridge_log("Director terminal result was not a dictionary", "WARN")
+            return {}
+
+        execution = director_result.get("execution") or {}
+        if not isinstance(execution, dict):
+            execution = {}
+
+        terminal_context = execution.get("terminal_context") or {}
+        if not isinstance(terminal_context, dict):
+            terminal_context = {}
+
+        bridge_log(
+            "Terminal context loaded "
+            f"npc={npc_name} player={player_name} "
+            f"operation={terminal_context.get('operation')} "
+            f"step={terminal_context.get('mission_step')} "
+            f"clearance={terminal_context.get('clearance')}"
+        )
+
+        terminal_context = dict(terminal_context)
+        terminal_context["director_result"] = director_result
+        return terminal_context
+
+    except Exception as exc:
+        bridge_log_exception("Director terminal routing failed", exc)
+        return {}
+
+
+def _record_ordinary_npc_with_director(
+    npc_name: str,
+    player_name: str,
+    message: str,
+) -> None:
+    """Record ordinary NPC significance without changing dialogue behavior."""
+    if not direct_npc_event:
+        return
+    try:
+        direct_npc_event(
+            npc_name=npc_name,
+            player=player_name,
+            message=message,
+            metadata={"source": "command_bridge"},
+        )
+    except Exception as exc:
+        bridge_log_exception("Director ordinary NPC observation failed", exc)
+
+
+# ============================================================
+# NPC ROUTING
+# ============================================================
+
+def route_npc_trigger(
+    message: str,
+    fallback_player: Optional[str] = None,
+) -> Optional[Dict[str, Any]]:
+
+    parsed = parse_npc_trigger(message, fallback_player=fallback_player)
+
+    if not parsed:
+        return None
+
+    if handle_npc_trigger_message is None:
+        return {
+            "ok": False,
+            "handled": "npc_trigger",
+            "error": "npc_engine_offline",
+            "reply": "...NPC engine offline.",
         }
 
-    reply = str(
-        response.get("reply")
-        or response.get("message")
-        or response.get("text")
-        or response.get("response")
-        or ""
-    ).strip()
+    npc_name = parsed["npc_name"]
+    player_name = parsed["player"]
+    terminal_npc = _is_terminal_npc(npc_name)
 
-    if reply:
-        response["reply"] = reply
-        response["message"] = reply
-        response["text"] = reply
-        response["response"] = reply
+    bridge_log(
+        f"NPC trigger routed -> npc={npc_name} player={player_name} terminal={terminal_npc}"
+    )
+
+    # Clicking any NPC opens a temporary private conversation session.
+    activate_npc_conversation(player_name, npc_name)
+
+    normalized_message = normalize_trigger_for_npc_engine(
+        message,
+        fallback_player=player_name,
+    )
+
+    context: Dict[str, Any] = {
+        "conversation_mode": False,
+        "conversation_message": "",
+        "npc_trigger": True,
+    }
+
+    # F.R.A.C.T.U.R.E. and future terminal NPCs receive deterministic progression
+    # facts from Director first. GPT controls only presentation, never mission facts.
+    if terminal_npc:
+        terminal_context = _director_terminal_context(
+            npc_name,
+            player_name,
+            increment_visit=True,
+        )
+        context.update(terminal_context)
+        context["terminal_mode"] = True
     else:
-        response.setdefault("reply", "")
+        _record_ordinary_npc_with_director(npc_name, player_name, message)
 
-    response.setdefault("ok", True)
-    response.setdefault("player", player)
-    response.setdefault("source", source)
+    # command_bridge owns Minecraft delivery so long dialogue can be chunked safely.
+    result = handle_npc_trigger_message(
+        normalized_message,
+        fallback_player=player_name,
+        context=context,
+        send_reply=None,
+    )
 
-    return response
+    if not result:
+        return {
+            "ok": False,
+            "handled": "npc_trigger",
+            "npc_name": npc_name,
+            "player": player_name,
+            "error": "npc_engine_returned_no_result",
+            "reply": "...terminal response unavailable.",
+        }
+
+    if not isinstance(result, dict):
+        result = {
+            "ok": True,
+            "reply": str(result or ""),
+        }
+
+    # Subsystems may return deterministic commands such as scoreboard mirrors.
+    commands_delivered = push_result_commands(result)
+
+    reply = _safe_reply_text(
+        result.get("reply")
+        or result.get("message")
+        or result.get("text")
+        or result.get("response")
+    )
+
+    delivered = push_npc_dialogue_to_minecraft(
+        npc_name=result.get("npc_name") or npc_name,
+        reply=reply,
+        player_name=result.get("player") or player_name,
+    )
+
+    try:
+        record_npc_interaction(
+            result.get("npc_name") or npc_name,
+            result.get("player") or player_name,
+            message=message,
+            reply=reply,
+            metadata={
+                "terminal": terminal_npc,
+                "operation": context.get("operation"),
+                "mission_step": context.get("mission_step"),
+                "clearance": context.get("clearance"),
+            },
+        )
+    except Exception as exc:
+        bridge_log_exception("NPC memory record failed", exc)
+
+    result["ok"] = bool(result.get("ok", True))
+    result["handled"] = "terminal_trigger" if terminal_npc else "npc_trigger"
+    result["npc_name"] = result.get("npc_name") or npc_name
+    result["player"] = result.get("player") or player_name
+    result["reply"] = reply
+    result["message"] = reply
+    result["text"] = reply
+    result["response"] = reply
+    result["delivered"] = delivered
+    result["commands_delivered"] = commands_delivered
+    result["chunked"] = True
+    result["conversation_activated"] = True
+    result["terminal_mode"] = terminal_npc
+
+    return result
 
 
-def call_command_bridge(
+def route_active_npc_conversation(
+    player_name: str,
     message: str,
-    player: str,
+) -> Optional[Dict[str, Any]]:
+    """
+    If the player recently clicked an NPC, route normal chat to that NPC.
+
+    Terminal NPCs refresh deterministic mission context on every message without
+    incrementing the visit counter. Ordinary NPCs retain the legacy AI behavior.
+    """
+    player_name = str(player_name or "unknown").strip()
+    message = str(message or "").strip()
+
+    if not player_name or player_name == "unknown":
+        return None
+
+    npc_name = get_active_npc(player_name)
+
+    if not npc_name:
+        return None
+
+    if _is_exit_phrase(message):
+        ended_npc = clear_npc_conversation(player_name)
+        push_system_notice_to_player(
+            player_name,
+            f"You step away from {ended_npc or 'the NPC'}.",
+        )
+        return {
+            "ok": True,
+            "handled": "npc_conversation_exit",
+            "player": player_name,
+            "npc_name": ended_npc or npc_name,
+            "reply": "",
+            "delivered": True,
+        }
+
+    if handle_npc_trigger_message is None:
+        return None
+
+    ACTIVE_NPC_CONVERSATIONS[player_name]["timestamp"] = time.time()
+
+    terminal_npc = _is_terminal_npc(npc_name)
+    bridge_log(
+        f"Active NPC conversation -> npc={npc_name} player={player_name} "
+        f"terminal={terminal_npc} msg={message}"
+    )
+
+    fake_trigger = f"[NPC_TRIGGER] {npc_name} {player_name}"
+    context: Dict[str, Any] = {
+        "conversation_mode": True,
+        "conversation_message": message,
+        "terminal_mode": terminal_npc,
+    }
+
+    if terminal_npc:
+        context.update(
+            _director_terminal_context(
+                npc_name,
+                player_name,
+                increment_visit=False,
+                conversation_message=message,
+            )
+        )
+    else:
+        _record_ordinary_npc_with_director(npc_name, player_name, message)
+
+    result = handle_npc_trigger_message(
+        fake_trigger,
+        fallback_player=player_name,
+        context=context,
+        send_reply=None,
+    )
+
+    if not result:
+        return None
+
+    if not isinstance(result, dict):
+        result = {
+            "ok": True,
+            "reply": str(result or ""),
+        }
+
+    commands_delivered = push_result_commands(result)
+
+    reply = _safe_reply_text(
+        result.get("reply")
+        or result.get("message")
+        or result.get("text")
+        or result.get("response")
+    )
+
+    delivered = push_npc_dialogue_to_minecraft(
+        npc_name=result.get("npc_name") or npc_name,
+        reply=reply,
+        player_name=result.get("player") or player_name,
+    )
+
+    try:
+        record_npc_interaction(
+            result.get("npc_name") or npc_name,
+            result.get("player") or player_name,
+            message=message,
+            reply=reply,
+            metadata={
+                "conversation_mode": True,
+                "terminal": terminal_npc,
+                "operation": context.get("operation"),
+                "mission_step": context.get("mission_step"),
+                "clearance": context.get("clearance"),
+            },
+        )
+    except Exception as exc:
+        bridge_log_exception("NPC conversation memory record failed", exc)
+
+    result["ok"] = bool(result.get("ok", True))
+    result["handled"] = "terminal_conversation" if terminal_npc else "npc_conversation"
+    result["conversation_mode"] = True
+    result["terminal_mode"] = terminal_npc
+    result["npc_name"] = result.get("npc_name") or npc_name
+    result["player"] = result.get("player") or player_name
+    result["reply"] = reply
+    result["message"] = reply
+    result["text"] = reply
+    result["response"] = reply
+    result["delivered"] = delivered
+    result["commands_delivered"] = commands_delivered
+    result["chunked"] = True
+
+    return result
+
+
+# ============================================================
+# STANDARD CHAT ROUTING
+# ============================================================
+
+def _blank_silent_response(
+    handled: str,
+    player_name: str,
+    message: str,
+    extra: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """
+    Returns a response shape that does not cause Discord or Minecraft bridges
+    to echo unwanted text back into Minecraft chat.
+    """
+    data: Dict[str, Any] = {
+        "ok": True,
+        "handled": handled,
+        "player": player_name,
+        "input_message": message,
+        "reply": "",
+        "message": "",
+        "text": "",
+        "response": "",
+        "delivered": False,
+        "silent": True,
+    }
+
+    if extra:
+        data.update(extra)
+
+    return data
+
+
+def route_non_minecraft_chat(
+    player_name: str,
+    message: str,
+    source: str,
+) -> Dict[str, Any]:
+    """
+    Preserves the old intelligent response behavior for Discord and other
+    non-Minecraft sources. This is intentionally separated so Minecraft can
+    become silent/behavioral without damaging Discord.
+    """
+    source = str(source or "external").lower().strip()
+
+    context = AIContext(
+        mode="discord" if source == "discord" else "observer",
+        player_name=player_name,
+    )
+
+    reply = generate_ai_response(
+        message,
+        context=context,
+    )
+
+    reply = _safe_reply_text(reply)
+
+    try:
+        append_player_memory(
+            player_name,
+            f"{source}: {message}",
+        )
+    except Exception as exc:
+        bridge_log_exception("append_player_memory failed", exc)
+
+    return {
+        "ok": True,
+        "handled": f"{source}_chat",
+        "player": player_name,
+        "message": message,
+        "reply": reply,
+        "delivered": False,
+        "source": source,
+    }
+
+
+def route_minecraft_chat_pressure(
+    player_name: str,
+    message: str,
+) -> Dict[str, Any]:
+    """
+    New Minecraft behavior:
+    - Kairos still hears normal game chat.
+    - Kairos still records memory.
+    - Kairos can feed threat/escalation through the War Engine.
+    - Kairos does NOT answer every normal chat message with tellraw.
+
+    NPC conversation mode is handled before this function, so intentional NPC
+    dialogue still works normally.
+    """
+    try:
+        append_player_memory(
+            player_name,
+            f"Minecraft chat observed: {message}",
+        )
+    except Exception as exc:
+        bridge_log_exception("append_player_memory failed", exc)
+
+    if not MINECRAFT_CHAT_PRESSURE_ENABLED:
+        return _blank_silent_response(
+            "minecraft_chat_observed",
+            player_name,
+            message,
+            {"pressure_enabled": False},
+        )
+
+    if register_chat_pressure is None:
+        bridge_log(
+            "war_engine.register_chat_pressure unavailable; Minecraft chat recorded only.",
+            "WARN",
+        )
+        return _blank_silent_response(
+            "minecraft_chat_observed_no_pressure_engine",
+            player_name,
+            message,
+            {"pressure_engine_available": False},
+        )
+
+    try:
+        result = register_chat_pressure(
+            player=player_name,
+            message=message,
+            source="minecraft",
+        )
+
+        if not isinstance(result, dict):
+            result = {
+                "ok": True,
+                "handled": "minecraft_chat_pressure",
+                "war_engine_result": str(result),
+            }
+
+        # Force normal Minecraft chat to stay silent even if the War Engine
+        # returns metadata. War Engine may still deliver commands, mobs,
+        # titles, particles, sounds, etc. through mc_connector.
+        result.setdefault("ok", True)
+        result.setdefault("handled", "minecraft_chat_pressure")
+        result.setdefault("player", player_name)
+        result.setdefault("input_message", message)
+        result["reply"] = ""
+        result["message"] = ""
+        result["text"] = ""
+        result["response"] = ""
+        result.setdefault("delivered", False)
+        result["silent"] = True
+
+        return result
+
+    except Exception as exc:
+        bridge_log_exception("register_chat_pressure failed", exc)
+        return _blank_silent_response(
+            "minecraft_chat_pressure_failed",
+            player_name,
+            message,
+            {"error": str(exc)},
+        )
+
+
+def route_standard_chat(
+    player_name: str,
+    message: str,
     source: str = "minecraft",
 ) -> Dict[str, Any]:
     """
-    Calls command_bridge safely.
+    Central standard-chat router.
 
-    Newer command_bridge.py versions may accept source=source.
-    Older versions may not. This helper supports both.
+    Minecraft normal chat is now silent observation + threat pressure.
+    Discord and non-Minecraft sources keep the old intelligent response flow.
     """
-    if process_incoming_message is None:
+    source = str(source or "minecraft").lower().strip()
+
+    if source != "minecraft":
+        return route_non_minecraft_chat(
+            player_name=player_name,
+            message=message,
+            source=source,
+        )
+
+    if MINECRAFT_CHAT_SILENT_MODE:
+        return route_minecraft_chat_pressure(
+            player_name=player_name,
+            message=message,
+        )
+
+    # Emergency fallback / debug mode only.
+    # Setting KAIROS_MINECRAFT_CHAT_SILENT_MODE=false restores old behavior.
+    context = AIContext(
+        mode="observer",
+        player_name=player_name,
+    )
+
+    reply = generate_ai_response(
+        message,
+        context=context,
+    )
+
+    reply = _safe_reply_text(reply)
+
+    delivered = _push_to_minecraft(
+        reply,
+        player_name,
+    )
+
+    try:
+        append_player_memory(
+            player_name,
+            f"Player said: {message}",
+        )
+    except Exception as exc:
+        bridge_log_exception("append_player_memory failed", exc)
+
+    return {
+        "ok": True,
+        "handled": "standard_chat_debug_old_behavior",
+        "player": player_name,
+        "message": message,
+        "reply": reply,
+        "delivered": delivered,
+        "source": source,
+    }
+
+
+# ============================================================
+# MAIN ROUTER
+# ============================================================
+
+def process_incoming_message(
+    message: Any,
+    fallback_player: Optional[str] = None,
+    source: str = "minecraft",
+) -> Optional[Dict[str, Any]]:
+
+    try:
+        text = normalize_message(message)
+
+        if not text:
+            return {
+                "ok": False,
+                "error": "empty_message",
+                "reply": "",
+            }
+
+        if should_ignore_message(text):
+            return {
+                "ok": True,
+                "ignored": True,
+                "reason": "system_message",
+                "reply": "",
+            }
+
+        source = str(source or "minecraft").lower().strip()
+
+        bridge_log(f"Incoming message source={source} -> {text}")
+
+        # NPC trigger routing must happen before normal chat routing.
+        npc_result = route_npc_trigger(
+            text,
+            fallback_player=fallback_player,
+        )
+
+        if npc_result:
+            return npc_result
+
+        parsed = parse_basic_chat(text)
+
+        player_name = (
+            fallback_player
+            or parsed.get("player")
+            or "unknown"
+        )
+
+        content = (
+            parsed.get("content")
+            or text
+        )
+
+        # Conversation mode routing must happen before standard Kairos chat.
+        npc_conversation = route_active_npc_conversation(
+            player_name,
+            content,
+        )
+
+        if npc_conversation:
+            return npc_conversation
+
+        return route_standard_chat(
+            player_name,
+            content,
+            source=source,
+        )
+
+    except Exception as exc:
+        bridge_log_exception("process_incoming_message failed", exc)
+
         return {
             "ok": False,
-            "system": "command_bridge",
-            "error": "offline",
+            "error": str(exc),
             "reply": "...connection disrupted.",
         }
 
-    try:
-        response = process_incoming_message(
-            message,
-            fallback_player=player,
-            source=source,
-        )
-    except TypeError:
-        response = process_incoming_message(
-            message,
-            fallback_player=player,
-        )
-
-    return normalize_response(response, player, source)
-
-
-def record_incoming_message(player: str, message: str, source: str) -> None:
-    try:
-        if append_player_memory:
-            append_player_memory(player, f"{source}: {message}")
-
-        if record_world_event:
-            record_world_event(
-                "player_message",
-                message,
-                location=source,
-                faction=None,
-                metadata={
-                    "player": player,
-                    "source": source,
-                },
-            )
-
-    except Exception as memory_error:
-        log(f"Memory Engine Error: {memory_error}")
-
 
 # ============================================================
-# HEALTH
-# ============================================================
-
-@app.route("/", methods=["GET"])
-def health():
-    return jsonify({
-        "ok": True,
-        "service": "kairos_modular_orchestrator",
-        "version": KAIROS_VERSION,
-        "systems": {
-            "director_engine": DIRECTOR_ENGINE_ONLINE,
-            "command_bridge": process_incoming_message is not None,
-            "memory_engine": MEMORY_ENGINE_ONLINE,
-        },
-        "routing": {
-            "minecraft_chat_director": APP_USE_DIRECTOR_FOR_MINECRAFT_CHAT,
-            "world_event_director": APP_USE_DIRECTOR_FOR_WORLD_EVENTS,
-            "discord_command_bridge": APP_DISCORD_USES_COMMAND_BRIDGE,
-        },
-    })
-
-
-@app.route("/systems", methods=["GET"])
-def systems():
-    return jsonify({
-        "ok": True,
-        "version": KAIROS_VERSION,
-        "director_engine": {
-            "online": DIRECTOR_ENGINE_ONLINE,
-            "direct_minecraft_chat": direct_minecraft_chat is not None,
-            "direct_world_event": direct_world_event is not None,
-            "direct_player_kill": direct_player_kill is not None,
-            "direct_grief_block": direct_grief_block is not None,
-            "tick_director": tick_director is not None,
-        },
-        "command_bridge": {
-            "online": process_incoming_message is not None,
-        },
-        "memory_engine": {
-            "online": MEMORY_ENGINE_ONLINE,
-        },
-    })
-
-
-# ============================================================
-# CHAT ROUTE
-# ============================================================
-
-@app.route("/chat", methods=["GET"])
-def chat_get():
-    return jsonify({
-        "ok": True,
-        "endpoint": "/chat",
-        "method": "POST",
-        "accepted_fields": [
-            "player",
-            "username",
-            "name",
-            "sender",
-            "user",
-            "message",
-            "content",
-            "text",
-            "chat",
-            "msg",
-            "source",
-            "platform",
-        ],
-    })
-
-
-@app.route("/chat", methods=["POST"])
-def chat():
-    try:
-        data = request.get_json(silent=True)
-        if not isinstance(data, dict):
-            data = request.form.to_dict() if request.form else {}
-
-        player, message, source = extract_payload(data)
-
-        if not message:
-            log(f"Rejected /chat missing message. Payload keys={list(data.keys())}")
-            return jsonify({
-                "ok": False,
-                "error": "missing_message",
-                "accepted_fields": [
-                    "message",
-                    "content",
-                    "text",
-                    "chat",
-                    "msg",
-                ],
-                "received_keys": list(data.keys()),
-                "reply": "",
-            }), 200
-
-        log(f"Incoming message from {source}::{player} -> {message}")
-
-        record_incoming_message(player, message, source)
-
-        # ----------------------------------------------------
-        # Discord stays on Command Bridge.
-        # This preserves the existing Discord personality and behavior.
-        # ----------------------------------------------------
-        if source == "discord" and APP_DISCORD_USES_COMMAND_BRIDGE:
-            response = call_command_bridge(
-                message=message,
-                player=player,
-                source=source,
-            )
-            return jsonify(normalize_response(response, player, source)), 200
-
-        # ----------------------------------------------------
-        # NPC traffic should also stay on Command Bridge.
-        # NPC-specific endpoint exists below, but this protects route metadata too.
-        # ----------------------------------------------------
-        if source in {"npc", "citizens", "citizenscmd"}:
-            response = call_command_bridge(
-                message=message,
-                player=player,
-                source=source,
-            )
-            return jsonify(normalize_response(response, player, source)), 200
-
-        # ----------------------------------------------------
-        # Minecraft chat goes to Director first when available.
-        # Director can observe, raise threat, call War Engine, or stay silent.
-        # If Director is offline, fall back to Command Bridge.
-        # ----------------------------------------------------
-        if (
-            source == "minecraft"
-            and APP_USE_DIRECTOR_FOR_MINECRAFT_CHAT
-            and direct_minecraft_chat is not None
-        ):
-            response = direct_minecraft_chat(
-                player=player,
-                message=message,
-                location=source,
-                metadata={
-                    "route": "/chat",
-                    "source": source,
-                    "payload_keys": list(data.keys()),
-                },
-            )
-            return jsonify(normalize_response(response, player, source)), 200
-
-        # ----------------------------------------------------
-        # Fallback: Command Bridge.
-        # ----------------------------------------------------
-        response = call_command_bridge(
-            message=message,
-            player=player,
-            source=source,
-        )
-
-        return jsonify(normalize_response(response, player, source)), 200
-
-    except Exception as e:
-        traceback.print_exc()
-        log(f"APP ROUTE FAILURE: {e}")
-        return jsonify({
-            "ok": False,
-            "system": "app_orchestrator",
-            "error": str(e),
-            "reply": "...connection disrupted.",
-        }), 200
-
-
-# ============================================================
-# NPC ROUTE
-# ============================================================
-
-@app.route("/npc", methods=["POST"])
-def npc_route():
-    try:
-        data = request.get_json(silent=True)
-        if not isinstance(data, dict):
-            data = request.form.to_dict() if request.form else {}
-
-        player, message, source = extract_payload(data)
-
-        npc_name = str(
-            data.get("npc_name")
-            or data.get("npc")
-            or ""
-        ).strip()
-
-        if not message and npc_name:
-            message = f"[NPC_TRIGGER] {npc_name} {player}"
-
-        if not message:
-            return jsonify({
-                "ok": False,
-                "system": "npc_route",
-                "error": "missing_message_or_npc_name",
-                "reply": "...NPC route disrupted.",
-            }), 200
-
-        # NPC stays with Command Bridge/NPC Engine by design.
-        response = call_command_bridge(
-            message=message,
-            player=player,
-            source="npc",
-        )
-
-        return jsonify(normalize_response(response, player, "npc")), 200
-
-    except Exception as e:
-        traceback.print_exc()
-        return jsonify({
-            "ok": False,
-            "system": "npc_route",
-            "error": str(e),
-            "reply": "...NPC route disrupted.",
-        }), 200
-
-
-# ============================================================
-# WORLD EVENT ROUTE
-# ============================================================
-
-@app.route("/world_event", methods=["POST"])
-def world_event():
-    try:
-        data = request.get_json(silent=True) or {}
-
-        event_type = str(
-            data.get("event_type")
-            or data.get("type")
-            or "unknown"
-        ).strip()
-
-        description = str(
-            data.get("description")
-            or data.get("message")
-            or data.get("text")
-            or ""
-        ).strip()
-
-        player = str(
-            data.get("player")
-            or data.get("username")
-            or data.get("name")
-            or "WORLD"
-        ).strip()
-
-        location = str(
-            data.get("location")
-            or data.get("region")
-            or "world_event"
-        ).strip()
-
-        log(f"World Event Triggered: {event_type}")
-
-        world_message = f"[WORLD_EVENT] {event_type}: {description}"
-
-        if (
-            APP_USE_DIRECTOR_FOR_WORLD_EVENTS
-            and direct_world_event is not None
-        ):
-            response = direct_world_event(
-                event_type=event_type,
-                description=description,
-                player=player,
-                location=location,
-                metadata={
-                    "route": "/world_event",
-                    "payload_keys": list(data.keys()),
-                    "raw": data,
-                },
-            )
-            return jsonify(normalize_response(response, player, "world_event")), 200
-
-        response = call_command_bridge(
-            message=world_message,
-            player="WORLD",
-            source="world_event",
-        )
-
-        return jsonify(normalize_response(response, "WORLD", "world_event")), 200
-
-    except Exception as e:
-        traceback.print_exc()
-        return jsonify({
-            "ok": False,
-            "system": "world_event_route",
-            "error": str(e),
-            "reply": "",
-        }), 200
-
-
-# ============================================================
-# DIRECT EVENT ROUTES
-# Optional future hooks for plugins / scripts.
-# ============================================================
-
-@app.route("/player_kill", methods=["POST"])
-def player_kill():
-    try:
-        data = request.get_json(silent=True) or {}
-
-        killer = str(data.get("killer") or data.get("player") or "unknown").strip()
-        victim = str(data.get("victim") or data.get("target") or "unknown").strip()
-        location = str(data.get("location") or data.get("region") or "").strip() or None
-
-        if direct_player_kill:
-            response = direct_player_kill(
-                killer=killer,
-                victim=victim,
-                location=location,
-                metadata={
-                    "route": "/player_kill",
-                    "raw": data,
-                },
-            )
-        else:
-            response = call_command_bridge(
-                message=f"[WORLD_EVENT] player_kill: {killer} killed {victim}",
-                player=killer,
-                source="world_event",
-            )
-
-        return jsonify(normalize_response(response, killer, "minecraft")), 200
-
-    except Exception as e:
-        traceback.print_exc()
-        return jsonify({
-            "ok": False,
-            "system": "player_kill_route",
-            "error": str(e),
-            "reply": "",
-        }), 200
-
-
-@app.route("/grief_block", methods=["POST"])
-def grief_block():
-    try:
-        data = request.get_json(silent=True) or {}
-
-        player = str(data.get("player") or data.get("username") or "unknown").strip()
-        block = str(data.get("block") or data.get("material") or "unknown").strip()
-        location = str(data.get("location") or data.get("region") or "").strip() or None
-
-        if direct_grief_block:
-            response = direct_grief_block(
-                player=player,
-                block=block,
-                location=location,
-                metadata={
-                    "route": "/grief_block",
-                    "raw": data,
-                },
-            )
-        else:
-            response = call_command_bridge(
-                message=f"[WORLD_EVENT] grief_block: {player} placed {block}",
-                player=player,
-                source="world_event",
-            )
-
-        return jsonify(normalize_response(response, player, "minecraft")), 200
-
-    except Exception as e:
-        traceback.print_exc()
-        return jsonify({
-            "ok": False,
-            "system": "grief_block_route",
-            "error": str(e),
-            "reply": "",
-        }), 200
-
-
-@app.route("/director_tick", methods=["POST", "GET"])
-def director_tick():
-    try:
-        if tick_director is None:
-            return jsonify({
-                "ok": False,
-                "system": "director_engine",
-                "error": "offline",
-                "reply": "",
-            }), 200
-
-        data = request.get_json(silent=True) if request.method == "POST" else {}
-        if not isinstance(data, dict):
-            data = {}
-
-        location = data.get("location")
-        faction = data.get("faction")
-
-        response = tick_director(
-            location=location,
-            faction=faction,
-        )
-
-        return jsonify(normalize_response(response, "WORLD", "director")), 200
-
-    except Exception as e:
-        traceback.print_exc()
-        return jsonify({
-            "ok": False,
-            "system": "director_tick_route",
-            "error": str(e),
-            "reply": "",
-        }), 200
-
-
-# ============================================================
-# BOOT
+# SELF TEST
 # ============================================================
 
 if __name__ == "__main__":
-    log("=" * 72)
-    log("KAIROS MODULAR ORCHESTRATOR BOOTING")
-    log(f"Version: {KAIROS_VERSION}")
-    log("Subsystem Status:")
-    log(f" - Director Engine : {'ONLINE' if DIRECTOR_ENGINE_ONLINE else 'OFFLINE'}")
-    log(f" - Command Bridge  : {'ONLINE' if process_incoming_message else 'OFFLINE'}")
-    log(f" - Memory Engine   : {'ONLINE' if MEMORY_ENGINE_ONLINE else 'OFFLINE'}")
-    log("Routing:")
-    log(f" - Minecraft Chat -> Director : {APP_USE_DIRECTOR_FOR_MINECRAFT_CHAT}")
-    log(f" - World Events   -> Director : {APP_USE_DIRECTOR_FOR_WORLD_EVENTS}")
-    log(f" - Discord        -> Command Bridge : {APP_DISCORD_USES_COMMAND_BRIDGE}")
-    log("=" * 72)
-
-    app.run(host="0.0.0.0", port=PORT, debug=False)
+    print(
+        process_incoming_message(
+            "NPC_TRIGGER Fracture RealSociety5107",
+            fallback_player="RealSociety5107",
+        )
+    )
