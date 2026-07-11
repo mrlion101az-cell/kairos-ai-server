@@ -1,12 +1,12 @@
 """
 command_bridge.py
 Kairos / Nexus Command Bridge
-FULL NPC ENGINE INTEGRATION + CHUNKED NPC DIALOGUE + CONVERSATION MODE
+PERMANENT NPC + F.R.A.C.T.U.R.E. TERMINAL ROUTING
 
 What this file does:
 - Receives Minecraft chat from app.py
 - Detects Citizens/CitizensCMD NPC triggers:
-    NPC_TRIGGER CaptainVaros RealSociety5107
+    NPC_TRIGGER Fracture RealSociety5107
 - Routes NPC triggers into npc_engine.py
 - Sends long NPC dialogue back to Minecraft safely in multiple tellraw chunks
 - Activates temporary conversation mode after clicking an NPC
@@ -76,6 +76,18 @@ except Exception as exc:
 
 
 # ============================================================
+# DIRECTOR / TERMINAL IMPORTS
+# ============================================================
+
+try:
+    from director_engine import direct_npc_event, direct_terminal_request
+except Exception as exc:
+    direct_npc_event = None
+    direct_terminal_request = None
+    print(f"[COMMAND_BRIDGE ERROR] director_engine import failed: {exc}", flush=True)
+
+
+# ============================================================
 # CONFIG
 # ============================================================
 
@@ -109,7 +121,7 @@ ACTIVE_NPC_CONVERSATIONS: Dict[str, Dict[str, Any]] = {}
 CHAT_PREFIX_PATTERN = re.compile(r"^\[(.*?)\]\s*(.*)$")
 
 # Supports BOTH:
-# NPC_TRIGGER CaptainVaros RealSociety5107
+# NPC_TRIGGER Fracture RealSociety5107
 # [NPC_TRIGGER] CaptainVaros RealSociety5107
 NPC_TRIGGER_PATTERN = re.compile(
     r"^\[?NPC_TRIGGER\]?\s+([A-Za-z0-9_\-]+)(?:\s+(.+))?$",
@@ -129,6 +141,15 @@ MINECRAFT_CHAT_PRESSURE_ENABLED = os.getenv("KAIROS_MINECRAFT_CHAT_PRESSURE_ENAB
 
 # Non-Minecraft sources, especially Discord, keep normal AI response behavior.
 DISCORD_CHAT_BEHAVIOR_UNCHANGED = os.getenv("KAIROS_DISCORD_CHAT_BEHAVIOR_UNCHANGED", "true").lower() == "true"
+
+# Terminal NPCs are deterministic story interfaces. They route through Director
+# before the dialogue engine so missions, clearance, artifacts, and memory state
+# are loaded without touching the War Engine.
+TERMINAL_NPC_NAMES = {
+    item.strip().lower().replace(".", "").replace("_", "").replace("-", "")
+    for item in os.getenv("KAIROS_TERMINAL_NPCS", "Fracture,F.R.A.C.T.U.R.E.").split(",")
+    if item.strip()
+}
 
 
 # ============================================================
@@ -494,6 +515,94 @@ def normalize_trigger_for_npc_engine(
 
 
 # ============================================================
+# DIRECTOR / TERMINAL HELPERS
+# ============================================================
+
+def _normalized_npc_identity(value: Any) -> str:
+    return re.sub(r"[^a-z0-9]", "", str(value or "").lower())
+
+
+def _is_terminal_npc(npc_name: str) -> bool:
+    return _normalized_npc_identity(npc_name) in TERMINAL_NPC_NAMES
+
+
+def _director_terminal_context(
+    npc_name: str,
+    player_name: str,
+    *,
+    increment_visit: bool,
+    conversation_message: str = "",
+) -> Dict[str, Any]:
+    """
+    Ask Director/Fracture for deterministic player progression context.
+
+    Returns an empty dict if the optional terminal subsystem is unavailable.
+    This keeps ordinary NPC conversations and server startup fail-soft.
+    """
+    if not direct_terminal_request:
+        bridge_log("direct_terminal_request unavailable", "WARN")
+        return {}
+
+    try:
+        director_result = direct_terminal_request(
+            terminal_name=npc_name,
+            player=player_name,
+            metadata={
+                "increment_visit": increment_visit,
+                "conversation_message": conversation_message,
+                "source": "command_bridge",
+            },
+        )
+
+        if not isinstance(director_result, dict):
+            bridge_log("Director terminal result was not a dictionary", "WARN")
+            return {}
+
+        execution = director_result.get("execution") or {}
+        if not isinstance(execution, dict):
+            execution = {}
+
+        terminal_context = execution.get("terminal_context") or {}
+        if not isinstance(terminal_context, dict):
+            terminal_context = {}
+
+        bridge_log(
+            "Terminal context loaded "
+            f"npc={npc_name} player={player_name} "
+            f"operation={terminal_context.get('operation')} "
+            f"step={terminal_context.get('mission_step')} "
+            f"clearance={terminal_context.get('clearance')}"
+        )
+
+        terminal_context = dict(terminal_context)
+        terminal_context["director_result"] = director_result
+        return terminal_context
+
+    except Exception as exc:
+        bridge_log_exception("Director terminal routing failed", exc)
+        return {}
+
+
+def _record_ordinary_npc_with_director(
+    npc_name: str,
+    player_name: str,
+    message: str,
+) -> None:
+    """Record ordinary NPC significance without changing dialogue behavior."""
+    if not direct_npc_event:
+        return
+    try:
+        direct_npc_event(
+            npc_name=npc_name,
+            player=player_name,
+            message=message,
+            metadata={"source": "command_bridge"},
+        )
+    except Exception as exc:
+        bridge_log_exception("Director ordinary NPC observation failed", exc)
+
+
+# ============================================================
 # NPC ROUTING
 # ============================================================
 
@@ -517,10 +626,13 @@ def route_npc_trigger(
 
     npc_name = parsed["npc_name"]
     player_name = parsed["player"]
+    terminal_npc = _is_terminal_npc(npc_name)
 
-    bridge_log(f"NPC trigger routed -> npc={npc_name} player={player_name}")
+    bridge_log(
+        f"NPC trigger routed -> npc={npc_name} player={player_name} terminal={terminal_npc}"
+    )
 
-    # Activates conversation mode after clicking NPC.
+    # Clicking any NPC opens a temporary private conversation session.
     activate_npc_conversation(player_name, npc_name)
 
     normalized_message = normalize_trigger_for_npc_engine(
@@ -528,21 +640,42 @@ def route_npc_trigger(
         fallback_player=player_name,
     )
 
-    # IMPORTANT:
-    # We do NOT let npc_engine send the reply directly.
-    # command_bridge handles delivery so it can chunk long dialogue safely.
+    context: Dict[str, Any] = {
+        "conversation_mode": False,
+        "conversation_message": "",
+        "npc_trigger": True,
+    }
+
+    # F.R.A.C.T.U.R.E. and future terminal NPCs receive deterministic progression
+    # facts from Director first. GPT controls only presentation, never mission facts.
+    if terminal_npc:
+        terminal_context = _director_terminal_context(
+            npc_name,
+            player_name,
+            increment_visit=True,
+        )
+        context.update(terminal_context)
+        context["terminal_mode"] = True
+    else:
+        _record_ordinary_npc_with_director(npc_name, player_name, message)
+
+    # command_bridge owns Minecraft delivery so long dialogue can be chunked safely.
     result = handle_npc_trigger_message(
         normalized_message,
         fallback_player=player_name,
-        context={
-            "conversation_mode": False,
-            "conversation_message": "",
-        },
+        context=context,
         send_reply=None,
     )
 
     if not result:
-        return None
+        return {
+            "ok": False,
+            "handled": "npc_trigger",
+            "npc_name": npc_name,
+            "player": player_name,
+            "error": "npc_engine_returned_no_result",
+            "reply": "...terminal response unavailable.",
+        }
 
     if not isinstance(result, dict):
         result = {
@@ -550,6 +683,7 @@ def route_npc_trigger(
             "reply": str(result or ""),
         }
 
+    # Subsystems may return deterministic commands such as scoreboard mirrors.
     commands_delivered = push_result_commands(result)
 
     reply = _safe_reply_text(
@@ -571,12 +705,18 @@ def route_npc_trigger(
             result.get("player") or player_name,
             message=message,
             reply=reply,
+            metadata={
+                "terminal": terminal_npc,
+                "operation": context.get("operation"),
+                "mission_step": context.get("mission_step"),
+                "clearance": context.get("clearance"),
+            },
         )
     except Exception as exc:
         bridge_log_exception("NPC memory record failed", exc)
 
-    result["ok"] = True
-    result["handled"] = "npc_trigger"
+    result["ok"] = bool(result.get("ok", True))
+    result["handled"] = "terminal_trigger" if terminal_npc else "npc_trigger"
     result["npc_name"] = result.get("npc_name") or npc_name
     result["player"] = result.get("player") or player_name
     result["reply"] = reply
@@ -587,6 +727,7 @@ def route_npc_trigger(
     result["commands_delivered"] = commands_delivered
     result["chunked"] = True
     result["conversation_activated"] = True
+    result["terminal_mode"] = terminal_npc
 
     return result
 
@@ -597,6 +738,9 @@ def route_active_npc_conversation(
 ) -> Optional[Dict[str, Any]]:
     """
     If the player recently clicked an NPC, route normal chat to that NPC.
+
+    Terminal NPCs refresh deterministic mission context on every message without
+    incrementing the visit counter. Ordinary NPCs retain the legacy AI behavior.
     """
     player_name = str(player_name or "unknown").strip()
     message = str(message or "").strip()
@@ -627,20 +771,37 @@ def route_active_npc_conversation(
     if handle_npc_trigger_message is None:
         return None
 
-    # Refresh timeout.
     ACTIVE_NPC_CONVERSATIONS[player_name]["timestamp"] = time.time()
 
-    bridge_log(f"Active NPC conversation -> npc={npc_name} player={player_name} msg={message}")
+    terminal_npc = _is_terminal_npc(npc_name)
+    bridge_log(
+        f"Active NPC conversation -> npc={npc_name} player={player_name} "
+        f"terminal={terminal_npc} msg={message}"
+    )
 
     fake_trigger = f"[NPC_TRIGGER] {npc_name} {player_name}"
+    context: Dict[str, Any] = {
+        "conversation_mode": True,
+        "conversation_message": message,
+        "terminal_mode": terminal_npc,
+    }
+
+    if terminal_npc:
+        context.update(
+            _director_terminal_context(
+                npc_name,
+                player_name,
+                increment_visit=False,
+                conversation_message=message,
+            )
+        )
+    else:
+        _record_ordinary_npc_with_director(npc_name, player_name, message)
 
     result = handle_npc_trigger_message(
         fake_trigger,
         fallback_player=player_name,
-        context={
-            "conversation_mode": True,
-            "conversation_message": message,
-        },
+        context=context,
         send_reply=None,
     )
 
@@ -674,13 +835,21 @@ def route_active_npc_conversation(
             result.get("player") or player_name,
             message=message,
             reply=reply,
+            metadata={
+                "conversation_mode": True,
+                "terminal": terminal_npc,
+                "operation": context.get("operation"),
+                "mission_step": context.get("mission_step"),
+                "clearance": context.get("clearance"),
+            },
         )
     except Exception as exc:
         bridge_log_exception("NPC conversation memory record failed", exc)
 
-    result["ok"] = True
-    result["handled"] = "npc_conversation"
+    result["ok"] = bool(result.get("ok", True))
+    result["handled"] = "terminal_conversation" if terminal_npc else "npc_conversation"
     result["conversation_mode"] = True
+    result["terminal_mode"] = terminal_npc
     result["npc_name"] = result.get("npc_name") or npc_name
     result["player"] = result.get("player") or player_name
     result["reply"] = reply
@@ -1002,7 +1171,7 @@ def process_incoming_message(
 if __name__ == "__main__":
     print(
         process_incoming_message(
-            "NPC_TRIGGER CaptainVaros RealSociety5107",
+            "NPC_TRIGGER Fracture RealSociety5107",
             fallback_player="RealSociety5107",
         )
     )
