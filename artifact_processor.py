@@ -30,6 +30,11 @@ from mission_registry import (
     load_mission,
 )
 
+from inventory_bridge import (
+    player_has_artifact,
+    remove_artifact,
+)
+
 
 def _clean_id(value: Any) -> str:
     return str(value or "").strip().lower()
@@ -118,6 +123,22 @@ def process_artifact_submission(
     completion = mission.get("completion", {}) or {}
     required_artifact = _clean_id(completion.get("required_artifact"))
 
+    inventory_check = player_has_artifact(player_name, artifact)
+
+    if not inventory_check.get("found"):
+        return {
+            "ok": True,
+            "accepted": False,
+            "player": player_name,
+            "artifact_id": artifact_id,
+            "artifact": artifact,
+            "mission": mission,
+            "reason": "artifact_not_present_in_inventory",
+            "inventory": inventory_check,
+            "commands": [],
+        }
+
+
     if required_artifact and artifact_id != required_artifact:
         return {
             "ok": True,
@@ -140,6 +161,21 @@ def process_artifact_submission(
         artifact.get("memory_integrity_gain"),
         1,
     )
+
+    remove_result = remove_artifact(player_name, artifact)
+
+    if not remove_result.get("removed"):
+        return {
+            "ok": False,
+            "accepted": False,
+            "player": player_name,
+            "artifact_id": artifact_id,
+            "artifact": artifact,
+            "mission": mission,
+            "reason": "artifact_remove_failed",
+            "inventory": remove_result,
+            "commands": [],
+        }
 
     record = add_artifact(
         player_name,
@@ -254,6 +290,12 @@ def build_artifact_response(result: Dict[str, Any]) -> str:
 
     if not result.get("accepted"):
         required = result.get("required_artifact")
+        reason = result.get("reason")
+        if reason == "artifact_not_present_in_inventory":
+            return (
+                "Inventory scan complete... Required artifact not detected. "
+                "Return after recovery."
+            )
         if required:
             return (
                 "Artifact rejected... "
