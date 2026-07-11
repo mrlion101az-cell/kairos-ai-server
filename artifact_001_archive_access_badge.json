@@ -1,0 +1,20 @@
+{
+  "id": "artifact_001_archive_access_badge",
+  "display_name": "Archive Access Badge",
+  "type": "personnel_badge",
+  "minecraft_item": "iron_nugget",
+  "custom_name": "Archive Access Badge",
+  "lore": [
+    "PROPERTY OF PROJECT NEXUS",
+    "LEVEL I CLEARANCE",
+    "Recovered from Mining Sector 01",
+    "Return to F.R.A.C.T.U.R.E."
+  ],
+  "restores_memory": "memory_001_mining_supervisor_record",
+  "memory_integrity_gain": 2,
+  "progression": {
+    "grant_clearance": 2,
+    "set_operation": "002",
+    "set_mission_step": 0
+  }
+}
