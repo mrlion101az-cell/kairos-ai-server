@@ -1,0 +1,33 @@
+{
+  "id": "002",
+  "title": "THE FIRST SHRINE",
+  "required_clearance": 2,
+  "destination": "Fairview City Terminal",
+  "warning": "Terminal systems report anomalous energy readings beyond the checkpoint.",
+  "stages": {
+    "0": {
+      "status": "ACTIVE",
+      "destination": "Fairview City Terminal",
+      "directive": "Establish a base within the terminal. A structure matching no known terminal blueprint has been detected nearby, designated TIME FRACTURE WAYSHARD. Investigate it.",
+      "warning": "Structural integrity of the terminal beyond checkpoint one is unconfirmed."
+    },
+    "1": {
+      "status": "ARTIFACT RECOVERED",
+      "destination": "WorldSpawn",
+      "directive": "Return the recovered artifact to WorldSpawn for cataloging.",
+      "warning": "Do not discard the recovered totem."
+    },
+    "2": {
+      "status": "COMPLETE",
+      "destination": "WorldSpawn",
+      "directive": "Waypoint shrine network acknowledged. Clearance Level III authorized. Continue investigating shrine locations as they are discovered -- additional archives may be recovered this way. Operation 003 is now available.",
+      "warning": ""
+    }
+  },
+  "completion": {
+    "required_artifact": "artifact_002_fractured_wayshard_totem",
+    "grant_clearance": 3,
+    "unlock_operation": "003",
+    "restore_memory": "memory_002_wayshard_keeper_record"
+  }
+}
