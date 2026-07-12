@@ -1,0 +1,20 @@
+{
+  "id": "artifact_003_wayshard_journal",
+  "display_name": "Wayshard Journal",
+  "type": "lore_book",
+  "minecraft_item": "blaze_rod",
+  "custom_name": "Wayshard Journal",
+  "lore": [
+    "RECOVERED FROM THE TIME FRACTURE WAYSHARD",
+    "PROPERTY OF PROJECT NEXUS -- PERSONAL RECORD",
+    "Handwritten. Ink still wet.",
+    "Return to F.R.A.C.T.U.R.E."
+  ],
+  "restores_memory": "memory_003_wayshard_journal_entry",
+  "memory_integrity_gain": 2,
+  "progression": {
+    "grant_clearance": 4,
+    "set_operation": "004",
+    "set_mission_step": 0
+  }
+}
