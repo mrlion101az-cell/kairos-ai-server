@@ -1,0 +1,33 @@
+{
+  "id": "003",
+  "title": "THE WAYSHARD JOURNAL",
+  "required_clearance": 3,
+  "destination": "Time Fracture Wayshard",
+  "warning": "Terminal systems detect a secondary resonance signature at the Wayshard site.",
+  "stages": {
+    "0": {
+      "status": "ACTIVE",
+      "destination": "Time Fracture Wayshard",
+      "directive": "Return to the Time Fracture Wayshard. A second object has been detected there since your last visit. Recover it.",
+      "warning": "Resonance levels at the Wayshard are higher than previously recorded."
+    },
+    "1": {
+      "status": "ARTIFACT RECOVERED",
+      "destination": "WorldSpawn",
+      "directive": "Return the recovered journal to WorldSpawn for cataloging.",
+      "warning": "Do not damage the journal. Its contents may be unrecoverable if lost."
+    },
+    "2": {
+      "status": "COMPLETE",
+      "destination": "WorldSpawn",
+      "directive": "Journal contents archived. Clearance Level IV authorized. Operation 004 is now available.",
+      "warning": ""
+    }
+  },
+  "completion": {
+    "required_artifact": "artifact_003_wayshard_journal",
+    "grant_clearance": 4,
+    "unlock_operation": "004",
+    "restore_memory": "memory_003_wayshard_journal_entry"
+  }
+}
