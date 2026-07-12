@@ -1,0 +1,15 @@
+{
+  "id": "memory_003_wayshard_journal_entry",
+  "title": "WAYSHARD JOURNAL ENTRY",
+  "classification": "PERSONAL ARCHIVE",
+  "unlock_artifact": "artifact_003_wayshard_journal",
+  "summary": "A handwritten journal recovered from the Time Fracture Wayshard. [RESERVED -- replace with story summary]",
+  "content": [
+    "[RESERVED -- replace with journal excerpt / story text]"
+  ],
+  "fracture_dialogue": [
+    "Journal archive restored...",
+    "Handwriting does not match any known terminal staff record...",
+    "[RESERVED -- replace with additional Fracture reaction lines]"
+  ]
+}
