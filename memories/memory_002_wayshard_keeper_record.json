@@ -1,0 +1,21 @@
+{
+  "id": "memory_002_wayshard_keeper_record",
+  "title": "WAYSHARD KEEPER RECORD",
+  "classification": "SHRINE NETWORK ARCHIVE",
+  "unlock_artifact": "artifact_002_fractured_wayshard_totem",
+  "summary": "A weathered maintenance log recovered from the Time Fracture Wayshard.",
+  "content": [
+    "Personnel Name: [REDACTED]",
+    "Position: Wayshard Keeper",
+    "Assignment: Time Fracture Wayshard, Fairview City Terminal",
+    "Note: Shrine predates terminal construction records by an unknown margin.",
+    "Final recorded directive: Maintain resonance. Do not let the network go dark."
+  ],
+  "fracture_dialogue": [
+    "Shrine archive restored...",
+    "Wayshard Keeper...",
+    "Assignment predates terminal construction...",
+    "Maintain resonance...",
+    "Do not let the network go dark."
+  ]
+}
