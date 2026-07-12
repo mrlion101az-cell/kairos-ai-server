@@ -1,0 +1,20 @@
+{
+  "id": "artifact_002_fractured_wayshard_totem",
+  "display_name": "Fractured Wayshard Totem",
+  "type": "shrine_relic",
+  "minecraft_item": "totem_of_undying",
+  "custom_name": "Fractured Wayshard Totem",
+  "lore": [
+    "RECOVERED FROM THE TIME FRACTURE WAYSHARD",
+    "PROPERTY OF PROJECT NEXUS -- SHRINE NETWORK ASSET",
+    "Latent resonance detected. Handle with caution.",
+    "Return to F.R.A.C.T.U.R.E."
+  ],
+  "restores_memory": "memory_002_wayshard_keeper_record",
+  "memory_integrity_gain": 2,
+  "progression": {
+    "grant_clearance": 3,
+    "set_operation": "003",
+    "set_mission_step": 0
+  }
+}
