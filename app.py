@@ -89,6 +89,24 @@ except Exception as e:
     inventory_bridge_status = None
     print(f"[APP ERROR] inventory_bridge import failed: {e}", flush=True)
 
+
+# ============================================================
+# ARTIFACT PROCESSOR IMPORT
+# ============================================================
+
+try:
+    from artifact_processor import (
+        process_repository_confirmation,
+        build_artifact_response,
+    )
+    ARTIFACT_PROCESSOR_ONLINE = True
+except Exception as e:
+    ARTIFACT_PROCESSOR_ONLINE = False
+    process_repository_confirmation = None
+    build_artifact_response = None
+    print(f"[APP ERROR] artifact_processor import failed: {e}", flush=True)
+
+
 # ============================================================
 # APP CONFIG
 # ============================================================
@@ -693,6 +711,66 @@ def inventory_event():
 
 
 # ============================================================
+# REPOSITORY EVENT ROUTE
+# Handles artifact turn-ins from NexusBridge (Minecraft plugin).
+# The plugin has already validated the item and physically removed
+# it from the chest -- this route only syncs Kairos's own story
+# state (clearance, operation, memory restoration) to match.
+# ============================================================
+
+@app.route("/repository_event", methods=["POST"])
+def repository_event():
+    try:
+        if process_repository_confirmation is None:
+            return jsonify({"ok": False, "error": "artifact_processor_offline"}), 200
+
+        data = request.get_json(silent=True) or {}
+
+        player = str(data.get("player") or data.get("username") or "unknown").strip()
+        artifact_id = str(data.get("id") or data.get("artifact_id") or "").strip()
+        memory_id = str(data.get("restores_memory") or "").strip() or None
+        integrity_gain = data.get("memory_integrity_gain")
+        progression = data.get("progression") or {}
+        mission_payload = data.get("mission") or {}
+
+        log(f"Repository Event: player={player} artifact={artifact_id} memory={memory_id}")
+
+        result = process_repository_confirmation(
+            player,
+            artifact_id,
+            memory_id=memory_id,
+            integrity_gain=integrity_gain if isinstance(integrity_gain, int) else 1,
+            grant_clearance=progression.get("grant_clearance"),
+            next_operation=progression.get("set_operation"),
+            next_step=progression.get("set_mission_step") or 0,
+            completed_operation=mission_payload.get("id"),
+        )
+
+        dialogue = build_artifact_response(result) if build_artifact_response else ""
+
+        response = {
+            "ok": result.get("ok", False),
+            "accepted": result.get("accepted", False),
+            "artifact_accepted": result.get("accepted", False),
+            "duplicate": result.get("duplicate", False),
+            "player": player,
+            "artifact_id": artifact_id,
+            "reply": dialogue,
+        }
+
+        return jsonify(normalize_response(response, player, "repository")), 200
+
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({
+            "ok": False,
+            "system": "repository_event_route",
+            "error": str(e),
+            "reply": "",
+        }), 200
+
+
+# ============================================================
 # BOOT
 # ============================================================
 
@@ -704,6 +782,7 @@ if __name__ == "__main__":
     log(f" - Director Engine : {'ONLINE' if DIRECTOR_ENGINE_ONLINE else 'OFFLINE'}")
     log(f" - Command Bridge  : {'ONLINE' if process_incoming_message else 'OFFLINE'}")
     log(f" - Memory Engine   : {'ONLINE' if MEMORY_ENGINE_ONLINE else 'OFFLINE'}")
+    log(f" - Artifact Processor : {'ONLINE' if ARTIFACT_PROCESSOR_ONLINE else 'OFFLINE'}")
     log("Routing:")
     log(f" - Minecraft Chat -> Director : {APP_USE_DIRECTOR_FOR_MINECRAFT_CHAT}")
     log(f" - World Events   -> Director : {APP_USE_DIRECTOR_FOR_WORLD_EVENTS}")
