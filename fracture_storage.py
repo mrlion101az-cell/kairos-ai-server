@@ -24,6 +24,7 @@ def _default_player(name: str) -> Dict[str, Any]:
         "fracture_visits": 0,
         "recovered_artifacts": [],
         "unlocked_memories": [],
+        "completed_operations": [],
         "memory_integrity": 3,
         "first_seen": time.time(),
         "last_seen": time.time(),
@@ -94,3 +95,29 @@ def add_artifact(name: str, artifact_id: str, memory_id: Optional[str] = None, i
     result = dict(record)
     result["artifact_duplicate"] = duplicate
     return result
+
+
+def mark_operation_complete(name: str, operation_id: str) -> Dict[str, Any]:
+    """
+    Records that a player has fully completed a given operation (mission).
+    Idempotent: completing the same operation twice only records it once.
+
+    Used by artifact_processor.py after an artifact submission finishes
+    updating clearance/current_operation/mission_step, to log which
+    operation was just finished (as opposed to current_operation, which
+    points at whichever operation is now active/next).
+    """
+    clean = str(name or "traveler").strip()
+    op = str(operation_id or "").strip().zfill(3)
+
+    data = _load()
+    players = data.setdefault("players", {})
+    record = players.setdefault(clean, _default_player(clean))
+
+    completed: List[str] = record.setdefault("completed_operations", [])
+    if op and op not in completed:
+        completed.append(op)
+
+    record["last_seen"] = time.time()
+    _save(data)
+    return dict(record)
