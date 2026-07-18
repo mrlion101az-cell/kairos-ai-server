@@ -12,6 +12,18 @@ Purpose:
 
 This module is data-driven.
 It reads mission, artifact, and memory JSON files through mission_registry.py.
+
+Two entry points:
+- process_artifact_submission(): Kairos is the authority. Re-checks the
+  player's live inventory snapshot and issues the removal command itself
+  via mc_connector. Used by repository_bridge.py for integrations where
+  nothing has already validated/removed the item.
+- process_repository_confirmation(): trusts that the caller (the
+  NexusBridge Minecraft plugin, via app.py's /repository_event route)
+  already validated the item was present and physically removed it.
+  Skips inventory re-check and removal entirely, and only syncs Kairos's
+  own story state (clearance, operation, memory restoration, duplicate
+  tracking) to match what already happened in-game.
 """
 
 from __future__ import annotations
@@ -258,6 +270,128 @@ def process_artifact_submission(
         "next_operation": next_operation,
         "record": record,
         "reason": "artifact_accepted_and_progression_updated",
+        "commands": _scoreboard_commands(player_name, record),
+    }
+
+
+# ============================================================
+# REPOSITORY CONFIRMATION (NexusBridge Minecraft plugin path)
+#
+# Called from app.py's /repository_event route. The plugin has
+# ALREADY validated the item was present and physically removed it
+# from the chest before this function is ever invoked -- so, unlike
+# process_artifact_submission() above, this does NOT call
+# player_has_artifact() or remove_artifact(). Re-checking inventory
+# here would always fail, since nothing currently pushes live
+# snapshots to /inventory_event for this flow.
+#
+# This function's only job is to bring Kairos's own story state
+# (fracture_storage) in sync with what the plugin already decided:
+# record the artifact, restore the linked memory, and advance
+# clearance/operation/mission_step.
+# ============================================================
+
+def process_repository_confirmation(
+    player_name: str,
+    artifact_id: str,
+    *,
+    memory_id: Optional[str] = None,
+    integrity_gain: int = 1,
+    grant_clearance: Optional[int] = None,
+    next_operation: Optional[str] = None,
+    next_step: int = 0,
+    completed_operation: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Confirms an artifact submission that the Minecraft plugin already
+    validated and physically removed from the player's chest/inventory.
+
+    Returns the same response shape as process_artifact_submission()
+    (ok, accepted, duplicate, player, artifact_id, artifact, memory_id,
+    memory, record, reason, commands) so build_artifact_response() and
+    any other downstream consumer work unmodified.
+    """
+
+    player_name = str(player_name or "").strip()
+    artifact_id = _clean_id(artifact_id)
+
+    if not player_name or not artifact_id:
+        return {
+            "ok": False,
+            "accepted": False,
+            "reason": "missing_player_or_artifact",
+            "commands": [],
+        }
+
+    artifact = load_artifact(artifact_id) or {}
+    record = get_player(player_name)
+
+    record = add_artifact(
+        player_name,
+        artifact_id=artifact_id,
+        memory_id=memory_id,
+        integrity_gain=integrity_gain,
+    )
+
+    duplicate = bool(record.get("artifact_duplicate"))
+
+    if duplicate:
+        clean_record = dict(record)
+        clean_record.pop("artifact_duplicate", None)
+
+        return {
+            "ok": True,
+            "accepted": False,
+            "duplicate": True,
+            "player": player_name,
+            "artifact_id": artifact_id,
+            "artifact": artifact,
+            "record": clean_record,
+            "reason": "artifact_already_submitted",
+            "commands": _scoreboard_commands(player_name, clean_record),
+        }
+
+    resolved_clearance = (
+        grant_clearance
+        if grant_clearance is not None
+        else _safe_int(record.get("clearance"), 1)
+    )
+    resolved_operation = str(
+        next_operation or record.get("current_operation") or "001"
+    ).zfill(3)
+
+    updated_clearance = max(
+        _safe_int(record.get("clearance"), 1),
+        _safe_int(resolved_clearance, 1),
+    )
+
+    record = update_player(
+        player_name,
+        clearance=updated_clearance,
+        current_operation=resolved_operation,
+        mission_step=_safe_int(next_step, 0),
+    )
+
+    if completed_operation:
+        record = mark_operation_complete(
+            player_name,
+            str(completed_operation).zfill(3),
+        )
+
+    memory = load_memory(memory_id) if memory_id else None
+
+    return {
+        "ok": True,
+        "accepted": True,
+        "duplicate": False,
+        "player": player_name,
+        "artifact_id": artifact_id,
+        "artifact": artifact,
+        "memory_id": memory_id,
+        "memory": memory,
+        "next_operation": resolved_operation,
+        "record": record,
+        "reason": "artifact_confirmed_from_minecraft",
         "commands": _scoreboard_commands(player_name, record),
     }
 
