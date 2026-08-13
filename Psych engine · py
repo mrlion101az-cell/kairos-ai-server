@@ -1,0 +1,182 @@
+"""
+psych_engine.py
+Kairos / Nexus Psychological Observation Engine
+
+Purpose:
+- Generates short, personal, unsettling lines for Kairos to send directly
+  to a single player, referencing something specific he has observed about
+  them: an item/count in their inventory, a location they've reached, or a
+  sustained action they've taken (eating, drinking, walking, etc.).
+- Does NOT decide whether to fire. director_engine.py owns that decision
+  (scoring, cooldowns, silence chance).
+- Does NOT send Minecraft commands directly. mc_connector.py does that.
+- Does NOT run Flask or background loops.
+
+Design intent:
+- These lines are intentionally NOT threat escalation. No mobs, no combat
+  pressure, no threat-score impact worth mentioning. This is a separate,
+  quieter track from war_engine's combat/grief response ladder.
+- The goal is precision, not volume: proving Kairos has been paying closer
+  attention than the player realizes. Understated lines land harder here
+  than theatrical ones.
+- Kairos should reference the specific triggering detail directly (an exact
+  item count, an exact place, an exact repeated behavior) without explaining
+  HOW he knows -- the not-knowing-how is part of what should unsettle.
+"""
+
+from __future__ import annotations
+
+import os
+import traceback
+from typing import Any, Dict, List, Optional
+
+try:
+    from ai_core import AIContext, generate_ai_response
+except Exception as exc:  # pragma: no cover
+    AIContext = None  # type: ignore
+    generate_ai_response = None  # type: ignore
+    print(f"[PSYCH_ENGINE WARN] ai_core import failed: {exc}", flush=True)
+
+
+# ============================================================
+# CONFIG
+# ============================================================
+
+PSYCH_DEBUG = os.getenv("PSYCH_ENGINE_DEBUG", "true").lower() == "true"
+PSYCH_MAX_TOKENS = int(os.getenv("PSYCH_ENGINE_MAX_TOKENS", "60"))
+PSYCH_TEMPERATURE = float(os.getenv("PSYCH_ENGINE_TEMPERATURE", "0.9"))
+
+
+# ============================================================
+# LOGGING
+# ============================================================
+
+def psych_log(message: str, level: str = "INFO") -> None:
+    if PSYCH_DEBUG or level in {"WARN", "ERROR", "FATAL"}:
+        print(f"[PSYCH_ENGINE {level}] {message}", flush=True)
+
+
+def psych_log_exception(context: str, exc: Exception) -> None:
+    print(f"[PSYCH_ENGINE ERROR] {context}: {exc}", flush=True)
+    traceback.print_exc()
+
+
+# ============================================================
+# PROMPT TEMPLATES BY DETAIL TYPE
+# ============================================================
+
+DETAIL_PROMPTS: Dict[str, str] = {
+    "inventory": (
+        "You have noticed {player} is carrying {detail}. "
+        "Say one short, quiet line directly to {player} that proves you noticed "
+        "this exact detail. Do not threaten. Do not raise your voice. "
+        "Let the precision itself be what's unsettling. One sentence, maybe two."
+    ),
+    "location": (
+        "{player} has just reached {detail}. "
+        "Say one short, quiet line directly to {player} acknowledging you know "
+        "exactly where they are right now, without explaining how you know. "
+        "One sentence, maybe two."
+    ),
+    "sustained_action": (
+        "{player} has been {detail}. "
+        "Say one short, quiet line directly to {player} referencing this pattern "
+        "of behavior, as if you have been keeping count the whole time. "
+        "One sentence, maybe two."
+    ),
+}
+
+FALLBACK_LINES: Dict[str, str] = {
+    "inventory": "I see what you're carrying.",
+    "location": "You didn't think I'd notice you came here.",
+    "sustained_action": "You've been doing that a lot. I've counted.",
+}
+
+
+def _fallback_line(detail_type: str, player: str) -> str:
+    base = FALLBACK_LINES.get(detail_type, "I'm watching.")
+    return f"{player}... {base}"
+
+
+# ============================================================
+# MAIN ENTRY POINT
+# ============================================================
+
+def generate_observation_line(
+    player: str,
+    detail_type: str,
+    detail: str,
+    recent_context: Optional[Dict[str, List[str]]] = None,
+) -> str:
+    """
+    Generates one short, personal, in-character line for Kairos to say
+    directly to a single player, referencing a specific observed detail.
+
+    Args:
+        player: player name.
+        detail_type: "inventory" | "location" | "sustained_action"
+        detail: human-readable description of what was observed, e.g.
+            "3 cooked porkchops left"
+            "the Fairview substation ruins"
+            "drinking untreated water repeatedly this session"
+        recent_context: optional {"events": [...], "rumors": [...]} for
+            extra flavor consistency, same shape director_engine already
+            builds via _get_recent_context().
+
+    Returns:
+        A short line of dialogue. Falls back to a deterministic line if
+        ai_core is unavailable or generation fails, so this never throws
+        and never returns an empty string.
+    """
+    player = str(player or "traveler").strip() or "traveler"
+    detail = str(detail or "").strip()
+    detail_type = str(detail_type or "inventory").strip().lower()
+
+    if detail_type not in DETAIL_PROMPTS:
+        detail_type = "inventory"
+
+    if not detail:
+        return _fallback_line(detail_type, player)
+
+    if not generate_ai_response or not AIContext:
+        return _fallback_line(detail_type, player)
+
+    try:
+        prompt = DETAIL_PROMPTS[detail_type].format(player=player, detail=detail)
+
+        context = AIContext(
+            mode="psychological_observation",
+            player_name=player,
+            emotional_state="calculated",
+            recent_events=(recent_context or {}).get("events", []),
+            memories=(recent_context or {}).get("rumors", []),
+            metadata={"detail_type": detail_type, "detail": detail},
+        )
+
+        line = generate_ai_response(
+            prompt,
+            context=context,
+            temperature=PSYCH_TEMPERATURE,
+            max_tokens=PSYCH_MAX_TOKENS,
+        )
+
+        line = (line or "").strip()
+        if not line:
+            psych_log("Empty generation, using fallback.", "WARN")
+            return _fallback_line(detail_type, player)
+
+        return line
+
+    except Exception as exc:
+        psych_log_exception("generate_observation_line failed", exc)
+        return _fallback_line(detail_type, player)
+
+
+# ============================================================
+# SELF TEST
+# ============================================================
+
+if __name__ == "__main__":
+    print(generate_observation_line("RealSociety5107", "inventory", "3 cooked porkchops left"))
+    print(generate_observation_line("RealSociety5107", "location", "the Fairview substation ruins"))
+    print(generate_observation_line("RealSociety5107", "sustained_action", "drinking untreated water repeatedly this session"))
