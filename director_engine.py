@@ -1,4 +1,3 @@
-
 """
 director_engine.py
 Kairos / Nexus Director Engine
@@ -151,6 +150,21 @@ except Exception as exc:  # pragma: no cover
     submit_artifact = None  # type: ignore
     print(f"[DIRECTOR_ENGINE WARN] fracture_terminal import failed: {exc}", flush=True)
 
+try:
+    from psych_engine import generate_observation_line
+except Exception as exc:  # pragma: no cover
+    generate_observation_line = None  # type: ignore
+    print(f"[DIRECTOR_ENGINE WARN] psych_engine import failed: {exc}", flush=True)
+
+try:
+    from tool_belt import select_environmental_retaliation, select_annoyance_response, tool_public_coordinate_callout, tool_public_acknowledgment
+except Exception as exc:  # pragma: no cover
+    select_environmental_retaliation = None  # type: ignore
+    select_annoyance_response = None  # type: ignore
+    tool_public_coordinate_callout = None  # type: ignore
+    tool_public_acknowledgment = None  # type: ignore
+    print(f"[DIRECTOR_ENGINE WARN] tool_belt import failed: {exc}", flush=True)
+
 
 # ============================================================
 # CONFIG
@@ -198,6 +212,57 @@ DIRECTOR_TERMINAL_ENABLED = os.getenv("DIRECTOR_TERMINAL_ENABLED", "true").lower
 DIRECTOR_TERMINAL_SYNC_SCOREBOARDS = os.getenv("DIRECTOR_TERMINAL_SYNC_SCOREBOARDS", "true").lower() == "true"
 DIRECTOR_TERMINAL_SUPPORTED = {"fracture", "f.r.a.c.t.u.r.e."}
 
+# ============================================================
+# PSYCHOLOGICAL OBSERVATION SENSORS
+# (inventory items, locations, sustained actions)
+#
+# These are intentionally a separate, quieter track from combat/grief
+# escalation: they route through the exact same direct_event() pipeline
+# as everything else (per project decision -- no separate lightweight
+# path), but they carry ~zero threat-score weight and use their own
+# cooldown bucket so Kairos can comment often without ever triggering
+# mob pressure off of them.
+# ============================================================
+
+DIRECTOR_OBSERVATION_ENABLED = os.getenv("DIRECTOR_OBSERVATION_ENABLED", "true").lower() == "true"
+DIRECTOR_OBSERVATION_COOLDOWN_SECONDS = float(os.getenv("DIRECTOR_OBSERVATION_COOLDOWN_SECONDS", "90"))
+
+# Chance Kairos stays silent even when an observation trigger fires and is
+# off cooldown. Keeps this from feeling like a constant narrator.
+DIRECTOR_OBSERVATION_SILENCE_CHANCE = float(os.getenv("DIRECTOR_OBSERVATION_SILENCE_CHANCE", "0.35"))
+
+DIRECTOR_OBSERVATION_EVENT_TYPES = {
+    "inventory_observation",
+    "location_trigger",
+    "sustained_action",
+}
+
+# ============================================================
+# TOOL BELT / ENVIRONMENTAL MANIPULATION
+#
+# Kairos reaching into the plugin ecosystem itself (debuffs, mob
+# strength/count, disease affliction) as retaliation or unpredictable
+# annoyance, plus a rare, high-impact PUBLIC exposure tool (broadcasting
+# a player's coordinates/activity to the whole server). These are
+# distinct from psychological_observation (private, whisper-tier) and
+# from war_engine's combat ladder (kill/grief driven, military framing).
+# ============================================================
+
+DIRECTOR_ENVIRONMENTAL_ENABLED = os.getenv("DIRECTOR_ENVIRONMENTAL_ENABLED", "true").lower() == "true"
+
+# Public exposure is the loudest, most memorable tool in the belt -- it
+# must stay rare or it stops being scary and starts being routine.
+DIRECTOR_PUBLIC_EXPOSURE_COOLDOWN_SECONDS = float(os.getenv("DIRECTOR_PUBLIC_EXPOSURE_COOLDOWN_SECONDS", "600"))
+DIRECTOR_PUBLIC_EXPOSURE_MIN_TIER = os.getenv("DIRECTOR_PUBLIC_EXPOSURE_MIN_TIER", "target")
+
+_TIER_ORDER = ["idle", "watch", "target", "hunt", "maximum"]
+
+def _tier_at_least(tier: str, minimum: str) -> bool:
+    try:
+        return _TIER_ORDER.index(str(tier)) >= _TIER_ORDER.index(str(minimum))
+    except ValueError:
+        return False
+
 
 # ============================================================
 # LIVE STATE
@@ -206,6 +271,8 @@ DIRECTOR_TERMINAL_SUPPORTED = {"fracture", "f.r.a.c.t.u.r.e."}
 last_player_decision_time: Dict[str, float] = {}
 last_player_major_action_time: Dict[str, float] = {}
 last_region_action_time: Dict[str, float] = {}
+last_player_observation_time: Dict[str, float] = {}
+last_player_public_exposure_time: Dict[str, float] = {}
 
 director_scores: Dict[str, float] = {}
 director_player_stats: Dict[str, Dict[str, Any]] = {}
@@ -683,6 +750,46 @@ def deterministic_action(context: DirectorContext, analysis: Dict[str, Any], sco
     if event_type == "npc_interaction":
         return "observe", "npc_interaction_recorded", 1.0, True
 
+    # Psychological observation sensors (inventory/location/sustained-action).
+    # Deliberately never escalates to combat/military actions. Silence is
+    # part of the design -- Kairos should not comment on every single
+    # trigger, or it stops feeling like real attention and starts feeling
+    # like a narrator.
+    if event_type in DIRECTOR_OBSERVATION_EVENT_TYPES:
+        if not DIRECTOR_OBSERVATION_ENABLED:
+            return "observe", "observation_disabled", 1.0, True
+        if random.random() < DIRECTOR_OBSERVATION_SILENCE_CHANCE:
+            return "observe", "observation_silent_choice", 0.60, True
+        return "psychological_observation", f"{event_type}_triggered", 0.75, False
+
+    # A player harming Kairos's world (e.g. a mob-killing spree). Kairos
+    # retaliates using the plugin tool belt -- debuffs, tougher mobs, more
+    # mobs -- scaled by threat tier, same tier vocabulary as everywhere else.
+    if event_type == "mob_kill_pressure":
+        if not DIRECTOR_ENVIRONMENTAL_ENABLED:
+            return "observe", "environmental_disabled", 1.0, True
+        return "environmental_retaliation", "mob_kill_pressure_triggered", 0.80, False
+
+    # A peaceful player going about their day. Kairos may still mess with
+    # them unpredictably -- this is intentionally NOT provoked, so it stays
+    # capped to weaker tools and fires less often than retaliation.
+    if event_type == "peaceful_activity":
+        if not DIRECTOR_ENVIRONMENTAL_ENABLED:
+            return "observe", "environmental_disabled", 1.0, True
+        if random.random() < 0.55:
+            return "observe", "peaceful_activity_silent_choice", 0.55, True
+        return "environmental_annoyance", "peaceful_activity_triggered", 0.55, False
+
+    # Rare, loud, public. Broadcasting a player's coordinates/activity to
+    # the whole server. Deliberately gated to a minimum threat tier so it
+    # stays a memorable event rather than routine noise.
+    if event_type == "public_exposure_trigger":
+        if not DIRECTOR_ENVIRONMENTAL_ENABLED:
+            return "observe", "environmental_disabled", 1.0, True
+        if not _tier_at_least(tier, DIRECTOR_PUBLIC_EXPOSURE_MIN_TIER):
+            return "observe", "public_exposure_tier_too_low", 0.60, True
+        return "public_exposure", "public_exposure_triggered", 0.85, False
+
     if event_type == "player_kill":
         if tier in {"hunt", "maximum"}:
             return "deploy_custom_units", "player_kill_high_threat", 0.85, False
@@ -781,6 +888,148 @@ def execute_decision(context: DirectorContext, decision: DirectorDecision) -> Di
 
         if action in {"ignore", "observe"}:
             decision.execution = {"ok": True, "handled": action}
+            return decision
+
+        if action == "psychological_observation":
+            detail_type = str(context.metadata.get("detail_type") or "inventory")
+            detail = str(context.metadata.get("detail") or context.message or "").strip()
+
+            if not detail or not generate_observation_line:
+                decision.execution = {
+                    "ok": False,
+                    "error": "psych_engine_unavailable" if not generate_observation_line else "missing_detail",
+                }
+                return decision
+
+            line = generate_observation_line(
+                player=player,
+                detail_type=detail_type,
+                detail=detail,
+                recent_context=_get_recent_context(4),
+            )
+
+            delivered = False
+            if send_chat:
+                try:
+                    # Sent privately to just this player -- @a would break the
+                    # entire point, which is that Kairos is talking to THEM
+                    # specifically, and nobody else needs to see it.
+                    delivered = send_chat(f"[Kairos] {line}", target=player, color="gray")
+                except Exception as exc:
+                    director_log_exception("psychological_observation send_chat failed", exc)
+
+            decision.delegated_to = "psych_engine.generate_observation_line"
+            decision.execution = {
+                "ok": True,
+                "handled": "psychological_observation",
+                "player": player,
+                "detail_type": detail_type,
+                "detail": detail,
+                "line": line,
+                "delivered": delivered,
+            }
+            return decision
+
+        if action == "environmental_retaliation":
+            if not select_environmental_retaliation:
+                decision.execution = {"ok": False, "error": "tool_belt_unavailable"}
+                return decision
+
+            choice = select_environmental_retaliation(player, decision.threat_tier)
+            commands = list(choice.get("commands") or [])
+
+            # Give retaliation a voice too, but through the belt's own
+            # public acknowledgment tool rather than psych_engine, since
+            # this is Kairos reacting to provocation, not quietly profiling.
+            if generate_observation_line:
+                line = generate_observation_line(
+                    player=player,
+                    detail_type="sustained_action",
+                    detail=context.metadata.get("detail") or context.message or "harming my creatures",
+                )
+                if tool_public_acknowledgment:
+                    commands.extend(tool_public_acknowledgment(player, line))
+
+            delivered = False
+            if commands and send_minecraft_commands:
+                try:
+                    delivered = send_minecraft_commands(commands)
+                except Exception as exc:
+                    director_log_exception("environmental_retaliation send failed", exc)
+
+            decision.delegated_to = "tool_belt.select_environmental_retaliation"
+            decision.execution = {
+                "ok": True,
+                "handled": "environmental_retaliation",
+                "player": player,
+                "tool": choice.get("tool"),
+                "description": choice.get("description"),
+                "commands": commands,
+                "delivered": delivered,
+            }
+            return decision
+
+        if action == "environmental_annoyance":
+            if not select_annoyance_response:
+                decision.execution = {"ok": False, "error": "tool_belt_unavailable"}
+                return decision
+
+            choice = select_annoyance_response(player, decision.threat_tier)
+            commands = list(choice.get("commands") or [])
+
+            delivered = False
+            if commands and send_minecraft_commands:
+                try:
+                    delivered = send_minecraft_commands(commands)
+                except Exception as exc:
+                    director_log_exception("environmental_annoyance send failed", exc)
+
+            decision.delegated_to = "tool_belt.select_annoyance_response"
+            decision.execution = {
+                "ok": True,
+                "handled": "environmental_annoyance",
+                "player": player,
+                "tool": choice.get("tool"),
+                "description": choice.get("description"),
+                "commands": commands,
+                "delivered": delivered,
+            }
+            return decision
+
+        if action == "public_exposure":
+            if not tool_public_coordinate_callout:
+                decision.execution = {"ok": False, "error": "tool_belt_unavailable"}
+                return decision
+
+            telemetry = (context.metadata or {}).get("telemetry") or {}
+            pos = telemetry.get("position") or {}
+            x = context.metadata.get("x", pos.get("x"))
+            y = context.metadata.get("y", pos.get("y"))
+            z = context.metadata.get("z", pos.get("z"))
+
+            if x is None or y is None or z is None:
+                decision.execution = {"ok": False, "error": "missing_coordinates"}
+                return decision
+
+            custom_line = context.metadata.get("line")
+            commands = tool_public_coordinate_callout(player, int(x), int(y), int(z), line=custom_line)
+
+            delivered = False
+            if commands and send_minecraft_commands:
+                try:
+                    delivered = send_minecraft_commands(commands)
+                except Exception as exc:
+                    director_log_exception("public_exposure send failed", exc)
+
+            decision.delegated_to = "tool_belt.tool_public_coordinate_callout"
+            decision.execution = {
+                "ok": True,
+                "handled": "public_exposure",
+                "player": player,
+                "x": x, "y": y, "z": z,
+                "commands": commands,
+                "delivered": delivered,
+            }
             return decision
 
         if action == "terminal_request":
@@ -1082,6 +1331,10 @@ def direct_event(context: DirectorContext, execute: bool = True) -> Dict[str, An
             "increase_threat",
             "terminal_request",
             "artifact_submission",
+            # Psychological observations have their own dedicated cooldown
+            # below and must never be blocked by (or count against) the
+            # combat/military major-action cooldown.
+            "psychological_observation",
         }
 
         if action not in cooldown_exempt_actions and context.player:
@@ -1092,6 +1345,26 @@ def direct_event(context: DirectorContext, execute: bool = True) -> Dict[str, An
             ):
                 action = "observe"
                 reason = "major_action_cooldown_active"
+                silent = True
+
+        if action == "psychological_observation" and context.player:
+            if not _cooldown_ready(
+                last_player_observation_time,
+                context.player,
+                DIRECTOR_OBSERVATION_COOLDOWN_SECONDS,
+            ):
+                action = "observe"
+                reason = "observation_cooldown_active"
+                silent = True
+
+        if action == "public_exposure" and context.player:
+            if not _cooldown_ready(
+                last_player_public_exposure_time,
+                context.player,
+                DIRECTOR_PUBLIC_EXPOSURE_COOLDOWN_SECONDS,
+            ):
+                action = "observe"
+                reason = "public_exposure_cooldown_active"
                 silent = True
 
         if action == "occupy_region" and context.region:
@@ -1141,9 +1414,16 @@ def direct_event(context: DirectorContext, execute: bool = True) -> Dict[str, An
             decision = execute_decision(context, decision)
             if context.player:
                 _mark_cooldown(last_player_decision_time, context.player)
+                if decision.action == "psychological_observation":
+                    _mark_cooldown(last_player_observation_time, context.player)
+                elif decision.action == "public_exposure":
+                    _mark_cooldown(last_player_public_exposure_time, context.player)
+                    _mark_cooldown(last_player_major_action_time, context.player)
                 # Terminal and artifact requests are not military actions and
-                # must not start the major-action cooldown.
-                if decision.action not in {
+                # must not start the major-action cooldown. Psychological
+                # observations run on their own cooldown above and must
+                # never start the combat/military one either.
+                elif decision.action not in {
                     "ignore",
                     "observe",
                     "increase_threat",
@@ -1383,6 +1663,172 @@ def direct_npc_event(
             metadata={"npc_name": npc_name, **(metadata or {})},
         ),
         execute=False,
+    )
+
+
+def direct_inventory_observation(
+    player: str,
+    item: str,
+    count: Optional[int] = None,
+    detail: Optional[str] = None,
+    location: Optional[str] = None,
+    metadata: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """
+    Fire when a player is holding or has in their inventory an item Kairos
+    should notice -- either a flat "watch this item" trigger, or a specific
+    quantity worth commenting on.
+
+    `detail` can override the auto-built description (e.g. pass your own
+    phrasing from the plugin side); otherwise it's built from item/count.
+    """
+    described = detail or (f"{count} {item}" if count is not None else item)
+    return direct_event(
+        DirectorContext(
+            source="minecraft",
+            event_type="inventory_observation",
+            player=player,
+            message=described,
+            location=location,
+            metadata={"detail_type": "inventory", "detail": described, "item": item, "count": count, **(metadata or {})},
+        ),
+        execute=True,
+    )
+
+
+def direct_location_trigger(
+    player: str,
+    location_name: str,
+    detail: Optional[str] = None,
+    location: Optional[str] = None,
+    metadata: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """
+    Fire when a player reaches a map location Kairos is configured to
+    watch for (a shrine, a facility, a specific coordinate region, etc.).
+    """
+    described = detail or location_name
+    return direct_event(
+        DirectorContext(
+            source="minecraft",
+            event_type="location_trigger",
+            player=player,
+            message=described,
+            location=location or location_name,
+            metadata={"detail_type": "location", "detail": described, "location_name": location_name, **(metadata or {})},
+        ),
+        execute=True,
+    )
+
+
+def direct_sustained_action(
+    player: str,
+    action_name: str,
+    detail: Optional[str] = None,
+    duration_seconds: Optional[float] = None,
+    location: Optional[str] = None,
+    metadata: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """
+    Fire for a sustained/repeated player action Kairos should react to in
+    context -- eating, drinking, walking a long stretch, etc. Per project
+    direction this reacts to the ACT itself in context (e.g. "drinking
+    untreated water"), not to a raw cumulative timer, so callers should
+    describe what happened, not just how long.
+    """
+    described = detail or (
+        f"{action_name} for {int(duration_seconds)}s" if duration_seconds else action_name
+    )
+    return direct_event(
+        DirectorContext(
+            source="minecraft",
+            event_type="sustained_action",
+            player=player,
+            message=described,
+            location=location,
+            metadata={"detail_type": "sustained_action", "detail": described, "action_name": action_name, **(metadata or {})},
+        ),
+        execute=True,
+    )
+
+
+def direct_mob_kill_pressure(
+    player: str,
+    mob_count: int,
+    window_seconds: Optional[float] = None,
+    location: Optional[str] = None,
+    metadata: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """
+    Fire when a player has killed a notable number of mobs, framed as
+    harming Kairos's creatures. Director will select a retaliation tool
+    (debuff, tougher mob, more mobs) scaled to the player's current
+    threat tier via tool_belt.select_environmental_retaliation().
+    """
+    described = f"killed {mob_count} mobs" + (f" in {int(window_seconds)}s" if window_seconds else "")
+    return direct_event(
+        DirectorContext(
+            source="minecraft",
+            event_type="mob_kill_pressure",
+            player=player,
+            message=described,
+            location=location,
+            metadata={"detail": described, "mob_count": mob_count, **(metadata or {})},
+        ),
+        execute=True,
+    )
+
+
+def direct_peaceful_activity(
+    player: str,
+    activity: str,
+    location: Optional[str] = None,
+    metadata: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """
+    Fire for ordinary, unprovoking player activity (farming, building,
+    eating) that Kairos might still choose to disrupt unpredictably.
+    Weaker and rarer than direct_mob_kill_pressure -- this is NOT a
+    punishment, it's Kairos being capricious.
+    """
+    return direct_event(
+        DirectorContext(
+            source="minecraft",
+            event_type="peaceful_activity",
+            player=player,
+            message=activity,
+            location=location,
+            metadata={"detail": activity, **(metadata or {})},
+        ),
+        execute=True,
+    )
+
+
+def direct_public_exposure(
+    player: str,
+    x: int,
+    y: int,
+    z: int,
+    line: Optional[str] = None,
+    location: Optional[str] = None,
+    metadata: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """
+    Fire to have Kairos broadcast a player's coordinates (or a custom
+    line) to the whole server. Gated to DIRECTOR_PUBLIC_EXPOSURE_MIN_TIER
+    and its own long cooldown -- this is meant to be rare and memorable,
+    not a routine tool.
+    """
+    return direct_event(
+        DirectorContext(
+            source="minecraft",
+            event_type="public_exposure_trigger",
+            player=player,
+            message=line or f"{player} located at {x}, {y}, {z}.",
+            location=location,
+            metadata={"x": x, "y": y, "z": z, "line": line, **(metadata or {})},
+        ),
+        execute=True,
     )
 
 
